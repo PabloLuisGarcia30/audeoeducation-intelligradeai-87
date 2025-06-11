@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CheckCircle, XCircle, HelpCircle, BookOpen, Target, ArrowLeft, Lightbulb, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, XCircle, HelpCircle, BookOpen, Target, ArrowLeft, Lightbulb, Loader2, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { PracticeAnswerKeyService, type PracticeAnswerKey } from '@/services/practiceAnswerKeyService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -29,6 +29,18 @@ interface QuestionReview {
   learningObjective?: string;
 }
 
+interface ExplanationInfo {
+  content: string;
+  routingInfo?: {
+    selectedModel: string;
+    originalModel: string;
+    fallbackTriggered: boolean;
+    complexityScore: number;
+    confidence: number;
+    reasoning: string;
+  };
+}
+
 export function PracticeExerciseReview({ 
   exerciseId, 
   studentAnswers, 
@@ -38,7 +50,7 @@ export function PracticeExerciseReview({
   const [answerKey, setAnswerKey] = useState<PracticeAnswerKey | null>(null);
   const [loading, setLoading] = useState(true);
   const [questionReviews, setQuestionReviews] = useState<QuestionReview[]>([]);
-  const [detailedExplanations, setDetailedExplanations] = useState<Record<string, string>>({});
+  const [detailedExplanations, setDetailedExplanations] = useState<Record<string, ExplanationInfo>>({});
   const [loadingExplanations, setLoadingExplanations] = useState<Record<string, boolean>>({});
   const [expandedExplanations, setExpandedExplanations] = useState<Record<string, boolean>>({});
 
@@ -150,7 +162,10 @@ export function PracticeExerciseReview({
 
       setDetailedExplanations(prev => ({
         ...prev,
-        [questionId]: data.detailedExplanation
+        [questionId]: {
+          content: data.detailedExplanation,
+          routingInfo: data.routingInfo
+        }
       }));
 
       setExpandedExplanations(prev => ({
@@ -158,7 +173,15 @@ export function PracticeExerciseReview({
         [questionId]: true
       }));
 
-      toast.success('Detailed explanation generated!');
+      // Show smart routing info in toast
+      if (data.routingInfo) {
+        const routingMsg = data.routingInfo.fallbackTriggered 
+          ? `Generated with ${data.routingInfo.selectedModel} (fallback from ${data.routingInfo.originalModel})`
+          : `Generated with ${data.routingInfo.selectedModel} (complexity: ${data.routingInfo.complexityScore})`;
+        toast.success(`Detailed explanation ready! ${routingMsg}`);
+      } else {
+        toast.success('Detailed explanation generated!');
+      }
     } catch (error) {
       console.error('Error getting detailed explanation:', error);
       toast.error('Failed to generate detailed explanation. Please try again.');
@@ -343,28 +366,37 @@ export function PracticeExerciseReview({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-muted-foreground">Explanation:</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleExplainFurther(review.id, review)}
-                    disabled={loadingExplanations[review.id]}
-                    className="text-blue-600 hover:text-blue-700"
-                  >
-                    {loadingExplanations[review.id] ? (
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                    ) : (
-                      <Lightbulb className="h-4 w-4 mr-1" />
+                  <div className="flex items-center gap-2">
+                    {detailedExplanations[review.id]?.routingInfo && (
+                      <Badge variant="outline" className="text-xs">
+                        <Zap className="h-3 w-3 mr-1" />
+                        {detailedExplanations[review.id].routingInfo!.selectedModel}
+                        {detailedExplanations[review.id].routingInfo!.fallbackTriggered && ' (fallback)'}
+                      </Badge>
                     )}
-                    {detailedExplanations[review.id] ? 
-                      (expandedExplanations[review.id] ? 'Hide detailed explanation' : 'Show detailed explanation') : 
-                      'Explain further'
-                    }
-                    {detailedExplanations[review.id] && (
-                      expandedExplanations[review.id] ? 
-                        <ChevronUp className="h-4 w-4 ml-1" /> : 
-                        <ChevronDown className="h-4 w-4 ml-1" />
-                    )}
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleExplainFurther(review.id, review)}
+                      disabled={loadingExplanations[review.id]}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      {loadingExplanations[review.id] ? (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <Lightbulb className="h-4 w-4 mr-1" />
+                      )}
+                      {detailedExplanations[review.id] ? 
+                        (expandedExplanations[review.id] ? 'Hide detailed explanation' : 'Show detailed explanation') : 
+                        'Explain further'
+                      }
+                      {detailedExplanations[review.id] && (
+                        expandedExplanations[review.id] ? 
+                          <ChevronUp className="h-4 w-4 ml-1" /> : 
+                          <ChevronDown className="h-4 w-4 ml-1" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <p className="text-sm leading-relaxed">{review.explanation}</p>
 
@@ -374,10 +406,23 @@ export function PracticeExerciseReview({
                     <div className="flex items-center gap-2 mb-3">
                       <Lightbulb className="h-4 w-4 text-blue-600" />
                       <p className="text-sm font-medium text-blue-800">Detailed Explanation (Explained Simply):</p>
+                      {detailedExplanations[review.id].routingInfo && (
+                        <Badge variant="outline" className="text-xs ml-auto">
+                          Complexity: {detailedExplanations[review.id].routingInfo!.complexityScore}/100
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-blue-700 leading-relaxed whitespace-pre-wrap">
-                      {detailedExplanations[review.id]}
+                      {detailedExplanations[review.id].content}
                     </div>
+                    {/* Smart routing info */}
+                    {detailedExplanations[review.id].routingInfo && (
+                      <div className="mt-3 pt-3 border-t border-blue-200">
+                        <p className="text-xs text-blue-600">
+                          🤖 {detailedExplanations[review.id].routingInfo!.reasoning}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
