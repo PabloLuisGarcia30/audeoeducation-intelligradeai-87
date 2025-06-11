@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PracticeExerciseSkillUpdate {
@@ -8,6 +7,7 @@ export interface PracticeExerciseSkillUpdate {
   skillName: string;
   exerciseScore: number;
   exerciseData: any;
+  classId?: string; // Add class context
 }
 
 export interface SkillScoreCalculation {
@@ -23,7 +23,7 @@ export class PracticeExerciseSkillService {
   
   /**
    * Process skill score updates when a practice exercise is completed
-   * Now uses authenticated user IDs directly
+   * Now uses authenticated user IDs directly with class context
    */
   async processPracticeExerciseCompletion(update: PracticeExerciseSkillUpdate): Promise<{
     success: boolean;
@@ -31,7 +31,7 @@ export class PracticeExerciseSkillService {
     error?: string;
   }> {
     try {
-      console.log('🎯 Processing practice exercise skill updates for authenticated user:', update.studentId);
+      console.log('🎯 Processing practice exercise skill updates for authenticated user:', update.studentId, 'with class:', update.classId);
       
       // Use the authenticated user ID directly (no need to resolve student profile)
       const authenticatedUserId = update.studentId;
@@ -60,7 +60,7 @@ export class PracticeExerciseSkillService {
           attemptsCount: currentSkillData.attemptsCount || 0
         });
 
-        // Insert new skill score record with authenticated user ID
+        // Insert new skill score record with authenticated user ID and class context
         await this.insertPracticeExerciseSkillScore(
           authenticatedUserId,
           update.exerciseId,
@@ -68,7 +68,8 @@ export class PracticeExerciseSkillService {
           skillScore.skillType,
           updatedScore,
           skillScore.pointsEarned,
-          skillScore.pointsPossible
+          skillScore.pointsPossible,
+          update.classId // Pass class context
         );
       }
 
@@ -247,7 +248,7 @@ export class PracticeExerciseSkillService {
   }
 
   /**
-   * Insert practice exercise skill score record (updated to use authenticated_student_id)
+   * Insert practice exercise skill score record with class context
    */
   private async insertPracticeExerciseSkillScore(
     authenticatedUserId: string,
@@ -256,21 +257,24 @@ export class PracticeExerciseSkillService {
     skillType: 'content' | 'subject',
     score: number,
     pointsEarned: number,
-    pointsPossible: number
+    pointsPossible: number,
+    classId?: string
   ): Promise<void> {
     try {
-      // Create a test result for practice exercises with authenticated user ID
+      console.log('🎯 Inserting skill score with class context:', { authenticatedUserId, exerciseId, skillName, classId });
+      
+      // Create a test result for practice exercises with authenticated user ID and proper class association
       const { data: testResult, error: testError } = await supabase
         .from('test_results')
         .insert({
           student_id: authenticatedUserId, // Legacy column for compatibility
           authenticated_student_id: authenticatedUserId, // New auth-based column
           exam_id: `practice_exercise_${exerciseId}`,
-          class_id: '', // Empty for practice exercises
+          class_id: classId || null, // Use actual class_id or null (not empty string)
           overall_score: score,
           total_points_earned: pointsEarned,
           total_points_possible: pointsPossible,
-          ai_feedback: 'Practice exercise completed with authenticated user tracking'
+          ai_feedback: 'Practice exercise completed with authenticated user tracking and class association'
         })
         .select('id')
         .single();
@@ -279,7 +283,7 @@ export class PracticeExerciseSkillService {
         throw new Error(`Failed to create test result: ${testError?.message}`);
       }
 
-      // Insert skill score record with authenticated user reference
+      // Insert skill score record with authenticated user reference and class context
       const skillTable = skillType === 'content' ? 'content_skill_scores' : 'subject_skill_scores';
       
       const { error: skillError } = await supabase
@@ -299,7 +303,7 @@ export class PracticeExerciseSkillService {
         throw new Error(`Failed to insert skill score: ${skillError.message}`);
       }
 
-      console.log(`✅ Inserted ${skillType} skill score for ${skillName}: ${score}% (authenticated user: ${authenticatedUserId})`);
+      console.log(`✅ Inserted ${skillType} skill score for ${skillName}: ${score}% (authenticated user: ${authenticatedUserId}, class: ${classId || 'none'})`);
       
     } catch (error) {
       console.error('Error inserting practice exercise skill score:', error);

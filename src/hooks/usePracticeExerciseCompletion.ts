@@ -22,18 +22,20 @@ export function usePracticeExerciseCompletion({
       exerciseId, 
       score, 
       skillName, 
-      exerciseData 
+      exerciseData,
+      classId 
     }: { 
       exerciseId: string; 
       score: number; 
       skillName: string; 
-      exerciseData: any; 
+      exerciseData: any;
+      classId?: string;
     }) => {
       if (!user?.id) {
         throw new Error('User must be authenticated to complete practice exercises');
       }
 
-      console.log('🎯 Completing practice exercise for authenticated user:', user.id);
+      console.log('🎯 Completing practice exercise for authenticated user:', user.id, 'classId:', classId);
       
       // Log skill metadata usage
       if (exerciseData?.skillType) {
@@ -45,7 +47,7 @@ export function usePracticeExerciseCompletion({
       // First update the exercise status
       await updateExerciseStatus(exerciseId, 'completed', score);
       
-      // Then process skill score updates using authenticated user ID
+      // Then process skill score updates using authenticated user ID with class context
       setIsUpdatingSkills(true);
       
       const skillUpdateResult = await practiceExerciseSkillService.processPracticeExerciseCompletion({
@@ -53,7 +55,8 @@ export function usePracticeExerciseCompletion({
         exerciseId,
         skillName,
         exerciseScore: score,
-        exerciseData // Pass complete exercise data including metadata
+        exerciseData, // Pass complete exercise data including metadata
+        classId // Pass class context for proper association
       });
 
       if (!skillUpdateResult.success) {

@@ -1,5 +1,3 @@
-
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -204,14 +202,15 @@ const StudentPracticeExercise = () => {
       }
     }
 
-    // Process skill score updates using the completion hook
-    if (exerciseData && authenticatedUserId) {
+    // Process skill score updates using the completion hook with class context
+    if (exerciseData && authenticatedUserId && currentClass) {
       try {
         await completeExercise({
           exerciseId: exerciseData.exerciseId,
           score: results.percentageScore,
           skillName: decodedSkillName,
-          exerciseData: exerciseData
+          exerciseData: exerciseData,
+          classId: currentClass.id // Pass class context for proper association
         });
         
         // Show improvement message with skill score updates

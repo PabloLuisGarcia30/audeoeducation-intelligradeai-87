@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,6 +100,15 @@ export function TailoredExercises() {
     return exercise.exercise_data?.skillMetadata || null;
   };
 
+  // Helper function to get class context from exercise
+  const getExerciseClassContext = (exercise: StudentExercise) => {
+    // Extract class_id from the exercise's class session
+    return {
+      classId: exercise.class_session_id, // This should be the class_id from the session
+      className: exercise.exercise_data?.metadata?.className || null
+    };
+  };
+
   if (loading) {
     return (
       <Card>
@@ -127,9 +135,11 @@ export function TailoredExercises() {
   }
 
   if (selectedExercise) {
+    const classContext = getExerciseClassContext(selectedExercise);
     const exerciseDataWithId = {
       ...selectedExercise.exercise_data,
-      exerciseId: selectedExercise.id // Add exercise ID for timing tracking
+      exerciseId: selectedExercise.id, // Add exercise ID for timing tracking
+      classContext: classContext // Add class context for skill score updates
     };
 
     return (
