@@ -1,1 +1,47 @@
+
 project_id = "irnkilorodqvhizmujtq"
+
+[functions.extract-text]
+verify_jwt = false
+
+[functions.extract-text-batch]
+verify_jwt = false
+
+[functions.analyze-test] 
+verify_jwt = false
+
+[functions.analyze-exam-skills]
+verify_jwt = false
+
+[functions.generate-practice-test]
+verify_jwt = false
+
+[functions.generate-practice-recommendation]
+verify_jwt = false
+
+[functions.generate-student-practice-exercise]
+verify_jwt = false
+
+[functions.batch-queue-manager]
+verify_jwt = false
+
+[functions.get-question-cache]
+verify_jwt = false
+
+[functions.set-question-cache]
+verify_jwt = false
+
+[functions.get-skill-aware-cache]
+verify_jwt = false
+
+[functions.set-skill-aware-cache]
+verify_jwt = false
+
+[functions.explain-concept]
+verify_jwt = false
+
+[functions.detect-missed-concept]
+verify_jwt = false
+
+[functions.ai-chat]
+verify_jwt = false
