@@ -16,139 +16,67 @@ interface ExplanationContext {
   subject: string;
   grade: string;
   skillName: string;
+  questionType?: string;
 }
 
-interface ComplexityAnalysis {
-  complexityScore: number;
-  confidenceInDecision: number;
-  complexityFactors: string[];
-  modelRecommendation: string;
-}
-
-interface ExplanationRoutingDecision {
+// Simple question-type-based routing
+function routeByQuestionType(context: ExplanationContext): {
   selectedModel: 'gpt-4o-mini' | 'gpt-4o';
-  complexityAnalysis: ComplexityAnalysis;
-  estimatedCost: number;
-  confidence: number;
   reasoning: string;
-}
+  complexityScore: number;
+} {
+  const questionText = context.question.toLowerCase();
+  const correctAnswer = context.correctAnswer.toLowerCase();
 
-// Smart routing logic for explanations
-function analyzeExplanationComplexity(context: ExplanationContext): ComplexityAnalysis {
-  let complexityScore = 0;
-  const factors: string[] = [];
+  // Check for multiple choice indicators
+  const mcqIndicators = [
+    /\ba\)|b\)|c\)|d\)/i,
+    /\b\(?a\)|\(?b\)|\(?c\)|\(?d\)/i,
+    /which of the following/i,
+    /select the/i,
+    /choose the/i
+  ];
 
-  // Subject complexity
-  const subjectLower = context.subject.toLowerCase();
-  if (subjectLower.includes('physics') || subjectLower.includes('chemistry') || subjectLower.includes('calculus')) {
-    complexityScore += 25;
-    factors.push(`High complexity subject: ${context.subject}`);
-  } else if (subjectLower.includes('math') || subjectLower.includes('science') || subjectLower.includes('algebra')) {
-    complexityScore += 15;
-    factors.push(`Medium complexity subject: ${context.subject}`);
-  } else {
-    complexityScore += 5;
-    factors.push(`Basic subject: ${context.subject}`);
+  const isMCQ = mcqIndicators.some(pattern => pattern.test(questionText)) ||
+                /^[A-D]$/i.test(correctAnswer.trim()) ||
+                /^[A-D]\)/i.test(correctAnswer.trim());
+
+  // Check for true/false
+  const isTF = ['true', 'false', 't', 'f', 'yes', 'no'].includes(correctAnswer.trim().toLowerCase());
+
+  if (isMCQ) {
+    return {
+      selectedModel: 'gpt-4o-mini',
+      reasoning: 'Selected gpt-4o-mini for multiple choice question - simple explanation suitable',
+      complexityScore: 20
+    };
   }
 
-  // Grade level
-  const gradeMatch = context.grade.match(/(\d+)/);
-  const gradeNumber = gradeMatch ? parseInt(gradeMatch[1]) : 10;
-  if (gradeNumber >= 11) {
-    complexityScore += 20;
-    factors.push('High school level');
-  } else if (gradeNumber >= 8) {
-    complexityScore += 15;
-    factors.push('Middle school level');
-  } else {
-    complexityScore += 10;
-    factors.push('Elementary/Middle level');
+  if (isTF) {
+    return {
+      selectedModel: 'gpt-4o-mini', 
+      reasoning: 'Selected gpt-4o-mini for true/false question - simple explanation suitable',
+      complexityScore: 15
+    };
   }
 
-  // Question complexity
-  if (context.question.length > 200) {
-    complexityScore += 10;
-    factors.push('Long question text');
-  }
-
-  // Mathematical notation
-  const mathPatterns = [/\$.*?\$/, /\\frac/, /\\sqrt/, /\^/, /_/];
-  const mathComplexity = mathPatterns.filter(pattern => 
-    pattern.test(context.question) || pattern.test(context.correctAnswer)
-  ).length;
-  if (mathComplexity > 0) {
-    complexityScore += mathComplexity * 5;
-    factors.push(`Mathematical notation (${mathComplexity} patterns)`);
-  }
-
-  // Reasoning indicators
-  const reasoningWords = ['explain why', 'compare', 'analyze', 'evaluate', 'justify'];
-  const reasoningCount = reasoningWords.filter(word => 
-    context.question.toLowerCase().includes(word)
-  ).length;
-  if (reasoningCount > 0) {
-    complexityScore += reasoningCount * 8;
-    factors.push(`Multi-step reasoning (${reasoningCount} indicators)`);
-  }
-
-  // Skill complexity
-  const skillLower = context.skillName.toLowerCase();
-  if (skillLower.includes('critical thinking') || skillLower.includes('analytical')) {
-    complexityScore += 15;
-    factors.push(`High complexity skill: ${context.skillName}`);
-  } else if (skillLower.includes('application') || skillLower.includes('comprehension')) {
-    complexityScore += 8;
-    factors.push(`Medium complexity skill: ${context.skillName}`);
-  }
-
-  // Calculate confidence
-  let confidence = 75 + Math.min(factors.length * 3, 15);
-  if (complexityScore < 20 || complexityScore > 60) confidence += 10;
-  if (complexityScore >= 30 && complexityScore <= 40) confidence -= 15;
-
+  // Default to complex for open-ended questions
   return {
-    complexityScore: Math.min(100, Math.max(0, complexityScore)),
-    confidenceInDecision: Math.min(95, Math.max(60, confidence)),
-    complexityFactors: factors,
-    modelRecommendation: complexityScore >= 35 ? 'gpt-4o' : 'gpt-4o-mini'
+    selectedModel: 'gpt-4o',
+    reasoning: 'Selected gpt-4o for open-ended question - detailed explanation required',
+    complexityScore: 80
   };
 }
 
-function routeExplanationRequest(context: ExplanationContext): ExplanationRoutingDecision {
-  const complexityAnalysis = analyzeExplanationComplexity(context);
-  const selectedModel = complexityAnalysis.complexityScore >= 35 ? 'gpt-4o' : 'gpt-4o-mini';
-  
-  // Cost estimates (relative to gpt-4o-mini baseline)
-  const estimatedCost = selectedModel === 'gpt-4o' ? 8 : 1; // gpt-4o is ~8x more expensive
-  
-  const factors = complexityAnalysis.complexityFactors.slice(0, 3).join(', ');
-  const reasoning = `Selected ${selectedModel} based on complexity score ${complexityAnalysis.complexityScore}/100. Key factors: ${factors}`;
-
-  return {
-    selectedModel,
-    complexityAnalysis,
-    estimatedCost,
-    confidence: complexityAnalysis.confidenceInDecision,
-    reasoning
-  };
-}
-
-function shouldFallbackToGPT4o(result: string, originalComplexity: ComplexityAnalysis): boolean {
-  // Quality checks for explanations
+function shouldFallbackToGPT4o(result: string, wasSimpleQuestion: boolean): boolean {
+  // For simple routing, minimal fallback logic
   const wordCount = result.split(/\s+/).length;
   
-  // Too short for educational value
-  if (wordCount < 200) return true;
+  // Only fallback if result is extremely short (likely an error)
+  if (wordCount < 50) return true;
   
-  // Too technical for 12-year-olds
-  const technicalTerms = (result.match(/\b[a-z]+tion\b|\b[a-z]+ism\b/gi) || []).length;
-  const technicalDensity = technicalTerms / wordCount;
-  if (technicalDensity > 0.15 && originalComplexity.complexityScore > 30) return true;
-  
-  // Lacks engaging elements for complex topics
-  const hasEngagingElements = /\b(imagine|picture|think about|like when)\b/i.test(result);
-  const hasExamples = /\b(example|for instance|such as)\b/i.test(result);
-  if (!hasEngagingElements && !hasExamples && originalComplexity.complexityScore > 40) return true;
+  // Check for error messages
+  if (result.toLowerCase().includes('error') || result.toLowerCase().includes('sorry')) return true;
   
   return false;
 }
@@ -207,7 +135,7 @@ serve(async (req) => {
   }
 
   try {
-    const { question, correctAnswer, explanation, subject, grade, skillName } = await req.json();
+    const { question, correctAnswer, explanation, subject, grade, skillName, questionType } = await req.json();
 
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
@@ -219,14 +147,15 @@ serve(async (req) => {
       explanation,
       subject: subject || 'General',
       grade: grade || 'Grade 10',
-      skillName
+      skillName,
+      questionType
     };
 
-    console.log('Analyzing explanation complexity for smart routing...');
+    console.log('Using simplified question-type routing for explanations...');
     
-    // Smart routing decision
-    const routingDecision = routeExplanationRequest(context);
-    console.log(`Routing decision: ${routingDecision.selectedModel} (complexity: ${routingDecision.complexityAnalysis.complexityScore}, confidence: ${routingDecision.confidence}%)`);
+    // Simple question-type-based routing
+    const routingDecision = routeByQuestionType(context);
+    console.log(`Routing decision: ${routingDecision.selectedModel}`);
     console.log(`Reasoning: ${routingDecision.reasoning}`);
 
     let detailedExplanation: string;
@@ -239,7 +168,8 @@ serve(async (req) => {
       
       // Quality check and potential fallback for gpt-4o-mini
       if (routingDecision.selectedModel === 'gpt-4o-mini') {
-        if (shouldFallbackToGPT4o(detailedExplanation, routingDecision.complexityAnalysis)) {
+        const wasSimpleQuestion = routingDecision.complexityScore < 30;
+        if (shouldFallbackToGPT4o(detailedExplanation, wasSimpleQuestion)) {
           console.log('Quality check failed for gpt-4o-mini, falling back to gpt-4o...');
           detailedExplanation = await generateExplanationWithModel('gpt-4o', context);
           usedModel = 'gpt-4o';
@@ -268,8 +198,8 @@ serve(async (req) => {
         selectedModel: usedModel,
         originalModel: routingDecision.selectedModel,
         fallbackTriggered,
-        complexityScore: routingDecision.complexityAnalysis.complexityScore,
-        confidence: routingDecision.confidence,
+        complexityScore: routingDecision.complexityScore,
+        confidence: 95, // High confidence in question-type routing
         reasoning: routingDecision.reasoning
       }
     }), {

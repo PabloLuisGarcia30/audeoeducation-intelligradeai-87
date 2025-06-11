@@ -154,7 +154,8 @@ export function PracticeExerciseReview({
           explanation: review.explanation,
           subject: answerKey?.metadata.subject || 'General',
           grade: answerKey?.metadata.grade || 'Grade 10',
-          skillName: review.targetSkill
+          skillName: review.targetSkill,
+          questionType: review.type // Pass the question type for smart routing
         }
       });
 
@@ -177,7 +178,7 @@ export function PracticeExerciseReview({
       if (data.routingInfo) {
         const routingMsg = data.routingInfo.fallbackTriggered 
           ? `Generated with ${data.routingInfo.selectedModel} (fallback from ${data.routingInfo.originalModel})`
-          : `Generated with ${data.routingInfo.selectedModel} (complexity: ${data.routingInfo.complexityScore})`;
+          : `Generated with ${data.routingInfo.selectedModel} (${review.type} question)`;
         toast.success(`Detailed explanation ready! ${routingMsg}`);
       } else {
         toast.success('Detailed explanation generated!');
