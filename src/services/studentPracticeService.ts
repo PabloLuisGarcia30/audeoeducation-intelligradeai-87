@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { practiceExerciseSkillService } from "./practiceExerciseSkillService";
+import { ProgressiveDifficultyService, type DifficultyRecommendation } from "./progressiveDifficultyService";
 
 export interface StudentPracticeRequest {
   studentId: string; // Now expects authenticated user ID
@@ -36,6 +37,7 @@ export interface StudentPracticeExercise {
   estimatedTime: number;
   adaptiveDifficulty: string;
   studentGuidance: string;
+  progressiveDifficulty: DifficultyRecommendation; // NEW: Include difficulty analysis
   metadata: {
     skillName: string;
     currentSkillScore: number;
@@ -46,6 +48,7 @@ export interface StudentPracticeExercise {
     sessionId: string;
     skillType?: string;
     skillMetadata?: any;
+    difficultyAnalysis?: DifficultyRecommendation; // NEW: Store difficulty analysis
   };
 }
 
@@ -87,10 +90,26 @@ export interface StudentPracticeAnalytics {
 export class StudentPracticeService {
   static async generatePracticeExercise(request: StudentPracticeRequest): Promise<StudentPracticeExercise> {
     try {
-      console.log('🎯 Generating student practice exercise for authenticated user:', request.studentId);
+      console.log('🎯 Generating student practice exercise with progressive difficulty for authenticated user:', request.studentId);
       
+      // Calculate progressive difficulty before generation
+      const difficultyRecommendation = ProgressiveDifficultyService.calculateDifficulty({
+        studentScore: request.currentSkillScore,
+        skillName: request.skillName,
+        targetImprovement: Math.min(request.currentSkillScore + 15, 95),
+        preferredDifficulty: request.preferredDifficulty
+      });
+
+      console.log('📊 Progressive difficulty calculated:', difficultyRecommendation.reasoning);
+
+      // Enhanced request with difficulty analysis
+      const enhancedRequest = {
+        ...request,
+        difficultyAnalysis: difficultyRecommendation
+      };
+
       const { data, error } = await supabase.functions.invoke('generate-student-practice-exercise', {
-        body: request
+        body: enhancedRequest
       });
 
       if (error) {
@@ -102,8 +121,18 @@ export class StudentPracticeService {
         throw new Error('No data received from practice exercise generation');
       }
 
-      console.log('✅ Successfully generated student practice exercise for authenticated user');
-      return data as StudentPracticeExercise;
+      // Add progressive difficulty information to the response
+      const exerciseWithDifficulty = {
+        ...data,
+        progressiveDifficulty: difficultyRecommendation,
+        metadata: {
+          ...data.metadata,
+          difficultyAnalysis: difficultyRecommendation
+        }
+      };
+
+      console.log('✅ Successfully generated student practice exercise with progressive difficulty for authenticated user');
+      return exerciseWithDifficulty as StudentPracticeExercise;
     } catch (error) {
       console.error('❌ Error in generatePracticeExercise:', error);
       throw error;

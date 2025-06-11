@@ -13,6 +13,22 @@ const corsHeaders = {
 
 const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
+interface DifficultyRecommendation {
+  level: {
+    name: string;
+    complexityFactor: number;
+    questionTypes: string[];
+    supportLevel: string;
+  };
+  reasoning: string;
+  questionDistribution: {
+    review: number;
+    practice: number;
+    challenge: number;
+  };
+  supportFeatures: string[];
+}
+
 interface StudentPracticeRequest {
   studentId: string;
   studentName: string;
@@ -24,6 +40,7 @@ interface StudentPracticeRequest {
   grade: string;
   preferredDifficulty?: 'adaptive' | 'review' | 'challenge';
   questionCount?: number;
+  difficultyAnalysis?: DifficultyRecommendation; // NEW: Include difficulty analysis
 }
 
 interface Question {
@@ -137,7 +154,7 @@ async function findSkillInDatabase(skillName: string, subject: string, grade: st
 }
 
 function buildStudentPracticePrompt(request: StudentPracticeRequest, difficultyLevel: string, skillMetadata: any): string {
-  const { studentName, skillName, currentSkillScore, className, subject, grade, questionCount = 4 } = request;
+  const { studentName, skillName, currentSkillScore, className, subject, grade, questionCount = 4, difficultyAnalysis } = request;
   
   const difficultyGuidance = {
     review: 'Focus on fundamental concepts with step-by-step explanations. Include hints and scaffolding.',
@@ -160,6 +177,29 @@ function buildStudentPracticePrompt(request: StudentPracticeRequest, difficultyL
     ? 'Focus on specific academic content knowledge and concepts as defined in the curriculum.'
     : 'Emphasize transferable thinking skills and analytical processes as defined in the curriculum.';
 
+  // NEW: Progressive difficulty prompt integration
+  let progressiveDifficultyPrompt = '';
+  if (difficultyAnalysis) {
+    const { questionDistribution, supportFeatures } = difficultyAnalysis;
+    const reviewCount = Math.round((questionDistribution.review / 100) * questionCount);
+    const practiceCount = Math.round((questionDistribution.practice / 100) * questionCount);
+    const challengeCount = questionCount - reviewCount - practiceCount;
+
+    progressiveDifficultyPrompt = `
+PROGRESSIVE DIFFICULTY REQUIREMENTS:
+- Current skill score: ${currentSkillScore}% (${difficultyAnalysis.reasoning})
+- Question distribution: ${reviewCount} review, ${practiceCount} practice, ${challengeCount} challenge
+- Support features: ${supportFeatures.join(', ')}
+- Complexity factor: ${difficultyAnalysis.level.complexityFactor}
+
+QUESTION COMPLEXITY GUIDELINES:
+${reviewCount > 0 ? `- Review Questions (${reviewCount}): Fundamental concepts, clear scaffolding, step-by-step approach` : ''}
+${practiceCount > 0 ? `- Practice Questions (${practiceCount}): Apply concepts in familiar contexts, moderate complexity` : ''}
+${challengeCount > 0 ? `- Challenge Questions (${challengeCount}): Complex applications, real-world scenarios, higher-order thinking` : ''}
+
+Ensure questions build progressively and match the student's current ability level.`;
+  }
+
   return `Create a personalized practice exercise for ${studentName} in ${className} (${subject}, ${grade}).
 
 STUDENT CONTEXT:
@@ -171,6 +211,8 @@ STUDENT CONTEXT:
 CURRICULUM SKILL INFORMATION:
 ${skillContext}
 
+${progressiveDifficultyPrompt}
+
 EXERCISE REQUIREMENTS:
 - Generate exactly ${questionCount} questions targeting "${skillName}"
 - Questions must align with the official curriculum skill description
@@ -180,17 +222,18 @@ EXERCISE REQUIREMENTS:
 - Make questions engaging and relatable to ${grade} students
 - Ensure questions align with ${skillMetadata.skillType} skill development
 ${skillMetadata.topic ? `- Incorporate concepts from the topic: "${skillMetadata.topic}"` : ''}
+- Follow the progressive difficulty distribution specified above
 
 FORMAT AS JSON:
 {
   "title": "Personalized Practice: ${skillName}",
-  "description": "Adaptive practice designed to improve your ${skillName} skills",
-  "studentGuidance": "Encouraging message about practice goals and what they'll learn",
+  "description": "Adaptive practice designed to improve your ${skillName} skills with progressive difficulty",
+  "studentGuidance": "Encouraging message about practice goals and how questions build in complexity",
   "questions": [
     {
       "id": "q1",
       "type": "multiple-choice" | "short-answer" | "essay",
-      "question": "Question text",
+      "question": "Question text (complexity appropriate to distribution)",
       "options": ["A", "B", "C", "D"] (for multiple choice),
       "correctAnswer": "Correct answer",
       "acceptableAnswers": ["Alternative answers"],
@@ -198,7 +241,7 @@ FORMAT AS JSON:
       "points": 1,
       "explanation": "Clear explanation of why this is correct",
       "targetSkill": "${skillName}",
-      "difficultyLevel": "${difficultyLevel}",
+      "difficultyLevel": "review" | "practice" | "challenge",
       "hint": "Helpful hint if student gets stuck"
     }
   ],
@@ -395,7 +438,10 @@ serve(async (req) => {
     }
 
     const requestData: StudentPracticeRequest = await req.json();
-    console.log('📋 Student request data:', requestData);
+    console.log('📋 Student request data with progressive difficulty:', {
+      ...requestData,
+      difficultyAnalysis: requestData.difficultyAnalysis ? 'included' : 'not included'
+    });
 
     // Validate required fields
     if (!requestData.studentId || !requestData.skillName || !requestData.className) {

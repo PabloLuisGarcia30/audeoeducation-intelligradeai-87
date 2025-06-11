@@ -1,6 +1,6 @@
-
 import { useState } from 'react';
 import { StudentPracticeService, type StudentPracticeRequest, type StudentPracticeExercise } from '@/services/studentPracticeService';
+import { ProgressiveDifficultyService } from '@/services/progressiveDifficultyService';
 import { toast } from 'sonner';
 
 interface UseStudentPracticeGenerationProps {
@@ -23,12 +23,29 @@ export function useStudentPracticeGeneration({
     setError(null);
 
     try {
-      console.log('🎯 Starting student practice exercise generation...');
+      console.log('🎯 Starting student practice exercise generation with progressive difficulty...');
+      
+      // Calculate difficulty before generation for better user feedback
+      const difficultyRecommendation = ProgressiveDifficultyService.calculateDifficulty({
+        studentScore: request.currentSkillScore,
+        skillName: request.skillName,
+        targetImprovement: Math.min(request.currentSkillScore + 15, 95),
+        preferredDifficulty: request.preferredDifficulty
+      });
+
+      console.log('📊 Progressive difficulty analysis:', difficultyRecommendation.reasoning);
       
       const exercise = await StudentPracticeService.generatePracticeExercise(request);
       
       setRetryCount(0);
-      toast.success(`Practice exercise generated for ${request.skillName}!`);
+      
+      // Enhanced success message with difficulty info
+      const difficultyInfo = exercise.progressiveDifficulty ? 
+        ` (${exercise.progressiveDifficulty.level.name} difficulty)` : '';
+      
+      toast.success(`Practice exercise generated for ${request.skillName}${difficultyInfo}!`, {
+        description: exercise.progressiveDifficulty?.reasoning
+      });
       
       return exercise;
     } catch (err) {
@@ -81,10 +98,20 @@ export function useStudentPracticeGeneration({
 
   return {
     generatePracticeExercise,
-    updateSessionScore,
+    updateSessionScore: async (sessionId: string, finalScore: number, improvementShown?: number): Promise<void> => {
+      try {
+        await StudentPracticeService.updatePracticeSessionScore(sessionId, finalScore, improvementShown);
+      } catch (error) {
+        console.error('❌ Error updating session score:', error);
+      }
+    },
     isLoading,
     error,
     retryCount,
-    reset
+    reset: () => {
+      setError(null);
+      setRetryCount(0);
+      setIsLoading(false);
+    }
   };
 }
