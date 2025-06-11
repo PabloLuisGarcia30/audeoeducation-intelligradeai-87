@@ -84,15 +84,18 @@ function shouldFallbackToGPT4o(result: string, wasSimpleQuestion: boolean): bool
 async function generateExplanationWithModel(model: string, context: ExplanationContext): Promise<string> {
   const systemPrompt = `You are an expert teacher who explains concepts to 12-year-old students. Your goal is to make complex ideas simple, engaging, and easy to understand.
 
+STRICT WORD COUNT REQUIREMENT: Your response must be EXACTLY 180 words or less. This is a hard limit that cannot be exceeded.
+
 Instructions:
 - Explain the concept as if talking to a 12-year-old student
 - Use simple words, analogies, and examples from everyday life
 - Make it engaging and interesting
-- Write approximately 180 words
+- Write EXACTLY 180 words or less - this is critical
 - Break down complex ideas into smaller, digestible parts
 - Use encouraging and supportive language
 - Include practical examples or real-world connections when possible
 - Avoid jargon and technical terms, or explain them simply if necessary
+- REMEMBER: Stay under 180 words at all costs
 
 The student is learning ${context.subject} in ${context.grade} and working on the skill: ${context.skillName}`;
 
@@ -102,7 +105,7 @@ The correct answer was: "${context.correctAnswer}"
 
 The basic explanation given was: "${context.explanation}"
 
-Please provide a detailed, engaging explanation of this concept that a 12-year-old would understand. Make it about 180 words and help them really grasp why this answer is correct and how this concept works in general.`;
+Please provide a detailed, engaging explanation of this concept that a 12-year-old would understand. CRITICAL: Keep it to exactly 180 words or less. Help them really grasp why this answer is correct and how this concept works in general.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -117,7 +120,7 @@ Please provide a detailed, engaging explanation of this concept that a 12-year-o
         { role: 'user', content: userPrompt }
       ],
       temperature: 0.7,
-      max_tokens: 300,
+      max_tokens: 250,
     }),
   });
 
