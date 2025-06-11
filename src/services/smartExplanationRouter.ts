@@ -85,7 +85,6 @@ export class SmartExplanationRouter {
     return {
       complexityScore: Math.min(100, Math.max(0, complexityScore)),
       confidenceInDecision,
-      complexityFactors: factors,
       modelRecommendation: complexityScore >= 35 ? 'gpt-4o' : 'gpt-4o-mini'
     };
   }
@@ -264,8 +263,19 @@ export class SmartExplanationRouter {
   }
 
   private generateRoutingReasoning(analysis: ComplexityAnalysis, selectedModel: string): string {
-    const factors = analysis.complexityFactors.slice(0, 3).join(', ');
-    return `Selected ${selectedModel} based on complexity score ${analysis.complexityScore}/100. Key factors: ${factors}`;
+    // Create a summary of key factors without accessing complexityFactors
+    const score = analysis.complexityScore;
+    let factors = 'complexity analysis';
+    
+    if (score > 60) {
+      factors = 'high complexity detected';
+    } else if (score > 30) {
+      factors = 'medium complexity detected';
+    } else {
+      factors = 'low complexity detected';
+    }
+    
+    return `Selected ${selectedModel} based on complexity score ${score}/100. Reasoning: ${factors}`;
   }
 
   shouldFallbackToGPT4o(gpt4oMiniResult: any, originalComplexity: ComplexityAnalysis): {
