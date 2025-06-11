@@ -36,9 +36,12 @@ export class SmartExplanationRouter {
   routeExplanationRequest(context: ExplanationContext): ExplanationRoutingDecision {
     const routingDecision = this.routeByQuestionType(context);
     
-    // Create a simplified complexity analysis for compatibility
+    // Create a complete complexity analysis that matches the interface
     const complexityAnalysis: ComplexityAnalysis = {
       complexityScore: routingDecision.isComplex ? 80 : 20,
+      recommendedModel: routingDecision.selectedModel,
+      factors: this.createComplexityFactors(context),
+      reasoning: [routingDecision.reasoning],
       confidenceInDecision: 95 // High confidence in question-type routing
     };
     
@@ -51,6 +54,39 @@ export class SmartExplanationRouter {
       confidence: complexityAnalysis.confidenceInDecision,
       reasoning: routingDecision.reasoning
     };
+  }
+
+  private createComplexityFactors(context: ExplanationContext): any {
+    // Create basic complexity factors based on the question type analysis
+    return {
+      ocrConfidence: 100, // Not applicable for explanations
+      bubbleQuality: 'high', // Not applicable for explanations
+      hasMultipleMarks: false,
+      hasReviewFlags: false,
+      isCrossValidated: true,
+      questionType: this.inferQuestionType(context),
+      answerClarity: 100,
+      selectedAnswer: context.correctAnswer
+    };
+  }
+
+  private inferQuestionType(context: ExplanationContext): string {
+    if (context.questionType) {
+      return context.questionType.toLowerCase();
+    }
+
+    const questionText = context.question.toLowerCase();
+    const correctAnswer = context.correctAnswer.toLowerCase();
+
+    if (this.isMultipleChoice(questionText, context)) {
+      return 'mcq';
+    }
+
+    if (this.isTrueFalse(correctAnswer)) {
+      return 'true-false';
+    }
+
+    return 'short-answer';
   }
 
   private routeByQuestionType(context: ExplanationContext): {
