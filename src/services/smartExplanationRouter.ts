@@ -17,7 +17,7 @@ export interface ExplanationContext {
 }
 
 export interface ExplanationRoutingDecision {
-  selectedModel: 'gpt-4o-mini' | 'gpt-4o';
+  selectedModel: 'gpt-4o-mini' | 'gpt-4.1-2025-04-14';
   complexityAnalysis: ComplexityAnalysis;
   estimatedCost: number;
   confidence: number;
@@ -45,7 +45,7 @@ export class SmartExplanationRouter {
       confidenceInDecision: 95 // High confidence in question-type routing
     };
     
-    const estimatedCost = routingDecision.selectedModel === 'gpt-4o' ? this.config.gpt4oMiniCost * 8 : this.config.gpt4oMiniCost;
+    const estimatedCost = routingDecision.selectedModel === 'gpt-4.1-2025-04-14' ? this.config.gpt4oMiniCost * 8 : this.config.gpt4oMiniCost;
     
     return {
       selectedModel: routingDecision.selectedModel,
@@ -90,7 +90,7 @@ export class SmartExplanationRouter {
   }
 
   private routeByQuestionType(context: ExplanationContext): {
-    selectedModel: 'gpt-4o-mini' | 'gpt-4o';
+    selectedModel: 'gpt-4o-mini' | 'gpt-4.1-2025-04-14';
     isComplex: boolean;
     reasoning: string;
   } {
@@ -108,9 +108,9 @@ export class SmartExplanationRouter {
       
       if (questionType.includes('short-answer') || questionType.includes('essay')) {
         return {
-          selectedModel: 'gpt-4o',
+          selectedModel: 'gpt-4.1-2025-04-14',
           isComplex: true,
-          reasoning: `Selected gpt-4o for ${context.questionType} question - detailed explanation required`
+          reasoning: `Selected gpt-4.1-2025-04-14 for ${context.questionType} question - detailed explanation required`
         };
       }
     }
@@ -139,9 +139,9 @@ export class SmartExplanationRouter {
 
     // Default to complex for open-ended questions
     return {
-      selectedModel: 'gpt-4o',
+      selectedModel: 'gpt-4.1-2025-04-14',
       isComplex: true,
-      reasoning: 'Selected gpt-4o - detected open-ended question requiring detailed explanation'
+      reasoning: 'Selected gpt-4.1-2025-04-14 - detected open-ended question requiring detailed explanation'
     };
   }
 

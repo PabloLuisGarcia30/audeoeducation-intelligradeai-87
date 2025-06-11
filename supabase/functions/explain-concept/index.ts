@@ -21,7 +21,7 @@ interface ExplanationContext {
 
 // Simple question-type-based routing
 function routeByQuestionType(context: ExplanationContext): {
-  selectedModel: 'gpt-4o-mini' | 'gpt-4o';
+  selectedModel: 'gpt-4o-mini' | 'gpt-4.1-2025-04-14';
   reasoning: string;
   complexityScore: number;
 } {
@@ -62,8 +62,8 @@ function routeByQuestionType(context: ExplanationContext): {
 
   // Default to complex for open-ended questions
   return {
-    selectedModel: 'gpt-4o',
-    reasoning: 'Selected gpt-4o for open-ended question - detailed explanation required',
+    selectedModel: 'gpt-4.1-2025-04-14',
+    reasoning: 'Selected gpt-4.1-2025-04-14 for open-ended question - detailed explanation required',
     complexityScore: 80
   };
 }
@@ -170,18 +170,18 @@ serve(async (req) => {
       if (routingDecision.selectedModel === 'gpt-4o-mini') {
         const wasSimpleQuestion = routingDecision.complexityScore < 30;
         if (shouldFallbackToGPT4o(detailedExplanation, wasSimpleQuestion)) {
-          console.log('Quality check failed for gpt-4o-mini, falling back to gpt-4o...');
-          detailedExplanation = await generateExplanationWithModel('gpt-4o', context);
-          usedModel = 'gpt-4o';
+          console.log('Quality check failed for gpt-4o-mini, falling back to gpt-4.1-2025-04-14...');
+          detailedExplanation = await generateExplanationWithModel('gpt-4.1-2025-04-14', context);
+          usedModel = 'gpt-4.1-2025-04-14';
           fallbackTriggered = true;
         }
       }
     } catch (error) {
-      // Error fallback - if gpt-4o-mini fails, try gpt-4o
+      // Error fallback - if gpt-4o-mini fails, try gpt-4.1-2025-04-14
       if (routingDecision.selectedModel === 'gpt-4o-mini') {
-        console.log('gpt-4o-mini failed, falling back to gpt-4o...');
-        detailedExplanation = await generateExplanationWithModel('gpt-4o', context);
-        usedModel = 'gpt-4o';
+        console.log('gpt-4o-mini failed, falling back to gpt-4.1-2025-04-14...');
+        detailedExplanation = await generateExplanationWithModel('gpt-4.1-2025-04-14', context);
+        usedModel = 'gpt-4.1-2025-04-14';
         fallbackTriggered = true;
       } else {
         throw error;
@@ -190,7 +190,7 @@ serve(async (req) => {
 
     // Log routing results for analytics
     console.log(`Successfully generated explanation using ${usedModel}${fallbackTriggered ? ' (after fallback)' : ''}`);
-    console.log(`Cost factor: ${usedModel === 'gpt-4o' ? '8x' : '1x'} baseline`);
+    console.log(`Cost factor: ${usedModel === 'gpt-4.1-2025-04-14' ? '8x' : '1x'} baseline`);
 
     return new Response(JSON.stringify({ 
       detailedExplanation,
