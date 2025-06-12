@@ -161,7 +161,8 @@ export async function createStudentExercises(exercises: {
   }
 }
 
-export async function getStudentExercises(studentId: string): Promise<StudentExercise[]> {
+// NEW: Specific function for Live Session Access - only lesson plan exercises
+export async function getStudentLiveSessionExercises(studentId: string): Promise<StudentExercise[]> {
   try {
     const { data, error } = await supabase
       .from('student_exercises')
@@ -207,7 +208,57 @@ export async function getStudentExercises(studentId: string): Promise<StudentExe
 
     return transformedData as StudentExercise[];
   } catch (error) {
-    console.error('Error fetching student exercises from lesson plan sessions:', error);
+    console.error('Error fetching student live session exercises:', error);
+    throw error;
+  }
+}
+
+// UPDATED: General function for HomeLearner - all available exercises (maintaining backward compatibility)
+export async function getStudentExercises(studentId: string): Promise<StudentExercise[]> {
+  try {
+    const { data, error } = await supabase
+      .from('student_exercises')
+      .select(`
+        *,
+        class_sessions!inner(
+          id,
+          is_active,
+          class_id,
+          session_name,
+          teacher_id,
+          lesson_plan_id,
+          started_at,
+          lesson_plans(
+            id,
+            class_name,
+            teacher_name,
+            subject,
+            grade,
+            scheduled_date,
+            scheduled_time,
+            status
+          )
+        )
+      `)
+      .eq('student_id', studentId)
+      .eq('class_sessions.is_active', true); // All active sessions, not just lesson plan ones
+
+    if (error) throw error;
+    
+    // Transform the data to include lesson plan information where available
+    const transformedData = data?.map(exercise => ({
+      ...exercise,
+      lesson_plan_info: exercise.class_sessions?.lesson_plans || undefined,
+      session_info: {
+        session_name: exercise.class_sessions?.session_name,
+        started_at: exercise.class_sessions?.started_at,
+        teacher_id: exercise.class_sessions?.teacher_id
+      }
+    })) || [];
+
+    return transformedData as StudentExercise[];
+  } catch (error) {
+    console.error('Error fetching student exercises:', error);
     throw error;
   }
 }

@@ -17,7 +17,7 @@ import {
   User
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { getStudentExercises } from "@/services/classSessionService";
+import { getStudentLiveSessionExercises } from "@/services/classSessionService";
 import { useNavigate } from "react-router-dom";
 
 interface StudentLiveSessionAccessProps {
@@ -28,8 +28,8 @@ export function StudentLiveSessionAccess({ studentId }: StudentLiveSessionAccess
   const navigate = useNavigate();
   
   const { data: activeExercises = [], isLoading, refetch } = useQuery({
-    queryKey: ['studentActiveExercises', studentId],
-    queryFn: () => getStudentExercises(studentId),
+    queryKey: ['studentLiveSessionExercises', studentId],
+    queryFn: () => getStudentLiveSessionExercises(studentId),
     refetchInterval: 30000, // Refetch every 30 seconds for live updates
   });
 
