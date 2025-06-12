@@ -46,3 +46,8 @@ export function calculateNextClass(classData: SimpleClass) {
 
   return null;
 }
+
+export function getNextClassDate(classData: SimpleClass): string {
+  const nextClass = calculateNextClass(classData);
+  return nextClass ? nextClass.formattedDate : 'No upcoming class';
+}

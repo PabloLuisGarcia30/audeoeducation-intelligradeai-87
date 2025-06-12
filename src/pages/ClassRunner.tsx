@@ -55,7 +55,7 @@ export default function ClassRunner() {
   });
 
   // Fetch active sessions for monitoring
-  const { data: sessions, isLoading: isLoadingSessions } = useQuery({
+  const { data: sessions = [], isLoading: isLoadingSessions } = useQuery({
     queryKey: ['activeClassSessions'],
     queryFn: () => getActiveClassSessions(),
     refetchInterval: 5000
@@ -192,16 +192,17 @@ export default function ClassRunner() {
                       </div>
                       <div>
                         <p className="text-2xl font-bold">{sessions.length}</p>
-                        <p className="text-blue-100 text-sm">Live Sessions</p>
+                        <p className="text-blue-100 text-sm">Active Sessions</p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
               
-              {/* Background decoration */}
-              <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-l from-white/10 to-transparent rounded-full blur-3xl"></div>
-              <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-gradient-to-r from-blue-400/20 to-transparent rounded-full blur-3xl"></div>
+              {/* Background Pattern */}
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-0 left-0 w-full h-full bg-[url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.1"%3E%3Ccircle cx="7" cy="7" r="2"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')]"></div>
+              </div>
             </div>
           ) : (
             <div className="mb-6">
@@ -211,6 +212,7 @@ export default function ClassRunner() {
           )}
         </div>
 
+        {/* Rest of component with proper sessions usage */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className={useModernDesign ? "grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm" : "grid w-full grid-cols-3"}>
             <TabsTrigger 
@@ -226,9 +228,9 @@ export default function ClassRunner() {
             >
               <Activity className="h-4 w-4" />
               Live Monitoring
-              {activeSessions.length > 0 && (
+              {sessions.length > 0 && (
                 <span className="ml-1 px-2 py-1 text-xs bg-emerald-500 text-white rounded-full animate-pulse">
-                  {activeSessions.length}
+                  {sessions.length}
                 </span>
               )}
             </TabsTrigger>
@@ -384,14 +386,14 @@ export default function ClassRunner() {
                   )}
                   <div>
                     <span className="text-xl">Live Session Monitoring</span>
-                    {activeSessions.length > 0 && (
+                    {sessions.length > 0 && (
                       <div className="flex items-center gap-2 mt-1">
                         <span className="flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-emerald-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
                         <span className="text-sm text-emerald-600 font-medium">
-                          {activeSessions.length} active session{activeSessions.length !== 1 ? 's' : ''}
+                          {sessions.length} active session{sessions.length !== 1 ? 's' : ''}
                         </span>
                       </div>
                     )}

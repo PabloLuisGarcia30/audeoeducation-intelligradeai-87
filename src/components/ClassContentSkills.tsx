@@ -77,7 +77,7 @@ export function ClassContentSkills({ activeClass }: ClassContentSkillsProps) {
 
   const autoLinkMathClass = async () => {
     try {
-      await autoLinkMathClassToGrade10Skills();
+      await autoLinkMathClassToGrade10Skills(activeClass.id);
       await loadSkills(); // Refresh the data
       toast.success('Grade 10 Math class has been automatically linked to Grade 10 Math skills!');
     } catch (error) {
@@ -104,7 +104,7 @@ export function ClassContentSkills({ activeClass }: ClassContentSkillsProps) {
 
   const autoLinkGeographyClass = async () => {
     try {
-      await autoLinkGeographyClassToGrade11Skills();
+      await autoLinkGeographyClassToGrade11Skills(activeClass.id);
       await loadSkills(); // Refresh the data
       toast.success('Grade 11 Geography class has been automatically linked to Grade 11 Geography skills!');
     } catch (error) {
