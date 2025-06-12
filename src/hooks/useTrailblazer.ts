@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trailblazerService } from '@/services/trailblazerService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -43,13 +42,32 @@ export const useTrailblazer = () => {
     enabled: !!user,
   });
 
-  // Start session mutation
+  // Get student's enrolled classes
+  const { data: enrolledClasses = [], isLoading: classesLoading } = useQuery({
+    queryKey: ['trailblazer', 'enrolledClasses'],
+    queryFn: trailblazerService.getEnrolledClasses,
+    enabled: !!user,
+  });
+
+  // Get class concepts for a specific class
+  const getClassConcepts = (classId: string) => {
+    return useQuery({
+      queryKey: ['trailblazer', 'classConcepts', classId],
+      queryFn: () => trailblazerService.getClassConcepts(classId),
+      enabled: !!classId,
+    });
+  };
+
+  // Enhanced start session mutation with class context
   const startSessionMutation = useMutation({
-    mutationFn: ({ goalType, focusConcept, durationMinutes }: {
+    mutationFn: ({ goalType, focusConcept, durationMinutes, classId, subject, grade }: {
       goalType: string;
       focusConcept: string;
       durationMinutes: number;
-    }) => trailblazerService.startSession(goalType, focusConcept, durationMinutes),
+      classId?: string;
+      subject?: string;
+      grade?: string;
+    }) => trailblazerService.startSession(goalType, focusConcept, durationMinutes, classId, subject, grade),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trailblazer'] });
     },
@@ -67,7 +85,7 @@ export const useTrailblazer = () => {
     },
   });
 
-  const isLoading = streakLoading || conceptsLoading || sessionsLoading || achievementsLoading;
+  const isLoading = streakLoading || conceptsLoading || sessionsLoading || achievementsLoading || classesLoading;
 
   return {
     // Data
@@ -75,6 +93,8 @@ export const useTrailblazer = () => {
     concepts,
     recentSessions,
     achievements,
+    enrolledClasses,
+    getClassConcepts,
     
     // Loading states
     isLoading,
@@ -86,5 +106,32 @@ export const useTrailblazer = () => {
     // Mutation states
     isStartingSession: startSessionMutation.isPending,
     isCompletingSession: completeSessionMutation.isPending,
+  };
+};
+
+// Hook for teachers to access student Trailblazer data
+export const useTeacherTrailblazer = () => {
+  const { user } = useAuth();
+
+  // Get all students' progress for the teacher
+  const { data: studentsProgress = [], isLoading: progressLoading } = useQuery({
+    queryKey: ['teacher', 'trailblazer', 'studentsProgress'],
+    queryFn: trailblazerService.getTeacherStudentsProgress,
+    enabled: !!user,
+  });
+
+  // Get specific student's Trailblazer data
+  const getStudentData = (studentId: string) => {
+    return useQuery({
+      queryKey: ['teacher', 'trailblazer', 'student', studentId],
+      queryFn: () => trailblazerService.getStudentTrailblazerData(studentId),
+      enabled: !!studentId,
+    });
+  };
+
+  return {
+    studentsProgress,
+    isLoading: progressLoading,
+    getStudentData,
   };
 };

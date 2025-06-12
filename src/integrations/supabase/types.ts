@@ -2184,47 +2184,64 @@ export type Database = {
       trailblazer_sessions: {
         Row: {
           actual_duration_minutes: number | null
+          class_id: string | null
           created_at: string | null
           duration_minutes: number
           focus_concept: string
           goal_type: string
+          grade: string | null
           id: string
           mistake_types_encountered: Json | null
           score_improvement: number | null
           session_date: string | null
           status: string | null
+          subject: string | null
           updated_at: string | null
           user_id: string | null
         }
         Insert: {
           actual_duration_minutes?: number | null
+          class_id?: string | null
           created_at?: string | null
           duration_minutes: number
           focus_concept: string
           goal_type: string
+          grade?: string | null
           id?: string
           mistake_types_encountered?: Json | null
           score_improvement?: number | null
           session_date?: string | null
           status?: string | null
+          subject?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
         Update: {
           actual_duration_minutes?: number | null
+          class_id?: string | null
           created_at?: string | null
           duration_minutes?: number
           focus_concept?: string
           goal_type?: string
+          grade?: string | null
           id?: string
           mistake_types_encountered?: Json | null
           score_improvement?: number | null
           session_date?: string | null
           status?: string | null
+          subject?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "trailblazer_sessions_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "active_classes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_concept_mastery: {
         Row: {
@@ -2419,6 +2436,15 @@ export type Database = {
           created_at: string
         }[]
       }
+      get_class_concepts_for_session: {
+        Args: { p_class_id: string }
+        Returns: {
+          concept_name: string
+          subject: string
+          grade: string
+          skill_names: string[]
+        }[]
+      }
       get_enhanced_mistake_analysis: {
         Args: { student_uuid: string; skill_filter?: string }
         Returns: {
@@ -2489,6 +2515,16 @@ export type Database = {
           last_updated: string
         }[]
       }
+      get_student_enrolled_classes: {
+        Args: { student_user_id: string }
+        Returns: {
+          class_id: string
+          class_name: string
+          subject: string
+          grade: string
+          teacher_name: string
+        }[]
+      }
       get_student_mistake_patterns: {
         Args: { student_uuid: string; skill_filter?: string }
         Returns: {
@@ -2497,6 +2533,18 @@ export type Database = {
           mistake_count: number
           total_questions: number
           mistake_rate: number
+        }[]
+      }
+      get_teacher_students_trailblazer_progress: {
+        Args: { teacher_user_id: string }
+        Returns: {
+          student_id: string
+          student_name: string
+          current_streak_days: number
+          total_sessions: number
+          avg_mastery_score: number
+          last_session_date: string
+          class_name: string
         }[]
       }
       get_user_role: {

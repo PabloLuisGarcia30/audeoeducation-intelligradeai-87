@@ -13,6 +13,34 @@ export interface TrailblazerSession {
   status: string;
   created_at: string;
   updated_at: string;
+  class_id?: string;
+  subject?: string;
+  grade?: string;
+}
+
+export interface EnrolledClass {
+  class_id: string;
+  class_name: string;
+  subject: string;
+  grade: string;
+  teacher_name: string;
+}
+
+export interface ClassConcept {
+  concept_name: string;
+  subject: string;
+  grade: string;
+  skill_names: string[];
+}
+
+export interface StudentTrailblazerProgress {
+  student_id: string;
+  student_name: string;
+  current_streak_days: number;
+  total_sessions: number;
+  avg_mastery_score: number;
+  last_session_date?: string;
+  class_name: string;
 }
 
 export interface UserStreak {
@@ -111,8 +139,49 @@ export const trailblazerService = {
     return data || [];
   },
 
-  // Start a new learning session
-  async startSession(goalType: string, focusConcept: string, durationMinutes: number): Promise<TrailblazerSession> {
+  // Get student's enrolled classes for session options
+  async getEnrolledClasses(): Promise<EnrolledClass[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const { data, error } = await supabase.rpc('get_student_enrolled_classes', {
+      student_user_id: user.id
+    });
+
+    if (error) {
+      console.error('Error fetching enrolled classes:', error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
+  // Get class-specific concepts for session recommendations
+  async getClassConcepts(classId: string): Promise<ClassConcept[]> {
+    const { data, error } = await supabase.rpc('get_class_concepts_for_session', {
+      p_class_id: classId
+    });
+
+    if (error) {
+      console.error('Error fetching class concepts:', error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
+  // Start a new learning session with class context
+  async startSession(
+    goalType: string, 
+    focusConcept: string, 
+    durationMinutes: number,
+    classId?: string,
+    subject?: string,
+    grade?: string
+  ): Promise<TrailblazerSession> {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -126,6 +195,9 @@ export const trailblazerService = {
         goal_type: goalType,
         focus_concept: focusConcept,
         duration_minutes: durationMinutes,
+        class_id: classId,
+        subject: subject,
+        grade: grade,
         status: 'started'
       })
       .select()
@@ -137,6 +209,65 @@ export const trailblazerService = {
     }
 
     return data;
+  },
+
+  // Teacher methods for viewing student data
+  async getTeacherStudentsProgress(): Promise<StudentTrailblazerProgress[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const { data, error } = await supabase.rpc('get_teacher_students_trailblazer_progress', {
+      teacher_user_id: user.id
+    });
+
+    if (error) {
+      console.error('Error fetching teacher students progress:', error);
+      throw error;
+    }
+
+    return data || [];
+  },
+
+  // Get specific student's Trailblazer data for teachers
+  async getStudentTrailblazerData(studentId: string) {
+    // Get student streak
+    const { data: streak } = await supabase
+      .from('user_streaks')
+      .select('*')
+      .eq('user_id', studentId)
+      .single();
+
+    // Get student concepts
+    const { data: concepts } = await supabase
+      .from('user_concept_mastery')
+      .select('*')
+      .eq('user_id', studentId)
+      .order('mastery_score', { ascending: false });
+
+    // Get student sessions
+    const { data: sessions } = await supabase
+      .from('trailblazer_sessions')
+      .select('*')
+      .eq('user_id', studentId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Get student achievements
+    const { data: achievements } = await supabase
+      .from('trailblazer_achievements')
+      .select('*')
+      .eq('user_id', studentId)
+      .order('unlocked_at', { ascending: false });
+
+    return {
+      streak: streak || null,
+      concepts: concepts || [],
+      sessions: sessions || [],
+      achievements: achievements || []
+    };
   },
 
   // Complete a session
