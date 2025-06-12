@@ -17,9 +17,11 @@ import {
   Compass
 } from "lucide-react";
 
+type ViewType = 'dashboard' | 'search' | 'classes' | 'analytics' | 'portals' | 'student-lesson-tracker' | 'learner-profiles' | 'misconceptions' | 'live-sessions' | 'trailblazer';
+
 interface DashboardSidebarProps {
-  activeView: string;
-  onViewChange: (view: string) => void;
+  activeView: ViewType;
+  onViewChange: (view: ViewType) => void;
 }
 
 export function DashboardSidebar({ activeView, onViewChange }: DashboardSidebarProps) {
@@ -27,26 +29,26 @@ export function DashboardSidebar({ activeView, onViewChange }: DashboardSidebarP
     {
       title: "Main",
       items: [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'search', label: 'Student Search', icon: Search },
-        { id: 'classes', label: 'Classes', icon: Users },
+        { id: 'dashboard' as ViewType, label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'search' as ViewType, label: 'Student Search', icon: Search },
+        { id: 'classes' as ViewType, label: 'Classes', icon: Users },
       ]
     },
     {
       title: "Teaching Tools",
       items: [
-        { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-        { id: 'portals', label: 'Student Portals', icon: UserCircle },
-        { id: 'misconceptions', label: 'Misconception Analytics', icon: Brain },
-        { id: 'live-sessions', label: 'Live Sessions', icon: Activity },
+        { id: 'analytics' as ViewType, label: 'Analytics', icon: BarChart3 },
+        { id: 'portals' as ViewType, label: 'Student Portals', icon: UserCircle },
+        { id: 'misconceptions' as ViewType, label: 'Misconception Analytics', icon: Brain },
+        { id: 'live-sessions' as ViewType, label: 'Live Sessions', icon: Activity },
       ]
     },
     {
       title: "Advanced Features",
       items: [
-        { id: 'student-lesson-tracker', label: 'Lesson Tracker', icon: Calendar },
-        { id: 'learner-profiles', label: 'Learner Profiles', icon: Target },
-        { id: 'trailblazer', label: 'Trailblazer Mode', icon: Compass },
+        { id: 'student-lesson-tracker' as ViewType, label: 'Lesson Tracker', icon: Calendar },
+        { id: 'learner-profiles' as ViewType, label: 'Learner Profiles', icon: Target },
+        { id: 'trailblazer' as ViewType, label: 'Trailblazer Mode', icon: Compass },
       ]
     }
   ];
