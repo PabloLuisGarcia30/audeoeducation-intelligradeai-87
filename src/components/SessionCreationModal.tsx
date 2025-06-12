@@ -20,7 +20,7 @@ interface SessionCreationModalProps {
 
 export const SessionCreationModal = ({ children, onSessionCreated }: SessionCreationModalProps) => {
   const [open, setOpen] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<string>('');
+  const [selectedClass, setSelectedClass] = useState<string>('independent');
   const [goalType, setGoalType] = useState<string>('');
   const [focusConcept, setFocusConcept] = useState<string>('');
   const [customConcept, setCustomConcept] = useState<string>('');
@@ -33,7 +33,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
   const { data: classConcepts = [] } = useQuery({
     queryKey: ['trailblazer', 'classConcepts', selectedClass],
     queryFn: () => trailblazerService.getClassConcepts(selectedClass),
-    enabled: !!selectedClass,
+    enabled: !!selectedClass && selectedClass !== 'independent',
   });
 
   const selectedClassData = enrolledClasses.find(c => c.class_id === selectedClass);
@@ -50,7 +50,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
         goalType,
         focusConcept: concept,
         durationMinutes: duration,
-        classId: selectedClass || undefined,
+        classId: selectedClass === 'independent' ? undefined : selectedClass,
         subject: selectedClassData?.subject,
         grade: selectedClassData?.grade,
       });
@@ -62,7 +62,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
       navigate(`/student-dashboard/trailblazer/session/${session.id}`);
       
       // Reset form
-      setSelectedClass('');
+      setSelectedClass('independent');
       setGoalType('');
       setFocusConcept('');
       setCustomConcept('');
@@ -94,7 +94,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
                 <SelectValue placeholder="Select a class or practice independently" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Independent Practice</SelectItem>
+                <SelectItem value="independent">Independent Practice</SelectItem>
                 {enrolledClasses.map((cls) => (
                   <SelectItem key={cls.class_id} value={cls.class_id}>
                     <div className="flex flex-col">
@@ -149,7 +149,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
                 <SelectValue placeholder="What concept do you want to focus on?" />
               </SelectTrigger>
               <SelectContent>
-                {selectedClass && classConcepts.length > 0 ? (
+                {selectedClass !== 'independent' && classConcepts.length > 0 ? (
                   <>
                     {classConcepts.map((concept, index) => (
                       <SelectItem key={index} value={concept.concept_name}>
