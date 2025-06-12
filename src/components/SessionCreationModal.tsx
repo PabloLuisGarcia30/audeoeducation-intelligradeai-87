@@ -1,5 +1,6 @@
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -25,6 +26,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
   const [customConcept, setCustomConcept] = useState<string>('');
   const [duration, setDuration] = useState<number>(25);
 
+  const navigate = useNavigate();
   const { enrolledClasses, startSession, isStartingSession } = useTrailblazer();
 
   // Get class concepts when a class is selected
@@ -44,7 +46,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
         return;
       }
 
-      await startSession({
+      const session = await startSession({
         goalType,
         focusConcept: concept,
         durationMinutes: duration,
@@ -55,6 +57,9 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
 
       setOpen(false);
       onSessionCreated?.();
+      
+      // Navigate to the active session
+      navigate(`/student-dashboard/trailblazer/session/${session.id}`);
       
       // Reset form
       setSelectedClass('');
