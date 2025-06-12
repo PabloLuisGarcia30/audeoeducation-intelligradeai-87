@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { DEV_CONFIG, MOCK_USER_DATA } from "@/config/devConfig";
 
 export interface TrailblazerSession {
   id: string;
@@ -89,6 +90,22 @@ export interface TrailblazerAchievement {
 }
 
 export const trailblazerService = {
+  // Helper function to get authenticated user with dev mode support
+  async getAuthenticatedUser() {
+    if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+      // In dev mode, use mock user data
+      const mockRole = DEV_CONFIG.DEFAULT_DEV_ROLE;
+      return {
+        user: MOCK_USER_DATA[mockRole].user,
+        error: null
+      };
+    }
+
+    // In production, require strict authentication
+    const { data, error } = await supabase.auth.getUser();
+    return { user: data.user, error };
+  },
+
   // Get user's current streak
   async getUserStreak(): Promise<UserStreak | null> {
     const { data, error } = await supabase
@@ -152,9 +169,10 @@ export const trailblazerService = {
 
   // Get student's enrolled classes for session options
   async getEnrolledClasses(): Promise<EnrolledClass[]> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, error: authError } = await this.getAuthenticatedUser();
     
-    if (!user) {
+    if (authError || !user) {
+      console.error('Authentication error in getEnrolledClasses:', authError);
       throw new Error('User not authenticated');
     }
 
@@ -184,7 +202,7 @@ export const trailblazerService = {
     return data || [];
   },
 
-  // Enhanced start session with misconception tracking preparation
+  // Enhanced start session with dev mode support and strict auth for production
   async startSession(
     goalType: string, 
     focusConcept: string, 
@@ -193,11 +211,18 @@ export const trailblazerService = {
     subject?: string,
     grade?: string
   ): Promise<TrailblazerSession> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, error: authError } = await this.getAuthenticatedUser();
     
-    if (!user) {
-      throw new Error('User not authenticated');
+    if (authError || !user) {
+      const errorMessage = DEV_CONFIG.DISABLE_AUTH_FOR_DEV 
+        ? 'Dev mode authentication failed - check mock user configuration'
+        : 'User not authenticated - please log in to start a session';
+      
+      console.error('Authentication error in startSession:', { authError, user, devMode: DEV_CONFIG.DISABLE_AUTH_FOR_DEV });
+      throw new Error(errorMessage);
     }
+
+    console.log(`🧠 Starting Trailblazer session for user ${user.id} with goal: ${goalType}, concept: ${focusConcept}`);
 
     const { data, error } = await supabase
       .from('trailblazer_sessions')
@@ -330,7 +355,7 @@ export const trailblazerService = {
     console.log(`🧠 Completed Trailblazer session ${sessionId} with ${finalMisconceptionSummary.total_misconceptions || 0} misconceptions tracked`);
 
     // Update user streak
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user } = await this.getAuthenticatedUser();
     if (user) {
       await supabase.rpc('update_user_streak', { p_user_id: user.id });
     }
@@ -389,9 +414,10 @@ export const trailblazerService = {
 
   // Get current active session for user
   async getCurrentActiveSession(): Promise<TrailblazerSession | null> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, error: authError } = await this.getAuthenticatedUser();
     
-    if (!user) {
+    if (authError || !user) {
+      console.error('Authentication error in getCurrentActiveSession:', authError);
       throw new Error('User not authenticated');
     }
 
@@ -414,16 +440,17 @@ export const trailblazerService = {
 
   // Teacher methods for viewing student data - now uses authenticated teacher ID
   async getTeacherStudentsProgress(): Promise<StudentTrailblazerProgress[]> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, error: authError } = await this.getAuthenticatedUser();
     
-    if (!user) {
+    if (authError || !user) {
+      console.error('Authentication error in getTeacherStudentsProgress:', authError);
       throw new Error('User not authenticated');
     }
 
     console.log('🔐 Fetching trailblazer progress for authenticated teacher:', user.id);
 
     const { data, error } = await supabase.rpc('get_teacher_students_trailblazer_progress', {
-      teacher_user_id: user.id // Use authenticated user ID
+      teacher_user_id: user.id
     });
 
     if (error) {
@@ -475,9 +502,10 @@ export const trailblazerService = {
 
   // Initialize user data (create streak record if doesn't exist)
   async initializeUser(): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, error: authError } = await this.getAuthenticatedUser();
     
-    if (!user) {
+    if (authError || !user) {
+      console.error('Authentication error in initializeUser:', authError);
       throw new Error('User not authenticated');
     }
 

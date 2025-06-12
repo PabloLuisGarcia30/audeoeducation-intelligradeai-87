@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTrailblazer } from '@/hooks/useTrailblazer';
 import { useQuery } from '@tanstack/react-query';
 import { trailblazerService } from '@/services/trailblazerService';
-import { PlayCircle, BookOpen, Target, Clock } from 'lucide-react';
+import { PlayCircle, BookOpen, Target, Clock, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface SessionCreationModalProps {
   children: React.ReactNode;
@@ -25,9 +27,10 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
   const [focusConcept, setFocusConcept] = useState<string>('');
   const [customConcept, setCustomConcept] = useState<string>('');
   const [duration, setDuration] = useState<number>(25);
+  const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
-  const { enrolledClasses, startSession, isStartingSession } = useTrailblazer();
+  const { enrolledClasses, startSession, isStartingSession, authError } = useTrailblazer();
 
   // Get class concepts when a class is selected
   const { data: classConcepts = [] } = useQuery({
@@ -40,11 +43,26 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
 
   const handleStartSession = async () => {
     try {
+      setError(null); // Clear any previous errors
+      
       const concept = focusConcept === 'custom' ? customConcept : focusConcept;
       
       if (!concept || !goalType) {
+        setError('Please fill in all required fields.');
         return;
       }
+
+      if (focusConcept === 'custom' && !customConcept.trim()) {
+        setError('Please describe your custom concept.');
+        return;
+      }
+
+      console.log('🚀 Starting session with:', {
+        goalType,
+        concept,
+        duration,
+        classId: selectedClass === 'independent' ? undefined : selectedClass
+      });
 
       const session = await startSession({
         goalType,
@@ -54,6 +72,8 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
         subject: selectedClassData?.subject,
         grade: selectedClassData?.grade,
       });
+
+      console.log('✅ Session started successfully:', session);
 
       setOpen(false);
       onSessionCreated?.();
@@ -67,10 +87,22 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
       setFocusConcept('');
       setCustomConcept('');
       setDuration(25);
+      setError(null);
+      
+      toast.success('Learning session started successfully!');
     } catch (error) {
       console.error('Error starting session:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start session';
+      setError(errorMessage);
+      
+      // Don't show toast if we're already showing the error in the modal
+      if (!errorMessage.includes('not authenticated')) {
+        toast.error('Failed to start session. Please try again.');
+      }
     }
   };
+
+  const isFormValid = goalType && focusConcept && (focusConcept !== 'custom' || customConcept.trim());
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -86,6 +118,16 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Error Display */}
+          {(error || authError) && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {error || authError}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Class Selection */}
           <div className="space-y-2">
             <Label>Choose a Class (Optional)</Label>
@@ -126,7 +168,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
 
           {/* Goal Type */}
           <div className="space-y-2">
-            <Label>Learning Goal</Label>
+            <Label>Learning Goal *</Label>
             <Select value={goalType} onValueChange={setGoalType}>
               <SelectTrigger>
                 <SelectValue placeholder="What do you want to achieve?" />
@@ -143,7 +185,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
 
           {/* Focus Concept */}
           <div className="space-y-2">
-            <Label>Focus Concept</Label>
+            <Label>Focus Concept *</Label>
             <Select value={focusConcept} onValueChange={setFocusConcept}>
               <SelectTrigger>
                 <SelectValue placeholder="What concept do you want to focus on?" />
@@ -180,7 +222,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
           {/* Custom Concept Input */}
           {focusConcept === 'custom' && (
             <div className="space-y-2">
-              <Label>Custom Concept</Label>
+              <Label>Custom Concept *</Label>
               <Textarea
                 value={customConcept}
                 onChange={(e) => setCustomConcept(e.target.value)}
@@ -219,7 +261,7 @@ export const SessionCreationModal = ({ children, onSessionCreated }: SessionCrea
             </Button>
             <Button
               onClick={handleStartSession}
-              disabled={!goalType || (!focusConcept || (focusConcept === 'custom' && !customConcept)) || isStartingSession}
+              disabled={!isFormValid || isStartingSession}
               className="flex items-center gap-2"
             >
               <Target className="h-4 w-4" />

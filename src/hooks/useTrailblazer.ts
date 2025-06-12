@@ -1,52 +1,95 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { trailblazerService } from '@/services/trailblazerService';
 import { useAuth } from '@/contexts/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { DEV_CONFIG } from '@/config/devConfig';
+import { toast } from 'sonner';
 
 export const useTrailblazer = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Initialize user data when they first visit
   useEffect(() => {
-    if (user) {
-      trailblazerService.initializeUser().catch(console.error);
+    if (user || DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+      trailblazerService.initializeUser().catch((error) => {
+        console.error('Failed to initialize user:', error);
+        setAuthError(error.message);
+      });
     }
   }, [user]);
 
+  // Helper function to determine if queries should be enabled
+  const shouldEnableQueries = () => {
+    return !!(user || DEV_CONFIG.DISABLE_AUTH_FOR_DEV);
+  };
+
   // Get user streak data
-  const { data: streak, isLoading: streakLoading } = useQuery({
+  const { data: streak, isLoading: streakLoading, error: streakError } = useQuery({
     queryKey: ['trailblazer', 'streak'],
     queryFn: trailblazerService.getUserStreak,
-    enabled: !!user,
+    enabled: shouldEnableQueries(),
+    retry: (failureCount, error) => {
+      // Don't retry auth errors
+      if (error.message?.includes('not authenticated')) {
+        return false;
+      }
+      return failureCount < 3;
+    }
   });
 
   // Get concept mastery data
-  const { data: concepts = [], isLoading: conceptsLoading } = useQuery({
+  const { data: concepts = [], isLoading: conceptsLoading, error: conceptsError } = useQuery({
     queryKey: ['trailblazer', 'concepts'],
     queryFn: trailblazerService.getConceptMastery,
-    enabled: !!user,
+    enabled: shouldEnableQueries(),
+    retry: (failureCount, error) => {
+      if (error.message?.includes('not authenticated')) {
+        return false;
+      }
+      return failureCount < 3;
+    }
   });
 
   // Get recent sessions
-  const { data: recentSessions = [], isLoading: sessionsLoading } = useQuery({
+  const { data: recentSessions = [], isLoading: sessionsLoading, error: sessionsError } = useQuery({
     queryKey: ['trailblazer', 'sessions'],
     queryFn: () => trailblazerService.getRecentSessions(5),
-    enabled: !!user,
+    enabled: shouldEnableQueries(),
+    retry: (failureCount, error) => {
+      if (error.message?.includes('not authenticated')) {
+        return false;
+      }
+      return failureCount < 3;
+    }
   });
 
   // Get achievements
-  const { data: achievements = [], isLoading: achievementsLoading } = useQuery({
+  const { data: achievements = [], isLoading: achievementsLoading, error: achievementsError } = useQuery({
     queryKey: ['trailblazer', 'achievements'],
     queryFn: trailblazerService.getAchievements,
-    enabled: !!user,
+    enabled: shouldEnableQueries(),
+    retry: (failureCount, error) => {
+      if (error.message?.includes('not authenticated')) {
+        return false;
+      }
+      return failureCount < 3;
+    }
   });
 
   // Get student's enrolled classes
-  const { data: enrolledClasses = [], isLoading: classesLoading } = useQuery({
+  const { data: enrolledClasses = [], isLoading: classesLoading, error: classesError } = useQuery({
     queryKey: ['trailblazer', 'enrolledClasses'],
     queryFn: trailblazerService.getEnrolledClasses,
-    enabled: !!user,
+    enabled: shouldEnableQueries(),
+    retry: (failureCount, error) => {
+      if (error.message?.includes('not authenticated')) {
+        return false;
+      }
+      return failureCount < 3;
+    }
   });
 
   // Get class concepts for a specific class
@@ -58,14 +101,20 @@ export const useTrailblazer = () => {
     });
   };
 
-  // NEW: Get current active session
-  const { data: activeSession, isLoading: activeSessionLoading } = useQuery({
+  // Get current active session
+  const { data: activeSession, isLoading: activeSessionLoading, error: activeSessionError } = useQuery({
     queryKey: ['trailblazer', 'activeSession'],
     queryFn: trailblazerService.getCurrentActiveSession,
-    enabled: !!user,
+    enabled: shouldEnableQueries(),
+    retry: (failureCount, error) => {
+      if (error.message?.includes('not authenticated')) {
+        return false;
+      }
+      return failureCount < 3;
+    }
   });
 
-  // NEW: Get session misconceptions
+  // Get session misconceptions
   const getSessionMisconceptions = (sessionId: string) => {
     return useQuery({
       queryKey: ['trailblazer', 'sessionMisconceptions', sessionId],
@@ -74,7 +123,7 @@ export const useTrailblazer = () => {
     });
   };
 
-  // Enhanced start session mutation with misconception tracking preparation
+  // Enhanced start session mutation with better error handling
   const startSessionMutation = useMutation({
     mutationFn: ({ goalType, focusConcept, durationMinutes, classId, subject, grade }: {
       goalType: string;
@@ -86,10 +135,26 @@ export const useTrailblazer = () => {
     }) => trailblazerService.startSession(goalType, focusConcept, durationMinutes, classId, subject, grade),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trailblazer'] });
+      setAuthError(null); // Clear any previous auth errors
+    },
+    onError: (error: Error) => {
+      console.error('Failed to start session:', error);
+      setAuthError(error.message);
+      
+      // Show user-friendly error message
+      if (error.message.includes('not authenticated')) {
+        if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+          toast.error('Dev mode authentication error. Check console for details.');
+        } else {
+          toast.error('Please log in to start a session.');
+        }
+      } else {
+        toast.error('Failed to start session. Please try again.');
+      }
     },
   });
 
-  // NEW: Record misconception during session
+  // Record misconception during session
   const recordMisconceptionMutation = useMutation({
     mutationFn: ({ sessionId, misconceptionId, questionSequence }: {
       sessionId: string;
@@ -99,6 +164,10 @@ export const useTrailblazer = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['trailblazer', 'sessionMisconceptions', variables.sessionId] });
       queryClient.invalidateQueries({ queryKey: ['trailblazer', 'activeSession'] });
+    },
+    onError: (error: Error) => {
+      console.error('Failed to record misconception:', error);
+      toast.error('Failed to record learning data.');
     },
   });
 
@@ -128,7 +197,39 @@ export const useTrailblazer = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trailblazer'] });
     },
+    onError: (error: Error) => {
+      console.error('Failed to complete session:', error);
+      toast.error('Failed to complete session. Your progress may not be saved.');
+    },
   });
+
+  // Collect all query errors for debugging
+  const queryErrors = [
+    streakError,
+    conceptsError,
+    sessionsError,
+    achievementsError,
+    classesError,
+    activeSessionError
+  ].filter(Boolean);
+
+  // Log authentication-related errors for debugging
+  useEffect(() => {
+    if (queryErrors.length > 0) {
+      const authErrors = queryErrors.filter(error => 
+        error.message?.includes('not authenticated')
+      );
+      
+      if (authErrors.length > 0) {
+        console.warn('Authentication errors detected:', {
+          errors: authErrors,
+          devMode: DEV_CONFIG.DISABLE_AUTH_FOR_DEV,
+          hasUser: !!user,
+          authError
+        });
+      }
+    }
+  }, [queryErrors, user, authError]);
 
   const isLoading = streakLoading || conceptsLoading || sessionsLoading || achievementsLoading || classesLoading || activeSessionLoading;
 
@@ -145,6 +246,10 @@ export const useTrailblazer = () => {
     
     // Loading states
     isLoading,
+    
+    // Error states
+    authError,
+    hasErrors: queryErrors.length > 0,
     
     // Mutations
     startSession: startSessionMutation.mutateAsync,
