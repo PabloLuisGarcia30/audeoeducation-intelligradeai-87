@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -54,12 +55,12 @@ export default function ClassRunner() {
     enabled: activeClasses.length > 0,
   });
 
-  // Fetch active sessions for monitoring
+  // Fetch active sessions for monitoring - fix the function call to not pass profile.id
   const { data: activeSessions = [] } = useQuery({
     queryKey: ['activeSessions', profile?.id],
     queryFn: async () => {
       if (!profile?.id) return [];
-      return await getActiveClassSessions(profile.id);
+      return await getActiveClassSessions();
     },
     enabled: !!profile?.id,
     refetchInterval: 30000, // Refresh every 30 seconds

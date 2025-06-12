@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -214,10 +215,10 @@ export function CreateClassDialog({ onCreateClass }: CreateClassDialogProps) {
                 <div className="flex-1 p-2 border rounded-md bg-gray-50 text-gray-700">
                   {profile?.full_name || 'Loading...'}
                 </div>
-                {profile?.teacher_id && (
+                {profile?.display_teacher_id && (
                   <Badge variant="secondary" className="flex items-center gap-1">
                     <IdCard className="h-3 w-3" />
-                    {profile.teacher_id}
+                    {profile.display_teacher_id}
                   </Badge>
                 )}
               </div>

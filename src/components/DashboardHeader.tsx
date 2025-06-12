@@ -47,9 +47,9 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
                       <Badge variant="outline" className="text-xs">
                         {profile.role}
                       </Badge>
-                      {profile.teacher_id && (
+                      {profile.display_teacher_id && (
                         <Badge variant="secondary" className="text-xs">
-                          {profile.teacher_id}
+                          {profile.display_teacher_id}
                         </Badge>
                       )}
                     </div>
@@ -63,10 +63,10 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
                     <p className="w-[200px] truncate text-sm text-muted-foreground">
                       {profile.email}
                     </p>
-                    {profile.teacher_id && (
+                    {profile.display_teacher_id && (
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <IdCard className="h-3 w-3" />
-                        <span>{profile.teacher_id}</span>
+                        <span>{profile.display_teacher_id}</span>
                       </div>
                     )}
                   </div>
