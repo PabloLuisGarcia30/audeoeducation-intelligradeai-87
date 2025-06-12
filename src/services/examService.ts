@@ -1,5 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import { calculateClassDuration } from "@/utils/classDurationUtils";
 
 export interface ActiveClass {
   id: string;
@@ -19,7 +19,11 @@ export interface ActiveClass {
 }
 
 export interface ActiveClassWithDuration extends ActiveClass {
-  duration?: number;
+  duration?: {
+    totalMinutes: number;
+    shortFormat: string;
+    formattedDuration: string;
+  };
 }
 
 export interface ActiveStudent {
@@ -102,6 +106,7 @@ export interface ExamData {
   time_limit?: number;
   class_id?: string;
   class_name?: string;
+  examId?: string; // Add examId to the interface
 }
 
 export async function getAllActiveClasses(): Promise<ActiveClass[]> {
@@ -322,15 +327,17 @@ export async function getActiveClassByIdWithDuration(classId: string): Promise<A
     if (error) throw error;
     
     if (data) {
-      // Calculate duration if class_time and end_time exist
-      let duration;
-      if (data.class_time && data.end_time) {
-        const start = new Date(`2024-01-01 ${data.class_time}`);
-        const end = new Date(`2024-01-01 ${data.end_time}`);
-        duration = Math.round((end.getTime() - start.getTime()) / (1000 * 60)); // Duration in minutes
-      }
+      // Calculate duration using the utility function
+      const durationInfo = calculateClassDuration(data.class_time, data.end_time);
       
-      return { ...data, duration };
+      return { 
+        ...data, 
+        duration: durationInfo ? {
+          totalMinutes: durationInfo.totalMinutes,
+          shortFormat: durationInfo.shortFormat,
+          formattedDuration: durationInfo.formattedDuration
+        } : undefined
+      };
     }
     
     return null;
@@ -591,8 +598,8 @@ export async function getExamByExamId(examId: string): Promise<StoredExam | null
 
 export async function saveExamToDatabase(examData: ExamData, skills: ContentSkill[]): Promise<string> {
   try {
-    // Generate a unique exam ID
-    const examId = `exam_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate a unique exam ID if not provided
+    const examId = examData.examId || `exam_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const { data, error } = await supabase
       .from('exams')
