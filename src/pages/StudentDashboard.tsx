@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,7 +21,8 @@ import {
   PlayCircle,
   BarChart3,
   Users,
-  Award
+  Award,
+  Compass
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -132,7 +134,7 @@ export default function StudentDashboard() {
 
         {/* Welcome Section with Key Stats */}
         <div className="mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             {/* Student Profile Card */}
             <Card className="md:col-span-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
               <CardContent className="p-6">
@@ -155,6 +157,32 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Trailblazer Learner Card */}
+            <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 hover:from-green-600 hover:to-emerald-700 transition-all duration-200 cursor-pointer">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                    <Compass className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold">Trailblazer</h3>
+                    <p className="text-green-100 text-sm">Learner</p>
+                  </div>
+                </div>
+                <p className="text-sm text-green-100 mb-3">
+                  Explore advanced learning paths and unlock new challenges
+                </p>
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  className="bg-white/20 text-white border-0 hover:bg-white/30"
+                >
+                  <PlayCircle className="h-4 w-4 mr-2" />
+                  Start Journey
+                </Button>
               </CardContent>
             </Card>
 
