@@ -55,14 +55,10 @@ export default function ClassRunner() {
   });
 
   // Fetch active sessions for monitoring
-  const { data: activeSessions = [] } = useQuery({
-    queryKey: ['activeSessions', profile?.id],
-    queryFn: async () => {
-      if (!profile?.id) return [];
-      return await getActiveClassSessions(profile.id);
-    },
-    enabled: !!profile?.id,
-    refetchInterval: 30000, // Refresh every 30 seconds
+  const { data: sessions, isLoading: isLoadingSessions } = useQuery({
+    queryKey: ['activeClassSessions'],
+    queryFn: () => getActiveClassSessions(),
+    refetchInterval: 5000
   });
 
   const formatTime = (timeString: string) => {
@@ -195,7 +191,7 @@ export default function ClassRunner() {
                         <Activity className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-2xl font-bold">{activeSessions.length}</p>
+                        <p className="text-2xl font-bold">{sessions.length}</p>
                         <p className="text-blue-100 text-sm">Live Sessions</p>
                       </div>
                     </div>

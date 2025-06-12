@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TrailblazerSession {
@@ -418,12 +419,17 @@ export const trailblazerService = {
     }
     
     // First verify teacher has access to this student via class enrollments
-    const { data: hasAccess, error: accessError } = await supabase.rpc(
-      'teacher_has_access_to_student',
-      { teacher_uuid: user.id, student_uuid: studentId }
+    // For now, we'll implement a simpler check - in a future update we can add the RPC function
+    const { data: teacherClasses } = await supabase
+      .from('active_classes')
+      .select('students')
+      .eq('teacher_id', user.id);
+    
+    const hasAccess = teacherClasses?.some(cls => 
+      cls.students && cls.students.includes(studentId)
     );
     
-    if (accessError || !hasAccess) {
+    if (!hasAccess) {
       throw new Error('Access denied: You do not have permission to view this student');
     }
 
