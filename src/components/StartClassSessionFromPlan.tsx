@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -50,17 +49,19 @@ export function StartClassSessionFromPlan({ classId, className, onSessionStarted
 
     setLoading(true);
     try {
-      // Get current user (teacher)
+      // Get current authenticated user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error("User not authenticated");
       }
 
+      console.log('🔐 Creating class session from lesson plan for authenticated teacher:', user.id);
+
       // Create the class session with lesson plan reference
       const session = await createClassSession({
         class_id: classId,
         lesson_plan_id: lessonPlan.id,
-        teacher_id: user.id,
+        teacher_id: user.id, // This will be overridden by the service to use authenticated user
         session_name: sessionName
       });
 

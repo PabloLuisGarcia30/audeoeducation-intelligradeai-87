@@ -13,7 +13,7 @@ export interface UserProfile {
   email: string;
   full_name: string;
   role: UserRole;
-  teacher_id?: string;
+  display_teacher_id?: string; // Renamed from teacher_id
   created_at: string;
   updated_at: string;
 }
@@ -57,10 +57,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Check if we're in dev mode
     if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
-      // Use mock data based on current dev role with teacher_id for teacher
+      // Use mock data based on current dev role with display_teacher_id for teacher
       const mockData = MOCK_USER_DATA[devRole];
       const enhancedProfile = devRole === 'teacher' 
-        ? { ...mockData.profile, teacher_id: 'TCH001' }
+        ? { ...mockData.profile, display_teacher_id: 'TCH001' } // Use display_teacher_id
         : mockData.profile;
       
       setUser(mockData.user as any);

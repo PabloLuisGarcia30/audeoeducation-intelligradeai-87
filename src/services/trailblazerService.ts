@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TrailblazerSession {
@@ -388,7 +387,7 @@ export const trailblazerService = {
     return data;
   },
 
-  // Teacher methods for viewing student data
+  // Teacher methods for viewing student data - now uses authenticated teacher ID
   async getTeacherStudentsProgress(): Promise<StudentTrailblazerProgress[]> {
     const { data: { user } } = await supabase.auth.getUser();
     
@@ -396,8 +395,10 @@ export const trailblazerService = {
       throw new Error('User not authenticated');
     }
 
+    console.log('🔐 Fetching trailblazer progress for authenticated teacher:', user.id);
+
     const { data, error } = await supabase.rpc('get_teacher_students_trailblazer_progress', {
-      teacher_user_id: user.id
+      teacher_user_id: user.id // Use authenticated user ID
     });
 
     if (error) {

@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface ClassSession {
@@ -59,12 +60,18 @@ export async function createClassSession(sessionData: {
   session_name: string;
 }): Promise<ClassSession> {
   try {
+    // Always use the authenticated user's ID, ignore any passed teacher_id
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
     const { data, error } = await supabase
       .from('class_sessions')
       .insert({
         class_id: sessionData.class_id,
         lesson_plan_id: sessionData.lesson_plan_id,
-        teacher_id: sessionData.teacher_id,
+        teacher_id: user.id, // Use authenticated user ID
         session_name: sessionData.session_name
       })
       .select()
@@ -95,12 +102,17 @@ export async function endClassSession(sessionId: string): Promise<void> {
   }
 }
 
-export async function getActiveClassSessions(teacherId: string): Promise<ClassSession[]> {
+export async function getActiveClassSessions(): Promise<ClassSession[]> {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
     const { data, error } = await supabase
       .from('class_sessions')
       .select('*')
-      .eq('teacher_id', teacherId)
+      .eq('teacher_id', user.id) // Use authenticated user ID
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
@@ -214,5 +226,27 @@ export async function getAllActiveSessionsMonitoringData(): Promise<SessionMonit
   } catch (error) {
     console.error('Error fetching all session monitoring data:', error);
     throw error;
+  }
+}
+
+// Helper function to get user's display teacher ID for UI purposes
+export async function getUserDisplayTeacherId(): Promise<string | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase.rpc('get_user_display_teacher_id', {
+      user_uuid: user.id
+    });
+
+    if (error) {
+      console.error('Error fetching display teacher ID:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in getUserDisplayTeacherId:', error);
+    return null;
   }
 }

@@ -293,6 +293,13 @@ export type Database = {
             referencedRelation: "student_data_transition"
             referencedColumns: ["profile_id"]
           },
+          {
+            foreignKeyName: "assignments_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       class_content_skills: {
@@ -385,6 +392,13 @@ export type Database = {
             referencedColumns: ["profile_id"]
           },
           {
+            foreignKeyName: "class_enrollments_enrolled_by_fkey"
+            columns: ["enrolled_by"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "class_enrollments_student_profile_id_fkey"
             columns: ["student_profile_id"]
             isOneToOne: false
@@ -397,6 +411,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "student_data_transition"
             referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "class_enrollments_student_profile_id_fkey"
+            columns: ["student_profile_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -580,6 +601,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "student_data_transition"
             referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "content_skill_scores_authenticated_student_id_fkey"
+            columns: ["authenticated_student_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "content_skill_scores_practice_exercise_id_fkey"
@@ -1572,6 +1600,13 @@ export type Database = {
             referencedColumns: ["profile_id"]
           },
           {
+            foreignKeyName: "notifications_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "notifications_sender_id_fkey"
             columns: ["sender_id"]
             isOneToOne: false
@@ -1584,6 +1619,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "student_data_transition"
             referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "notifications_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1656,29 +1698,29 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string | null
+          display_teacher_id: string | null
           email: string | null
           full_name: string | null
           id: string
           role: Database["public"]["Enums"]["app_role"]
-          teacher_id: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          display_teacher_id?: string | null
           email?: string | null
           full_name?: string | null
           id: string
           role?: Database["public"]["Enums"]["app_role"]
-          teacher_id?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          display_teacher_id?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
-          teacher_id?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -2097,6 +2139,13 @@ export type Database = {
             referencedRelation: "student_data_transition"
             referencedColumns: ["profile_id"]
           },
+          {
+            foreignKeyName: "student_practice_sessions_authenticated_student_id_fkey"
+            columns: ["authenticated_student_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       student_profiles: {
@@ -2276,6 +2325,13 @@ export type Database = {
             referencedColumns: ["profile_id"]
           },
           {
+            foreignKeyName: "subject_skill_scores_authenticated_student_id_fkey"
+            columns: ["authenticated_student_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "subject_skill_scores_practice_exercise_id_fkey"
             columns: ["practice_exercise_id"]
             isOneToOne: false
@@ -2399,6 +2455,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "student_data_transition"
             referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "test_results_authenticated_student_id_fkey"
+            columns: ["authenticated_student_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_profiles"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "test_results_class_id_fkey"
@@ -2717,6 +2780,36 @@ export type Database = {
         }
         Relationships: []
       }
+      teacher_profiles: {
+        Row: {
+          created_at: string | null
+          display_teacher_id: string | null
+          email: string | null
+          full_name: string | null
+          role: Database["public"]["Enums"]["app_role"] | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_teacher_id?: string | null
+          email?: string | null
+          full_name?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_teacher_id?: string | null
+          email?: string | null
+          full_name?: string | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       calculate_updated_skill_score: {
@@ -2727,6 +2820,10 @@ export type Database = {
           recency_weight?: number
         }
         Returns: number
+      }
+      generate_display_teacher_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       generate_teacher_id: {
         Args: Record<PropertyKey, never>
@@ -2872,7 +2969,7 @@ export type Database = {
         }[]
       }
       get_teacher_students_trailblazer_progress: {
-        Args: { teacher_user_id: string }
+        Args: { teacher_user_id?: string }
         Returns: {
           student_id: string
           student_name: string
@@ -2882,6 +2979,10 @@ export type Database = {
           last_session_date: string
           class_name: string
         }[]
+      }
+      get_user_display_teacher_id: {
+        Args: { user_uuid: string }
+        Returns: string
       }
       get_user_role: {
         Args: { user_id: string }
