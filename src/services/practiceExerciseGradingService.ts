@@ -146,23 +146,29 @@ export class PracticeExerciseGradingService {
           }
 
           // NEW: Record misconception in Trailblazer session if applicable
-          if (trailblazerSessionId && !gradingResult.isCorrect && gradingResult.misconceptionAnalysis?.misconceptionId) {
+          // For now, we'll use a placeholder misconception ID based on the analysis
+          if (trailblazerSessionId && !gradingResult.isCorrect && gradingResult.misconceptionAnalysis) {
             try {
+              // Generate a unique misconception identifier based on the analysis
+              const misconceptionId = `${gradingResult.misconceptionAnalysis.categoryName || 'unknown'}_${gradingResult.misconceptionAnalysis.subtypeName || 'general'}_${Date.now()}`;
+              
               await trailblazerService.recordSessionMisconception(
                 trailblazerSessionId,
-                gradingResult.misconceptionAnalysis.misconceptionId,
+                misconceptionId,
                 i + 1 // question sequence
               );
               
-              trailblazerMisconceptions.push(gradingResult.misconceptionAnalysis.misconceptionId);
+              trailblazerMisconceptions.push(misconceptionId);
               
-              // Update the question result with the misconception ID
-              questionResult.misconceptionAnalysis = {
-                ...questionResult.misconceptionAnalysis,
-                misconceptionId: gradingResult.misconceptionAnalysis.misconceptionId
-              };
+              // Update the question result with the generated misconception ID
+              if (questionResult.misconceptionAnalysis) {
+                questionResult.misconceptionAnalysis = {
+                  ...questionResult.misconceptionAnalysis,
+                  misconceptionId: misconceptionId
+                };
+              }
               
-              console.log(`🧠 Recorded misconception ${gradingResult.misconceptionAnalysis.misconceptionId} for Trailblazer session ${trailblazerSessionId}`);
+              console.log(`🧠 Recorded misconception ${misconceptionId} for Trailblazer session ${trailblazerSessionId}`);
             } catch (error) {
               console.error('Error recording Trailblazer misconception:', error);
             }
