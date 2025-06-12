@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +21,8 @@ import {
   BarChart3,
   Users,
   Award,
-  Compass
+  Compass,
+  Activity
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -31,6 +31,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { TailoredExercises } from "@/components/TailoredExercises";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { RoleToggle } from "@/components/RoleToggle";
+import { MistakeBasedPractice } from "@/components/MistakeBasedPractice";
+import { StudentLiveSessionAccess } from "@/components/StudentLiveSessionAccess";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDevRole } from "@/contexts/DevRoleContext";
 
@@ -207,11 +209,12 @@ export default function StudentDashboard() {
 
         {/* Rest of the dashboard content */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="exercises">Practice</TabsTrigger>
+            <TabsTrigger value="live-sessions">Live Sessions</TabsTrigger>
+            <TabsTrigger value="mistakes">Practice</TabsTrigger>
+            <TabsTrigger value="exercises">Exercises</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
-            <TabsTrigger value="goals">Goals</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -306,6 +309,14 @@ export default function StudentDashboard() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="live-sessions">
+            <StudentLiveSessionAccess studentId={studentProfile.id} />
+          </TabsContent>
+
+          <TabsContent value="mistakes">
+            <MistakeBasedPractice studentId={studentProfile.id} />
+          </TabsContent>
+
           <TabsContent value="exercises">
             <TailoredExercises />
           </TabsContent>
@@ -378,36 +389,6 @@ export default function StudentDashboard() {
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
-
-          <TabsContent value="goals">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Learning Goals
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {mockLearningGoals.map((goal, index) => (
-                  <div key={index} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">{goal.goal}</h4>
-                      <span className="text-sm text-slate-600">Target: {goal.target}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Progress value={goal.progress} className="flex-1 h-3" />
-                      <span className="text-sm font-medium w-12">{goal.progress}%</span>
-                    </div>
-                  </div>
-                ))}
-                
-                <Button className="w-full mt-4" variant="outline">
-                  <Target className="h-4 w-4 mr-2" />
-                  Set New Goal
-                </Button>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="profile">

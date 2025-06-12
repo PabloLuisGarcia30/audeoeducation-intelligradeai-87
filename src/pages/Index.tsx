@@ -7,6 +7,7 @@ import { LearnerProfileDisplay } from "@/components/LearnerProfileDisplay";
 import { ClassView } from "@/components/ClassView";
 import { StudentPortals } from "@/components/StudentPortals";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
+import { TeacherMisconceptionAnalytics } from "@/components/TeacherMisconceptionAnalytics";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useDevRole } from "@/contexts/DevRoleContext";
@@ -92,6 +93,30 @@ const Index = () => {
           <div className="p-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
             <p className="text-gray-600 mb-4">View performance insights and trends</p>
+            <p className="text-gray-600 mt-2">Coming soon...</p>
+          </div>
+        );
+      case 'misconceptions':
+        return (
+          <div className="p-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Misconception Analytics</h1>
+            <p className="text-gray-600 mb-4">AI-powered analysis of student learning patterns</p>
+            <TeacherMisconceptionAnalytics />
+          </div>
+        );
+      case 'live-sessions':
+        return (
+          <div className="p-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Live Class Sessions</h1>
+            <p className="text-gray-600 mb-4">Monitor active sessions and student progress</p>
+            <p className="text-gray-600 mt-2">Navigate to Class Runner for session management...</p>
+          </div>
+        );
+      case 'trailblazer':
+        return (
+          <div className="p-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Trailblazer Mode</h1>
+            <p className="text-gray-600 mb-4">Advanced learning path creation and management</p>
             <p className="text-gray-600 mt-2">Coming soon...</p>
           </div>
         );

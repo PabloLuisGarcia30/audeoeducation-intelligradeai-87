@@ -10,7 +10,9 @@ import {
   Users, 
   TrendingUp, 
   Calendar, 
-  BookOpen
+  BookOpen,
+  Search,
+  Brain
 } from "lucide-react";
 import { toast } from "sonner";
 import { 
@@ -21,6 +23,7 @@ import {
 } from "@/services/examService";
 import { StudentPerformanceOverview } from "@/components/StudentPerformanceOverview";
 import { MultiSkillActionBar } from "@/components/MultiSkillActionBar";
+import { TeacherMisconceptionAnalytics } from "@/components/TeacherMisconceptionAnalytics";
 import { generateMultiplePracticeTests } from "@/services/practiceTestService";
 
 interface StudentDashboardProps {
