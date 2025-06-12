@@ -2,6 +2,7 @@ import { SmartAnswerGradingService, type GradingResult, type AnswerPattern } fro
 import { MistakePatternService } from './mistakePatternService';
 import { QuestionTimingService } from './questionTimingService';
 import { ConceptMissedService, type ConceptMissedAnalysis } from './conceptMissedService';
+import { EnhancedMisconceptionIntegrationService } from './enhancedMisconceptionIntegrationService';
 
 export interface PracticeExerciseAnswer {
   questionId: string;
@@ -36,7 +37,7 @@ export interface ExerciseSubmissionResult {
 export class PracticeExerciseGradingService {
   
   /**
-   * Grade a complete practice exercise submission with enhanced tracking
+   * Grade a complete practice exercise submission with enhanced misconception tracking
    */
   static async gradeExerciseSubmission(
     answers: PracticeExerciseAnswer[],
@@ -61,56 +62,16 @@ export class PracticeExerciseGradingService {
       totalScore += result.pointsEarned;
       totalPossible += result.pointsPossible;
       
-      // Record enhanced mistake pattern if we have the required data
-      if (studentExerciseId && skillName) {
-        const mistakeType = result.isCorrect ? null : 
-          MistakePatternService.analyzeMistakeType(
-            answer.questionType,
-            answer.studentAnswer,
-            answer.correctAnswer,
-            answer.options
-          );
-
-        // Analyze missed concept for incorrect answers
-        let conceptMissedAnalysis: ConceptMissedAnalysis | null = null;
-        if (!result.isCorrect) {
-          conceptMissedAnalysis = await ConceptMissedService.analyzeConceptMissed(
-            answer.questionType === 'multiple-choice' 
-              ? `Question: ${answer.questionId}. Options: ${answer.options?.join(', ')}`
-              : `Question: ${answer.questionId}`,
-            answer.studentAnswer,
-            answer.correctAnswer,
-            skillName,
-            exerciseMetadata?.subject,
-            exerciseMetadata?.grade
-          );
-          
-          console.log('🧠 Concept missed analysis:', conceptMissedAnalysis);
-        }
-
-        await MistakePatternService.recordMistakePattern({
-          studentExerciseId,
-          questionId: answer.questionId,
+      // Enhanced misconception analysis - ONLY for short-answer and essay questions
+      if (studentExerciseId && skillName && !result.isCorrect) {
+        await this.processIncorrectAnswer(
+          answer,
           questionNumber,
-          questionType: answer.questionType,
-          studentAnswer: answer.studentAnswer,
-          correctAnswer: answer.correctAnswer,
-          isCorrect: result.isCorrect,
-          skillTargeted: skillName,
-          mistakeType: mistakeType || undefined,
-          confidenceScore: result.confidence,
-          gradingMethod: result.gradingMethod,
-          feedbackGiven: result.feedback,
-          questionContext: answer.questionType === 'multiple-choice' 
-            ? `Question: ${answer.questionId}. Options: ${answer.options?.join(', ')}`
-            : `Question: ${answer.questionId}`,
-          options: answer.options,
-          subject: exerciseMetadata?.subject,
-          grade: exerciseMetadata?.grade,
-          // Add concept missed data
-          conceptMissedId: conceptMissedAnalysis?.conceptMissedId,
-          conceptMissedDescription: conceptMissedAnalysis?.conceptMissedDescription
-        });
+          studentExerciseId,
+          skillName,
+          exerciseMetadata,
+          result
+        );
       }
     }
     
@@ -127,6 +88,191 @@ export class PracticeExerciseGradingService {
       overallFeedback,
       completedAt: new Date()
     };
+  }
+
+  /**
+   * Process incorrect answers with enhanced misconception analysis
+   * Only runs for short-answer and essay questions
+   */
+  private static async processIncorrectAnswer(
+    answer: PracticeExerciseAnswer,
+    questionNumber: number,
+    studentExerciseId: string,
+    skillName: string,
+    exerciseMetadata: any,
+    gradingResult: ExerciseGradingResult
+  ) {
+    const shouldAnalyzeMisconceptions = this.shouldAnalyzeMisconceptions(answer.questionType);
+    
+    console.log(`🧠 Question ${questionNumber} (${answer.questionType}): Misconception analysis ${shouldAnalyzeMisconceptions ? 'ENABLED' : 'SKIPPED'}`);
+    
+    if (shouldAnalyzeMisconceptions) {
+      // Use enhanced misconception integration service
+      try {
+        const misconceptionAnalysis = await EnhancedMisconceptionIntegrationService.analyzeMisconceptionWithTaxonomy(
+          exerciseMetadata?.subject || 'General',
+          answer.questionType,
+          answer.studentAnswer,
+          answer.correctAnswer,
+          `Question: ${answer.questionId}`,
+          answer.options
+        );
+
+        console.log('🎯 Enhanced misconception analysis result:', misconceptionAnalysis);
+
+        // Record the enhanced misconception if found
+        if (misconceptionAnalysis) {
+          await EnhancedMisconceptionIntegrationService.recordEnhancedMisconception(
+            studentExerciseId, // Using as student ID for now
+            answer.questionId,
+            skillName, // Using as skill ID for now
+            studentExerciseId, // Using as exam ID for now
+            exerciseMetadata?.subject || 'General',
+            answer.questionType,
+            answer.studentAnswer,
+            answer.correctAnswer,
+            `Question: ${answer.questionId}`,
+            answer.options
+          );
+        }
+
+        // Also record in legacy mistake pattern system with enhanced data
+        await MistakePatternService.recordMistakePattern({
+          studentExerciseId,
+          questionId: answer.questionId,
+          questionNumber,
+          questionType: answer.questionType,
+          studentAnswer: answer.studentAnswer,
+          correctAnswer: answer.correctAnswer,
+          isCorrect: false,
+          skillTargeted: skillName,
+          mistakeType: this.getMistakeTypeFromMisconception(misconceptionAnalysis),
+          confidenceScore: gradingResult.confidence,
+          gradingMethod: gradingResult.gradingMethod,
+          feedbackGiven: gradingResult.feedback,
+          questionContext: `Question: ${answer.questionId}`,
+          options: answer.options,
+          subject: exerciseMetadata?.subject,
+          grade: exerciseMetadata?.grade,
+          // Enhanced fields from misconception analysis
+          misconceptionCategory: misconceptionAnalysis?.categoryName,
+          concept_missed_id: misconceptionAnalysis?.subtypeId,
+          concept_missed_description: misconceptionAnalysis?.subtypeName
+        });
+
+      } catch (error) {
+        console.error('❌ Enhanced misconception analysis failed:', error);
+        
+        // Fallback to legacy analysis
+        await this.recordLegacyMistakePattern(
+          answer,
+          questionNumber,
+          studentExerciseId,
+          skillName,
+          exerciseMetadata,
+          gradingResult
+        );
+      }
+    } else {
+      // For multiple-choice and true-false, only record basic mistake pattern
+      await this.recordLegacyMistakePattern(
+        answer,
+        questionNumber,
+        studentExerciseId,
+        skillName,
+        exerciseMetadata,
+        gradingResult
+      );
+    }
+  }
+
+  /**
+   * Determine if misconception analysis should run based on question type
+   */
+  private static shouldAnalyzeMisconceptions(questionType: string): boolean {
+    const analyzableTypes = ['short-answer', 'essay'];
+    const shouldAnalyze = analyzableTypes.includes(questionType);
+    
+    if (!shouldAnalyze) {
+      console.log(`📝 Skipping misconception analysis for ${questionType} - only analyzing: ${analyzableTypes.join(', ')}`);
+    }
+    
+    return shouldAnalyze;
+  }
+
+  /**
+   * Extract mistake type from misconception analysis
+   */
+  private static getMistakeTypeFromMisconception(misconceptionAnalysis: any): string | undefined {
+    if (!misconceptionAnalysis) return undefined;
+    
+    // Map taxonomy categories to legacy mistake types
+    const categoryMapping: Record<string, string> = {
+      'Procedural Errors': 'procedural_error',
+      'Conceptual Errors': 'conceptual_misunderstanding', 
+      'Interpretive Errors': 'task_misread',
+      'Expression Errors': 'communication_error',
+      'Strategic Errors': 'wrong_approach',
+      'Meta-Cognitive Errors': 'metacognitive_error'
+    };
+    
+    return categoryMapping[misconceptionAnalysis.categoryName] || 'unclassified';
+  }
+
+  /**
+   * Record legacy mistake pattern (fallback or for non-analyzable question types)
+   */
+  private static async recordLegacyMistakePattern(
+    answer: PracticeExerciseAnswer,
+    questionNumber: number,
+    studentExerciseId: string,
+    skillName: string,
+    exerciseMetadata: any,
+    gradingResult: ExerciseGradingResult
+  ) {
+    const mistakeType = MistakePatternService.analyzeMistakeType(
+      answer.questionType,
+      answer.studentAnswer,
+      answer.correctAnswer,
+      answer.options
+    );
+
+    // Legacy concept missed analysis for fallback
+    let conceptMissedAnalysis: ConceptMissedAnalysis | null = null;
+    if (answer.questionType === 'multiple-choice') {
+      conceptMissedAnalysis = await ConceptMissedService.analyzeConceptMissed(
+        `Question: ${answer.questionId}. Options: ${answer.options?.join(', ')}`,
+        answer.studentAnswer,
+        answer.correctAnswer,
+        skillName,
+        exerciseMetadata?.subject,
+        exerciseMetadata?.grade
+      );
+    }
+
+    await MistakePatternService.recordMistakePattern({
+      studentExerciseId,
+      questionId: answer.questionId,
+      questionNumber,
+      questionType: answer.questionType,
+      studentAnswer: answer.studentAnswer,
+      correctAnswer: answer.correctAnswer,
+      isCorrect: false,
+      skillTargeted: skillName,
+      mistakeType: mistakeType || undefined,
+      confidenceScore: gradingResult.confidence,
+      gradingMethod: gradingResult.gradingMethod,
+      feedbackGiven: gradingResult.feedback,
+      questionContext: answer.questionType === 'multiple-choice' 
+        ? `Question: ${answer.questionId}. Options: ${answer.options?.join(', ')}`
+        : `Question: ${answer.questionId}`,
+      options: answer.options,
+      subject: exerciseMetadata?.subject,
+      grade: exerciseMetadata?.grade,
+      // Legacy concept missed data
+      conceptMissedId: conceptMissedAnalysis?.conceptMissedId,
+      conceptMissedDescription: conceptMissedAnalysis?.conceptMissedDescription
+    });
   }
   
   /**

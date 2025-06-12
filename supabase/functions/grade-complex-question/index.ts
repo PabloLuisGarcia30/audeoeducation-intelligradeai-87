@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
@@ -314,7 +313,8 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
     pointsPossible,
     questionNumber,
     studentName,
-    skillContext
+    skillContext,
+    questionType
   } = requestBody;
 
   if (!questionText || !studentAnswer || !correctAnswer) {
@@ -339,7 +339,7 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
           messages: [
             {
               role: 'system',
-              content: 'You are an expert educational grading assistant. Always respond with valid JSON matching the requested format.'
+              content: 'You are an expert educational grading assistant with expertise in misconception analysis. Always respond with valid JSON matching the requested format.'
             },
             {
               role: 'user',
@@ -347,7 +347,7 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
             }
           ],
           temperature: 0.3,
-          max_tokens: 1000,
+          max_tokens: 1500, // Increased for misconception analysis
           response_format: { type: "json_object" }
         }),
       });
@@ -391,7 +391,17 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
       }
     };
 
-    console.log(`✅ OpenAI graded Q${questionNumber}: ${sanitizedResult.pointsEarned}/${pointsPossible} points`);
+    // Add misconception analysis if available
+    if (gradingResult.misconceptionCategory) {
+      sanitizedResult.misconceptionAnalysis = {
+        category: String(gradingResult.misconceptionCategory),
+        subtype: String(gradingResult.misconceptionSubtype || ''),
+        confidence: Math.max(0, Math.min(1, Number(gradingResult.misconceptionConfidence) || 0.7)),
+        reasoning: String(gradingResult.misconceptionReasoning || '')
+      };
+    }
+
+    console.log(`✅ OpenAI graded Q${questionNumber}: ${sanitizedResult.pointsEarned}/${pointsPossible} points${sanitizedResult.misconceptionAnalysis ? ` (Misconception: ${sanitizedResult.misconceptionAnalysis.category})` : ''}`);
 
     return new Response(
       JSON.stringify(sanitizedResult),
@@ -405,6 +415,57 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
+}
+
+function createSingleQuestionPrompt(requestBody: any): string {
+  const {
+    questionText,
+    studentAnswer,
+    correctAnswer,
+    pointsPossible,
+    questionNumber,
+    studentName,
+    skillContext,
+    subject,
+    questionType
+  } = requestBody;
+
+  const isAnalyzableForMisconceptions = questionType === 'short-answer' || questionType === 'essay';
+  
+  return `You are an expert educational grading assistant. Grade this ${questionType} question and ${isAnalyzableForMisconceptions ? 'analyze any misconceptions' : 'provide basic feedback'}.
+
+Question: ${questionText}
+Student Answer: "${studentAnswer}"
+Correct Answer: "${correctAnswer}"
+Points Possible: ${pointsPossible}
+${subject ? `Subject: ${subject}` : ''}
+${skillContext ? `Skill Context: ${skillContext}` : ''}
+
+${isAnalyzableForMisconceptions ? `
+MISCONCEPTION ANALYSIS: Since this is a ${questionType} question, analyze the student's response for educational misconceptions using these categories:
+
+1. **Procedural Errors**: Mistakes in execution of known steps (Step Omission, Step Order Error, Symbol Confusion, Partial Completion, Flawed Memorized Routine)
+2. **Conceptual Errors**: Misunderstanding of underlying ideas (False Assumption, Category Confusion, Causal Misunderstanding, Overgeneralization, Model Misuse)
+3. **Interpretive Errors**: Misunderstood task/content (Keyword Confusion, Ambiguity Blindness, Literal Interpretation, Task Misread, Diagram/Text Misalignment)
+4. **Expression Errors**: Can't express knowledge clearly (Vocabulary Mismatch, Poor Organization, Omitted Justification, Communication Breakdown, Grammatical Noise)
+5. **Strategic Errors**: Wrong approach/method (Guess-and-Check Default, Overkill Strategy, Off-topic Response, Algorithmic Overreliance, Misapplied Prior Knowledge)
+6. **Meta-Cognitive Errors**: Awareness breakdown (Overconfidence in Error, Underconfidence in Correct Work, Repeated Submission Without Adjustment, Ignores Feedback, Abandons Question Midway)
+
+If the answer is incorrect, identify the primary misconception category and specific subtype.` : ''}
+
+Provide your response in JSON format:
+{
+  "isCorrect": boolean,
+  "pointsEarned": number (0 to ${pointsPossible}),
+  "confidence": number (0 to 1),
+  "reasoning": "detailed explanation of grading decision",
+  "complexityScore": number (0 to 1),
+  "reasoningDepth": "shallow" | "medium" | "deep"${isAnalyzableForMisconceptions ? `,
+  "misconceptionCategory": "category name or null",
+  "misconceptionSubtype": "specific subtype or null",
+  "misconceptionConfidence": number (0 to 1),
+  "misconceptionReasoning": "explanation of misconception if found"` : ''}
+}`;
 }
 
 function createEnhancedBatchPrompt(questions: any[], rubric?: string): string {
@@ -506,4 +567,3 @@ function validateAndSanitizeEnhancedBatchResults(results: any, questions: any[])
 
   return { results: sanitizedResults };
 }
-

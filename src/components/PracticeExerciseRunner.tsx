@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -150,12 +149,29 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showT
         points: question.points
       }));
 
+      // Enhanced exercise metadata for misconception analysis
+      const enhancedMetadata = {
+        subject: exerciseData.title.includes('Math') ? 'Mathematics' : 
+                exerciseData.title.includes('Science') ? 'Science' :
+                exerciseData.title.includes('English') ? 'English' : 'General',
+        grade: 'Grade 10', // Default for now
+        exerciseType: 'practice',
+        skillsTargeted: [...new Set(exerciseData.questions.map(q => q.targetSkill))]
+      };
+
+      console.log('🎯 Submitting exercise with enhanced misconception tracking:', {
+        totalQuestions: exerciseAnswers.length,
+        analyzableQuestions: exerciseAnswers.filter(q => q.questionType === 'short-answer' || q.questionType === 'essay').length,
+        metadata: enhancedMetadata
+      });
+
       // Grade the exercise with enhanced tracking
       const results = await PracticeExerciseGradingService.gradeExerciseSubmission(
         exerciseAnswers,
         exerciseData.title,
         exerciseData.exerciseId, // Pass exercise ID for tracking
-        exerciseData.questions[0]?.targetSkill // Pass skill name for tracking
+        exerciseData.questions[0]?.targetSkill, // Pass skill name for tracking
+        enhancedMetadata // Pass enhanced metadata for misconception analysis
       );
 
       // Include answers in the results for review functionality
@@ -288,6 +304,10 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showT
               <p className="text-muted-foreground mt-1">
                 {exerciseData.description}
               </p>
+              {/* Enhanced metadata display */}
+              <div className="mt-2 text-xs text-muted-foreground">
+                📊 {exerciseData.questions.filter(q => q.type === 'short-answer' || q.type === 'essay').length} questions will be analyzed for misconceptions
+              </div>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               {showTimer && (

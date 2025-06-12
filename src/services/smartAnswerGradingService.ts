@@ -1,5 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { EnhancedMisconceptionIntegrationService } from './enhancedMisconceptionIntegrationService';
 
 export interface GradingResult {
   isCorrect: boolean;
@@ -7,6 +7,12 @@ export interface GradingResult {
   confidence: number;
   feedback?: string;
   method: 'exact_match' | 'flexible_match' | 'ai_graded';
+  misconceptionAnalysis?: {
+    categoryName?: string;
+    subtypeName?: string;
+    confidence?: number;
+    reasoning?: string;
+  };
 }
 
 export interface AnswerPattern {
@@ -20,13 +26,15 @@ export class SmartAnswerGradingService {
   private static readonly PARTIAL_CREDIT_THRESHOLD = 0.6;
 
   /**
-   * Grade a short answer using smart grading logic
+   * Grade a short answer using smart grading logic with misconception detection
    */
   static async gradeShortAnswer(
     studentAnswer: string,
     correctAnswer: string | AnswerPattern,
     questionText: string,
-    questionId?: string
+    questionId?: string,
+    subject?: string,
+    questionType: 'short-answer' | 'essay' = 'short-answer'
   ): Promise<GradingResult> {
     const normalizedStudentAnswer = this.normalizeAnswer(studentAnswer);
     
@@ -55,6 +63,12 @@ export class SmartAnswerGradingService {
         questionText,
         questionId
       );
+
+      // Add misconception analysis for incorrect answers (short-answer and essay only)
+      if (!aiResult.isCorrect && (questionType === 'short-answer' || questionType === 'essay')) {
+        await this.addMisconceptionAnalysis(aiResult, studentAnswer, correctAnswer, subject, questionType, questionText);
+      }
+
       return aiResult;
     } catch (error) {
       console.error('AI grading failed, using local result:', error);
@@ -62,6 +76,48 @@ export class SmartAnswerGradingService {
         ...localResult,
         feedback: 'Grading system encountered an issue. Answer marked based on text similarity.'
       };
+    }
+  }
+
+  /**
+   * Add misconception analysis to grading result for incorrect answers
+   */
+  private static async addMisconceptionAnalysis(
+    gradingResult: GradingResult,
+    studentAnswer: string,
+    correctAnswer: string | AnswerPattern,
+    subject: string = 'General',
+    questionType: string,
+    questionContext: string
+  ): Promise<void> {
+    try {
+      const correctText = typeof correctAnswer === 'string' ? correctAnswer : correctAnswer.text;
+      
+      const misconceptionAnalysis = await EnhancedMisconceptionIntegrationService.analyzeMisconceptionWithTaxonomy(
+        subject,
+        questionType,
+        studentAnswer,
+        correctText,
+        questionContext
+      );
+
+      if (misconceptionAnalysis) {
+        gradingResult.misconceptionAnalysis = {
+          categoryName: misconceptionAnalysis.categoryName,
+          subtypeName: misconceptionAnalysis.subtypeName,
+          confidence: misconceptionAnalysis.confidence,
+          reasoning: misconceptionAnalysis.reasoning
+        };
+
+        // Enhance feedback with misconception insights
+        if (gradingResult.feedback) {
+          gradingResult.feedback += ` This appears to be a ${misconceptionAnalysis.categoryName.toLowerCase()} issue, specifically ${misconceptionAnalysis.subtypeName.toLowerCase()}.`;
+        }
+
+        console.log(`🧠 Added misconception analysis: ${misconceptionAnalysis.categoryName} -> ${misconceptionAnalysis.subtypeName}`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to add misconception analysis:', error);
     }
   }
 
