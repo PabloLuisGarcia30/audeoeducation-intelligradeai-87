@@ -17,7 +17,7 @@ import { DEV_CONFIG } from "@/config/devConfig";
 const Index = () => {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [selectedClass, setSelectedClass] = useState<{ id: string; name: string } | null>(null);
-  const [activeView, setActiveView] = useState<'dashboard' | 'search' | 'classes' | 'analytics' | 'portals' | 'student-lesson-tracker' | 'learner-profiles'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'search' | 'classes' | 'analytics' | 'portals' | 'student-lesson-tracker' | 'learner-profiles' | 'misconceptions' | 'live-sessions' | 'trailblazer'>('dashboard');
   
   const { profile } = useAuth();
   const navigate = useNavigate();
