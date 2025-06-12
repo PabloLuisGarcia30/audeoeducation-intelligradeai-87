@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TrailblazerSession {
@@ -11,7 +10,7 @@ export interface TrailblazerSession {
   score_improvement?: number;
   session_date: string;
   mistake_types_encountered: any;
-  status: 'started' | 'completed' | 'abandoned';
+  status: string;
   created_at: string;
   updated_at: string;
 }
