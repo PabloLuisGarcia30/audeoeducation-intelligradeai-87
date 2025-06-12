@@ -93,6 +93,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_prompt_personality: {
+        Row: {
+          created_at: string | null
+          difficulty_preference: string | null
+          learning_style: string | null
+          preferred_tone: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          difficulty_preference?: string | null
+          learning_style?: string | null
+          preferred_tone?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          difficulty_preference?: string | null
+          learning_style?: string | null
+          preferred_tone?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       answer_keys: {
         Row: {
           acceptable_answers: Json | null
@@ -566,6 +593,33 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_prompt_cache: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          generated_at: string | null
+          generated_prompt: string
+          prompt_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          generated_at?: string | null
+          generated_prompt: string
+          prompt_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          generated_at?: string | null
+          generated_prompt?: string
+          prompt_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       error_pattern_definitions: {
         Row: {
           category: string
@@ -829,6 +883,53 @@ export type Database = {
           },
         ]
       }
+      goal_history: {
+        Row: {
+          achieved: boolean | null
+          achieved_score: number | null
+          concept: string
+          created_at: string | null
+          goal_type: string
+          id: string
+          session_id: string | null
+          submitted_at: string | null
+          target_score: number | null
+          user_id: string | null
+        }
+        Insert: {
+          achieved?: boolean | null
+          achieved_score?: number | null
+          concept: string
+          created_at?: string | null
+          goal_type: string
+          id?: string
+          session_id?: string | null
+          submitted_at?: string | null
+          target_score?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          achieved?: boolean | null
+          achieved_score?: number | null
+          concept?: string
+          created_at?: string | null
+          goal_type?: string
+          id?: string
+          session_id?: string | null
+          submitted_at?: string | null
+          target_score?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_history_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "trailblazer_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           completed_at: string | null
@@ -873,6 +974,50 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      learning_delta_log: {
+        Row: {
+          concept: string
+          final_score: number | null
+          id: string
+          improvement: number | null
+          initial_score: number | null
+          logged_at: string | null
+          mistake_types_fixed: Json | null
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          concept: string
+          final_score?: number | null
+          id?: string
+          improvement?: number | null
+          initial_score?: number | null
+          logged_at?: string | null
+          mistake_types_fixed?: Json | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          concept?: string
+          final_score?: number | null
+          id?: string
+          improvement?: number | null
+          initial_score?: number | null
+          logged_at?: string | null
+          mistake_types_fixed?: Json | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_delta_log_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "trailblazer_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lesson_plan_practice_exercises: {
         Row: {
@@ -2003,6 +2148,153 @@ export type Database = {
           },
         ]
       }
+      trailblazer_achievements: {
+        Row: {
+          achievement_name: string
+          achievement_type: string
+          description: string | null
+          icon_name: string | null
+          id: string
+          metadata: Json | null
+          unlocked_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          achievement_name: string
+          achievement_type: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          metadata?: Json | null
+          unlocked_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          achievement_name?: string
+          achievement_type?: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          metadata?: Json | null
+          unlocked_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      trailblazer_sessions: {
+        Row: {
+          actual_duration_minutes: number | null
+          created_at: string | null
+          duration_minutes: number
+          focus_concept: string
+          goal_type: string
+          id: string
+          mistake_types_encountered: Json | null
+          score_improvement: number | null
+          session_date: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          actual_duration_minutes?: number | null
+          created_at?: string | null
+          duration_minutes: number
+          focus_concept: string
+          goal_type: string
+          id?: string
+          mistake_types_encountered?: Json | null
+          score_improvement?: number | null
+          session_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          actual_duration_minutes?: number | null
+          created_at?: string | null
+          duration_minutes?: number
+          focus_concept?: string
+          goal_type?: string
+          id?: string
+          mistake_types_encountered?: Json | null
+          score_improvement?: number | null
+          session_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_concept_mastery: {
+        Row: {
+          concept: string
+          created_at: string | null
+          last_practiced_at: string | null
+          mastery_score: number | null
+          mistake_history: Json | null
+          practice_count: number | null
+          time_spent_minutes: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          concept: string
+          created_at?: string | null
+          last_practiced_at?: string | null
+          mastery_score?: number | null
+          mistake_history?: Json | null
+          practice_count?: number | null
+          time_spent_minutes?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          concept?: string
+          created_at?: string | null
+          last_practiced_at?: string | null
+          mastery_score?: number | null
+          mistake_history?: Json | null
+          practice_count?: number | null
+          time_spent_minutes?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_streaks: {
+        Row: {
+          created_at: string | null
+          current_streak_days: number | null
+          last_session_date: string | null
+          longest_streak_days: number | null
+          rescue_used_today: boolean | null
+          total_sessions: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current_streak_days?: number | null
+          last_session_date?: string | null
+          longest_streak_days?: number | null
+          rescue_used_today?: boolean | null
+          total_sessions?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current_streak_days?: number | null
+          last_session_date?: string | null
+          longest_streak_days?: number | null
+          rescue_used_today?: boolean | null
+          total_sessions?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       validation_logs: {
         Row: {
           error_details: Json | null
@@ -2224,6 +2516,19 @@ export type Database = {
       }
       migrate_student_data_to_auth_users: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      update_concept_mastery: {
+        Args: {
+          p_user_id: string
+          p_concept: string
+          p_score_change: number
+          p_time_spent: number
+        }
+        Returns: undefined
+      }
+      update_user_streak: {
+        Args: { p_user_id: string }
         Returns: undefined
       }
     }
