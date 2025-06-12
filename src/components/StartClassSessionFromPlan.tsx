@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -7,8 +8,8 @@ import { Play, Loader2, Activity, BookOpen, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { createClassSession, createStudentExercises } from "@/services/classSessionService";
 import { getLessonPlanByClassId } from "@/services/lessonPlanService";
-import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { useTeacherAuth } from "@/hooks/useTeacherAuth";
 
 interface StartClassSessionFromPlanProps {
   classId: string;
@@ -20,6 +21,7 @@ export function StartClassSessionFromPlan({ classId, className, onSessionStarted
   const [open, setOpen] = useState(false);
   const [sessionName, setSessionName] = useState(`${className} - ${new Date().toLocaleDateString()}`);
   const [loading, setLoading] = useState(false);
+  const { teacherUUID, isAuthenticated } = useTeacherAuth();
 
   // Fetch the latest lesson plan for this class
   const { data: lessonPlan, isLoading: isLoadingPlan } = useQuery({
@@ -37,6 +39,11 @@ export function StartClassSessionFromPlan({ classId, className, onSessionStarted
       return;
     }
 
+    if (!isAuthenticated || !teacherUUID) {
+      toast.error("User not authenticated");
+      return;
+    }
+
     if (!lessonPlan) {
       toast.error("No lesson plan found for this class");
       return;
@@ -49,19 +56,13 @@ export function StartClassSessionFromPlan({ classId, className, onSessionStarted
 
     setLoading(true);
     try {
-      // Get current authenticated user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("User not authenticated");
-      }
-
-      console.log('🔐 Creating class session from lesson plan for authenticated teacher:', user.id);
+      console.log('🔐 Creating class session from lesson plan for authenticated teacher:', teacherUUID);
 
       // Create the class session with lesson plan reference
       const session = await createClassSession({
         class_id: classId,
         lesson_plan_id: lessonPlan.id,
-        teacher_id: user.id, // This will be overridden by the service to use authenticated user
+        teacher_id: teacherUUID, // Service will verify this matches authenticated user
         session_name: sessionName
       });
 
