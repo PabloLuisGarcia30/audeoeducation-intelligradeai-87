@@ -10,7 +10,7 @@ export interface TrailblazerSession {
   actual_duration_minutes?: number;
   score_improvement?: number;
   session_date: string;
-  mistake_types_encountered: any[];
+  mistake_types_encountered: any;
   status: 'started' | 'completed' | 'abandoned';
   created_at: string;
   updated_at: string;
