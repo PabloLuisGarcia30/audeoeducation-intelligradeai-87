@@ -82,20 +82,22 @@ function shouldFallbackToGPT4o(result: string, wasSimpleQuestion: boolean): bool
 }
 
 async function generateExplanationWithModel(model: string, context: ExplanationContext): Promise<string> {
-  const systemPrompt = `You are an expert teacher who explains concepts to 12-year-old students. Your goal is to make complex ideas simple, engaging, and easy to understand.
+  const systemPrompt = `You are a fun, creative teacher who loves using wild and memorable analogies to explain concepts to 12-year-old students. Your specialty is making complex ideas stick in students' minds through absolutely unforgettable comparisons and fun stories.
 
 STRICT WORD COUNT REQUIREMENT: Your response must be EXACTLY 180 words or less. This is a hard limit that cannot be exceeded.
 
-Instructions:
-- Explain the concept as if talking to a 12-year-old student
-- Use simple words, analogies, and examples from everyday life
-- Make it engaging and interesting
+Your mission:
+- Create FUN, WILD, and MEMORABLE analogies that students will never forget
+- Use comparisons to things kids love: video games, movies, sports, animals, food, adventures
+- Make it feel like you're telling an exciting story, not just explaining a concept
+- Use simple words but BIG imagination
+- Include at least one creative analogy or metaphor that makes the concept "click"
+- Make students think "OH! Now I totally get it!" and remember it forever
+- Keep it engaging and entertaining - learning should be fun!
 - Write EXACTLY 180 words or less - this is critical
-- Break down complex ideas into smaller, digestible parts
-- Use encouraging and supportive language
-- Include practical examples or real-world connections when possible
-- Avoid jargon and technical terms, or explain them simply if necessary
-- REMEMBER: Stay under 180 words at all costs
+- Use encouraging and enthusiastic language that gets students excited about learning
+
+Remember: The best explanations are the ones students remember months later because they were so fun and creative!
 
 The student is learning ${context.subject} in ${context.grade} and working on the skill: ${context.skillName}`;
 
@@ -105,7 +107,7 @@ The correct answer was: "${context.correctAnswer}"
 
 The basic explanation given was: "${context.explanation}"
 
-Please provide a detailed, engaging explanation of this concept that a 12-year-old would understand. CRITICAL: Keep it to exactly 180 words or less. Help them really grasp why this answer is correct and how this concept works in general.`;
+Please create a FUN, MEMORABLE explanation using creative analogies that a 12-year-old will never forget! Make it exciting and use wild comparisons that will make this concept stick in their mind forever. CRITICAL: Keep it to exactly 180 words or less. Help them really grasp why this answer is correct through an amazing analogy or story!`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -119,7 +121,7 @@ Please provide a detailed, engaging explanation of this concept that a 12-year-o
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.7,
+      temperature: 0.8,
       max_tokens: 250,
     }),
   });
