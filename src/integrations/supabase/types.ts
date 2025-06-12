@@ -93,6 +93,57 @@ export type Database = {
         }
         Relationships: []
       }
+      affective_response_flags: {
+        Row: {
+          behavioral_data: Json | null
+          detected_at: string | null
+          exam_id: string | null
+          flag_type: string
+          id: string
+          intensity_score: number | null
+          notes: string | null
+          question_id: string | null
+          student_id: string
+        }
+        Insert: {
+          behavioral_data?: Json | null
+          detected_at?: string | null
+          exam_id?: string | null
+          flag_type: string
+          id?: string
+          intensity_score?: number | null
+          notes?: string | null
+          question_id?: string | null
+          student_id: string
+        }
+        Update: {
+          behavioral_data?: Json | null
+          detected_at?: string | null
+          exam_id?: string | null
+          flag_type?: string
+          id?: string
+          intensity_score?: number | null
+          notes?: string | null
+          question_id?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affective_response_flags_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_data_transition"
+            referencedColumns: ["student_profile_id"]
+          },
+          {
+            foreignKeyName: "affective_response_flags_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_prompt_personality: {
         Row: {
           created_at: string | null
@@ -1143,6 +1194,164 @@ export type Database = {
         }
         Relationships: []
       }
+      misconception_categories: {
+        Row: {
+          category_name: string
+          created_at: string | null
+          description: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          category_name: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          category_name?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      misconception_feedback_sessions: {
+        Row: {
+          created_at: string | null
+          feedback_type: string
+          id: string
+          intervention_data: Json | null
+          notes: string | null
+          student_misconception_id: string
+          success: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          feedback_type: string
+          id?: string
+          intervention_data?: Json | null
+          notes?: string | null
+          student_misconception_id: string
+          success?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          feedback_type?: string
+          id?: string
+          intervention_data?: Json | null
+          notes?: string | null
+          student_misconception_id?: string
+          success?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "misconception_feedback_sessions_student_misconception_id_fkey"
+            columns: ["student_misconception_id"]
+            isOneToOne: false
+            referencedRelation: "student_misconceptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      misconception_persistence_logs: {
+        Row: {
+          created_at: string | null
+          first_detected_at: string | null
+          id: string
+          last_detected_at: string | null
+          misconception_subtype_id: string
+          resolution_date: string | null
+          resolved: boolean | null
+          student_id: string
+          total_occurrences: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          first_detected_at?: string | null
+          id?: string
+          last_detected_at?: string | null
+          misconception_subtype_id: string
+          resolution_date?: string | null
+          resolved?: boolean | null
+          student_id: string
+          total_occurrences?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          first_detected_at?: string | null
+          id?: string
+          last_detected_at?: string | null
+          misconception_subtype_id?: string
+          resolution_date?: string | null
+          resolved?: boolean | null
+          student_id?: string
+          total_occurrences?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "misconception_persistence_logs_misconception_subtype_id_fkey"
+            columns: ["misconception_subtype_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_subtypes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "misconception_persistence_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_data_transition"
+            referencedColumns: ["student_profile_id"]
+          },
+          {
+            foreignKeyName: "misconception_persistence_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      misconception_subtypes: {
+        Row: {
+          category_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          subtype_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          category_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          subtype_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          category_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          subtype_name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "misconception_subtypes_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mistake_patterns: {
         Row: {
           cognitive_load_indicators: Json | null
@@ -1690,6 +1899,79 @@ export type Database = {
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "active_classes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_misconceptions: {
+        Row: {
+          confidence_score: number | null
+          context_data: Json | null
+          corrected: boolean | null
+          created_at: string | null
+          detected_at: string | null
+          exam_id: string | null
+          feedback_given: boolean | null
+          id: string
+          misconception_subtype_id: string
+          question_id: string | null
+          retry_count: number | null
+          skill_id: string | null
+          student_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          context_data?: Json | null
+          corrected?: boolean | null
+          created_at?: string | null
+          detected_at?: string | null
+          exam_id?: string | null
+          feedback_given?: boolean | null
+          id?: string
+          misconception_subtype_id: string
+          question_id?: string | null
+          retry_count?: number | null
+          skill_id?: string | null
+          student_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          confidence_score?: number | null
+          context_data?: Json | null
+          corrected?: boolean | null
+          created_at?: string | null
+          detected_at?: string | null
+          exam_id?: string | null
+          feedback_given?: boolean | null
+          id?: string
+          misconception_subtype_id?: string
+          question_id?: string | null
+          retry_count?: number | null
+          skill_id?: string | null
+          student_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_misconceptions_misconception_subtype_id_fkey"
+            columns: ["misconception_subtype_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_subtypes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_misconceptions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_data_transition"
+            referencedColumns: ["student_profile_id"]
+          },
+          {
+            foreignKeyName: "student_misconceptions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "student_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2573,6 +2855,10 @@ export type Database = {
           p_score_change: number
           p_time_spent: number
         }
+        Returns: undefined
+      }
+      update_misconception_persistence: {
+        Args: { p_student_id: string; p_subtype_id: string }
         Returns: undefined
       }
       update_user_streak: {
