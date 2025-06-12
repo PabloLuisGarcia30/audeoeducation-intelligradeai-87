@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface ClassSession {
@@ -153,18 +152,46 @@ export async function getStudentExercises(studentId: string): Promise<StudentExe
       .select(`
         *,
         class_sessions!inner(
+          id,
           is_active,
           class_id,
-          session_name
+          session_name,
+          teacher_id,
+          lesson_plan_id,
+          started_at,
+          lesson_plans!inner(
+            id,
+            class_name,
+            teacher_name,
+            subject,
+            grade,
+            scheduled_date,
+            scheduled_time,
+            status
+          )
         )
       `)
       .eq('student_id', studentId)
-      .eq('class_sessions.is_active', true);
+      .eq('class_sessions.is_active', true)
+      .not('class_sessions.lesson_plan_id', 'is', null) // Only exercises from lesson plan sessions
+      .eq('class_sessions.lesson_plans.status', 'active'); // Only from active lesson plans
 
     if (error) throw error;
-    return data as StudentExercise[];
+    
+    // Transform the data to include lesson plan information
+    const transformedData = data?.map(exercise => ({
+      ...exercise,
+      lesson_plan_info: exercise.class_sessions?.lesson_plans,
+      session_info: {
+        session_name: exercise.class_sessions?.session_name,
+        started_at: exercise.class_sessions?.started_at,
+        teacher_id: exercise.class_sessions?.teacher_id
+      }
+    })) || [];
+
+    return transformedData as StudentExercise[];
   } catch (error) {
-    console.error('Error fetching student exercises:', error);
+    console.error('Error fetching student exercises from lesson plan sessions:', error);
     throw error;
   }
 }

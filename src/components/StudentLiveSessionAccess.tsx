@@ -11,7 +11,10 @@ import {
   Users, 
   BookOpen,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Calendar,
+  GraduationCap,
+  User
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getStudentExercises } from "@/services/classSessionService";
@@ -67,10 +70,23 @@ export function StudentLiveSessionAccess({ studentId }: StudentLiveSessionAccess
         <CardContent>
           <div className="text-center py-8">
             <Clock className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Active Sessions</h3>
-            <p className="text-gray-500">
-              When your teacher starts a class session, you'll see available exercises here.
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Active Lesson Plan Sessions</h3>
+            <p className="text-gray-500 mb-4">
+              When your teacher starts a live class session from an approved lesson plan, 
+              you'll see the exercises here.
             </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+              <div className="flex items-start gap-2">
+                <BookOpen className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div className="text-left">
+                  <h4 className="font-medium text-blue-900 mb-1">Looking for Practice?</h4>
+                  <p className="text-sm text-blue-800">
+                    You can still practice anytime with HomeLearner exercises and explore 
+                    advanced learning paths in Trailblazer mode.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -88,12 +104,45 @@ export function StudentLiveSessionAccess({ studentId }: StudentLiveSessionAccess
           </Badge>
         </CardTitle>
         <p className="text-sm text-gray-600">
-          Join live sessions and complete your personalized exercises
+          Join live lesson plan sessions and complete your teacher-assigned exercises
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {activeExercises.map((exercise) => (
           <div key={exercise.id} className="border rounded-lg p-4 space-y-3">
+            {/* Lesson Plan Header */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  <span className="font-medium text-blue-900">
+                    {exercise.lesson_plan_info?.class_name || 'Lesson Plan Session'}
+                  </span>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  Teacher-Led
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4 mt-2 text-xs text-blue-700">
+                {exercise.lesson_plan_info?.teacher_name && (
+                  <div className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    <span>{exercise.lesson_plan_info.teacher_name}</span>
+                  </div>
+                )}
+                {exercise.lesson_plan_info?.subject && (
+                  <div className="flex items-center gap-1">
+                    <GraduationCap className="h-3 w-3" />
+                    <span>{exercise.lesson_plan_info.subject} • {exercise.lesson_plan_info.grade}</span>
+                  </div>
+                )}
+                {exercise.session_info?.session_name && (
+                  <span className="font-medium">{exercise.session_info.session_name}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Exercise Details */}
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
@@ -107,12 +156,12 @@ export function StudentLiveSessionAccess({ studentId }: StudentLiveSessionAccess
                   </Badge>
                 </div>
                 <p className="text-sm text-gray-600 mb-2">
-                  Skill Score: {exercise.skill_score}% • Class Session Active
+                  Your Current Skill Score: {exercise.skill_score}% • Live Session Active
                 </p>
                 {exercise.status === 'completed' && exercise.score && (
                   <div className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    <span className="text-green-600">Score: {exercise.score}%</span>
+                    <span className="text-green-600">Exercise Score: {exercise.score}%</span>
                   </div>
                 )}
               </div>
@@ -167,10 +216,10 @@ export function StudentLiveSessionAccess({ studentId }: StudentLiveSessionAccess
           <div className="flex items-start gap-2">
             <Users className="h-5 w-5 text-green-600 mt-0.5" />
             <div>
-              <h4 className="font-medium text-green-900 mb-1">Live Session Benefits</h4>
+              <h4 className="font-medium text-green-900 mb-1">Live Lesson Plan Session</h4>
               <p className="text-sm text-green-800">
-                Exercises are tailored to your current skill level. Complete them during 
-                the live session for real-time feedback from your teacher.
+                These exercises come from your teacher's approved lesson plan. Complete them during 
+                the live session for real-time feedback and guidance from your teacher.
               </p>
             </div>
           </div>
