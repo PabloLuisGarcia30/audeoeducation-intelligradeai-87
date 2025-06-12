@@ -27,6 +27,22 @@ export interface StudentExercise {
   score?: number;
   created_at: string;
   updated_at: string;
+  // Added properties for lesson plan integration
+  lesson_plan_info?: {
+    id: string;
+    class_name: string;
+    teacher_name: string;
+    subject: string;
+    grade: string;
+    scheduled_date: string;
+    scheduled_time: string;
+    status: string;
+  };
+  session_info?: {
+    session_name: string;
+    started_at: string;
+    teacher_id: string;
+  };
 }
 
 export interface SessionMonitoringData {
