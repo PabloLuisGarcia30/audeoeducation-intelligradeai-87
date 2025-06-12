@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface ClassSession {
@@ -27,22 +28,6 @@ export interface StudentExercise {
   score?: number;
   created_at: string;
   updated_at: string;
-  // Added properties for lesson plan integration
-  lesson_plan_info?: {
-    id: string;
-    class_name: string;
-    teacher_name: string;
-    subject: string;
-    grade: string;
-    scheduled_date: string;
-    scheduled_time: string;
-    status: string;
-  };
-  session_info?: {
-    session_name: string;
-    started_at: string;
-    teacher_id: string;
-  };
 }
 
 export interface SessionMonitoringData {
@@ -161,59 +146,6 @@ export async function createStudentExercises(exercises: {
   }
 }
 
-// NEW: Specific function for Live Session Access - only lesson plan exercises
-export async function getStudentLiveSessionExercises(studentId: string): Promise<StudentExercise[]> {
-  try {
-    const { data, error } = await supabase
-      .from('student_exercises')
-      .select(`
-        *,
-        class_sessions!inner(
-          id,
-          is_active,
-          class_id,
-          session_name,
-          teacher_id,
-          lesson_plan_id,
-          started_at,
-          lesson_plans!inner(
-            id,
-            class_name,
-            teacher_name,
-            subject,
-            grade,
-            scheduled_date,
-            scheduled_time,
-            status
-          )
-        )
-      `)
-      .eq('student_id', studentId)
-      .eq('class_sessions.is_active', true)
-      .not('class_sessions.lesson_plan_id', 'is', null) // Only exercises from lesson plan sessions
-      .eq('class_sessions.lesson_plans.status', 'active'); // Only from active lesson plans
-
-    if (error) throw error;
-    
-    // Transform the data to include lesson plan information
-    const transformedData = data?.map(exercise => ({
-      ...exercise,
-      lesson_plan_info: exercise.class_sessions?.lesson_plans,
-      session_info: {
-        session_name: exercise.class_sessions?.session_name,
-        started_at: exercise.class_sessions?.started_at,
-        teacher_id: exercise.class_sessions?.teacher_id
-      }
-    })) || [];
-
-    return transformedData as StudentExercise[];
-  } catch (error) {
-    console.error('Error fetching student live session exercises:', error);
-    throw error;
-  }
-}
-
-// UPDATED: General function for HomeLearner - all available exercises (maintaining backward compatibility)
 export async function getStudentExercises(studentId: string): Promise<StudentExercise[]> {
   try {
     const { data, error } = await supabase
@@ -221,42 +153,16 @@ export async function getStudentExercises(studentId: string): Promise<StudentExe
       .select(`
         *,
         class_sessions!inner(
-          id,
           is_active,
           class_id,
-          session_name,
-          teacher_id,
-          lesson_plan_id,
-          started_at,
-          lesson_plans(
-            id,
-            class_name,
-            teacher_name,
-            subject,
-            grade,
-            scheduled_date,
-            scheduled_time,
-            status
-          )
+          session_name
         )
       `)
       .eq('student_id', studentId)
-      .eq('class_sessions.is_active', true); // All active sessions, not just lesson plan ones
+      .eq('class_sessions.is_active', true);
 
     if (error) throw error;
-    
-    // Transform the data to include lesson plan information where available
-    const transformedData = data?.map(exercise => ({
-      ...exercise,
-      lesson_plan_info: exercise.class_sessions?.lesson_plans || undefined,
-      session_info: {
-        session_name: exercise.class_sessions?.session_name,
-        started_at: exercise.class_sessions?.started_at,
-        teacher_id: exercise.class_sessions?.teacher_id
-      }
-    })) || [];
-
-    return transformedData as StudentExercise[];
+    return data as StudentExercise[];
   } catch (error) {
     console.error('Error fetching student exercises:', error);
     throw error;

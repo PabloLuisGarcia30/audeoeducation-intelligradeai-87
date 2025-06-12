@@ -262,10 +262,10 @@ export function ClassView({ onSelectStudent }: ClassViewProps) {
               <h1 className="text-3xl font-bold text-gray-900">{classData.name}</h1>
               <div className="flex items-center gap-3 mt-1">
                 <p className="text-gray-600">Teacher: {classData.teacher}</p>
-                {profile?.display_teacher_id && (
+                {profile?.teacher_id && (
                   <Badge variant="secondary" className="flex items-center gap-1">
                     <IdCard className="h-3 w-3" />
-                    {profile.display_teacher_id}
+                    {profile.teacher_id}
                   </Badge>
                 )}
               </div>

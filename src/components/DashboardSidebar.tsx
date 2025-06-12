@@ -1,101 +1,257 @@
 
-import { cn } from "@/lib/utils";
+import { BarChart3, Users, GraduationCap, Calendar, Brain, Home, User, LogOut, TrendingUp } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
-import { 
-  LayoutDashboard, 
-  Search, 
-  Users, 
-  BarChart3, 
-  UserCircle, 
-  BookOpen, 
-  Calendar,
-  Brain,
-  Activity,
-  Target,
-  Compass
-} from "lucide-react";
-
-type ViewType = 'dashboard' | 'search' | 'classes' | 'analytics' | 'portals' | 'student-lesson-tracker' | 'learner-profiles' | 'misconceptions' | 'live-sessions' | 'trailblazer';
+import { useAuth } from "@/contexts/AuthContext";
+import { useDevRole } from "@/contexts/DevRoleContext";
+import { RoleToggle } from "@/components/RoleToggle";
+import { DEV_CONFIG } from "@/config/devConfig";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+} from "@/components/ui/sidebar";
 
 interface DashboardSidebarProps {
-  activeView: ViewType;
-  onViewChange: (view: ViewType) => void;
+  activeView: 'dashboard' | 'search' | 'classes' | 'analytics' | 'portals' | 'student-lesson-tracker' | 'learner-profiles';
+  onViewChange: (view: 'dashboard' | 'search' | 'classes' | 'analytics' | 'portals' | 'student-lesson-tracker' | 'learner-profiles') => void;
 }
 
 export function DashboardSidebar({ activeView, onViewChange }: DashboardSidebarProps) {
-  const menuItems = [
+  const location = useLocation();
+  const { user, profile, signOut } = useAuth();
+  
+  // Get current role (dev or actual)
+  let currentRole: 'teacher' | 'student' = 'teacher';
+  try {
+    const { currentRole: devRole, isDevMode } = useDevRole();
+    if (isDevMode) {
+      currentRole = devRole;
+    } else if (profile?.role) {
+      currentRole = profile.role;
+    }
+  } catch {
+    currentRole = profile?.role || 'teacher';
+  }
+
+  // In dev mode, always show sidebar. In production, check for auth
+  if (!DEV_CONFIG.DISABLE_AUTH_FOR_DEV && (!user || !profile)) {
+    return null;
+  }
+
+  const isTeacherView = currentRole === 'teacher';
+
+  const teacherNavigationItems = [
     {
-      title: "Main",
-      items: [
-        { id: 'dashboard' as ViewType, label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'search' as ViewType, label: 'Student Search', icon: Search },
-        { id: 'classes' as ViewType, label: 'Classes', icon: Users },
-      ]
+      title: "Dashboard",
+      icon: Home,
+      onClick: () => onViewChange('dashboard'),
+      isActive: activeView === 'dashboard'
     },
     {
-      title: "Teaching Tools",
-      items: [
-        { id: 'analytics' as ViewType, label: 'Analytics', icon: BarChart3 },
-        { id: 'portals' as ViewType, label: 'Student Portals', icon: UserCircle },
-        { id: 'misconceptions' as ViewType, label: 'Misconception Analytics', icon: Brain },
-        { id: 'live-sessions' as ViewType, label: 'Live Sessions', icon: Activity },
-      ]
+      title: "Student Directory",
+      icon: Users,
+      onClick: () => onViewChange('search'),
+      isActive: activeView === 'search'
     },
     {
-      title: "Advanced Features",
-      items: [
-        { id: 'student-lesson-tracker' as ViewType, label: 'Lesson Tracker', icon: Calendar },
-        { id: 'learner-profiles' as ViewType, label: 'Learner Profiles', icon: Target },
-        { id: 'trailblazer' as ViewType, label: 'Trailblazer Mode', icon: Compass },
-      ]
+      title: "Classes",
+      icon: GraduationCap,
+      onClick: () => onViewChange('classes'),
+      isActive: activeView === 'classes'
+    },
+    {
+      title: "Analytics",
+      icon: BarChart3,
+      onClick: () => onViewChange('analytics'),
+      isActive: activeView === 'analytics'
+    },
+    {
+      title: "Student Portals",
+      icon: Calendar,
+      onClick: () => onViewChange('portals'),
+      isActive: activeView === 'portals'
+    },
+    {
+      title: "Learner Profiles",
+      href: "/student-learner-profile",
+      icon: Brain,
+      isActive: location.pathname === '/student-learner-profile'
     }
   ];
 
+  const studentNavigationItems = [
+    {
+      title: "My Dashboard",
+      href: "/student-dashboard",
+      icon: Home,
+      isActive: location.pathname === '/student-dashboard'
+    },
+    {
+      title: "My Assignments",
+      href: "/student-assignments",
+      icon: Calendar,
+      isActive: location.pathname === '/student-assignments'
+    },
+    {
+      title: "My Progress",
+      href: "/student-progress",
+      icon: BarChart3,
+      isActive: location.pathname === '/student-progress'
+    },
+    {
+      title: "Learning Profile",
+      href: "/student-learner-profile",
+      icon: Brain,
+      isActive: location.pathname === '/student-learner-profile'
+    }
+  ];
+
+  const externalLinks = [
+    {
+      title: "Test Creator",
+      href: "/test-creator"
+    },
+    {
+      title: "Upload Test",
+      href: "/upload-test"
+    },
+    {
+      title: "Student Upload",
+      href: "/student-upload"
+    },
+    {
+      title: "Create Quiz Link",
+      href: "/create-quiz-link"
+    },
+    {
+      title: "Lesson Tracker",
+      href: "/student-lesson-tracker"
+    },
+    {
+      title: "ClassRunner",
+      href: "/class-runner"
+    },
+    {
+      title: "Mistake Pattern Demo",
+      href: "/mistake-pattern-demo"
+    }
+  ];
+
+  const navigationItems = isTeacherView ? teacherNavigationItems : studentNavigationItems;
+
+  // Get display name and email
+  const displayName = profile?.full_name || 'User';
+  const displayEmail = profile?.email || user?.email || 'dev@example.com';
+
   return (
-    <Sidebar className="w-64 border-r bg-white">
-      <SidebarContent>
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-900">EduAI Platform</h2>
-          <p className="text-sm text-gray-600">Intelligent Learning System</p>
-        </div>
-        
-        <ScrollArea className="flex-1 px-3">
-          {menuItems.map((group) => (
-            <SidebarGroup key={group.title}>
-              <SidebarGroupLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {group.title}
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {group.items.map((item) => (
-                    <SidebarMenuItem key={item.id}>
-                      <SidebarMenuButton
-                        onClick={() => onViewChange(item.id)}
-                        className={cn(
-                          "w-full justify-start",
-                          activeView === item.id && "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                        )}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))}
-        </ScrollArea>
-        
-        <div className="p-4 border-t">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <Brain className="h-4 w-4" />
-            <span>AI-Powered Learning</span>
+    <Sidebar className="border-r bg-white">
+      <SidebarHeader className="p-4 border-b">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-6 w-6 text-blue-600" />
+            <span className="font-semibold text-slate-900">EduPlatform</span>
+          </div>
+
+          {/* Role Toggle */}
+          <RoleToggle />
+
+          {/* User Info */}
+          <div className="flex items-center gap-3 p-2 bg-blue-50 rounded-lg">
+            <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center">
+              <User className="h-4 w-4 text-blue-700" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-900 truncate">
+                {displayName}
+              </p>
+              <p className="text-xs text-slate-600">{displayEmail}</p>
+            </div>
           </div>
         </div>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>
+            {isTeacherView ? 'Teacher Navigation' : 'Student Navigation'}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navigationItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    onClick={item.onClick}
+                    isActive={item.isActive}
+                    className="w-full justify-start"
+                    asChild={!!item.href}
+                  >
+                    {item.href ? (
+                      <Link 
+                        to={item.href}
+                        className={`w-full justify-start ${
+                          item.isActive ? 'bg-accent text-accent-foreground' : ''
+                        }`}
+                      >
+                        <item.icon className="mr-2 h-4 w-4" />
+                        {item.title}
+                      </Link>
+                    ) : (
+                      <>
+                        <item.icon className="mr-2 h-4 w-4" />
+                        {item.title}
+                      </>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {isTeacherView && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Tools & Features</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {externalLinks.map((link) => (
+                  <SidebarMenuItem key={link.title}>
+                    <SidebarMenuButton asChild>
+                      <Link 
+                        to={link.href}
+                        className={`w-full justify-start ${
+                          location.pathname === link.href ? 'bg-accent text-accent-foreground' : ''
+                        }`}
+                      >
+                        <div className="mr-2 h-4 w-4" />
+                        {link.title}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
+
+      <SidebarFooter className="p-4 border-t">
+        <Button 
+          variant="outline" 
+          onClick={signOut}
+          className="w-full justify-start"
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          {DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? 'Sign Out (Dev)' : 'Sign Out'}
+        </Button>
+      </SidebarFooter>
     </Sidebar>
   );
 }

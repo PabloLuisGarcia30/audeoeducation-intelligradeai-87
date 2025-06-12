@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -7,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Play, Loader2, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { createClassSession, createStudentExercises } from "@/services/classSessionService";
-import { useTeacherAuth } from "@/hooks/useTeacherAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface StartClassSessionProps {
   classId: string;
@@ -27,16 +26,10 @@ export function StartClassSession({ classId, className, students, onSessionStart
   const [open, setOpen] = useState(false);
   const [sessionName, setSessionName] = useState(`${className} - ${new Date().toLocaleDateString()}`);
   const [loading, setLoading] = useState(false);
-  const { teacherUUID, isAuthenticated } = useTeacherAuth();
 
   const handleStartSession = async () => {
     if (!sessionName.trim()) {
       toast.error("Please enter a session name");
-      return;
-    }
-
-    if (!isAuthenticated || !teacherUUID) {
-      toast.error("User not authenticated");
       return;
     }
 
@@ -47,12 +40,18 @@ export function StartClassSession({ classId, className, students, onSessionStart
 
     setLoading(true);
     try {
-      console.log('🔐 Creating class session for authenticated teacher:', teacherUUID);
+      // Get current authenticated user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
 
-      // Create the class session - service will use authenticated user ID
+      console.log('🔐 Creating class session for authenticated teacher:', user.id);
+
+      // Create the class session - createClassSession will use user.id internally
       const session = await createClassSession({
         class_id: classId,
-        teacher_id: teacherUUID, // This will be verified by the service
+        teacher_id: user.id, // This will be overridden by the service to use authenticated user
         session_name: sessionName
       });
 
