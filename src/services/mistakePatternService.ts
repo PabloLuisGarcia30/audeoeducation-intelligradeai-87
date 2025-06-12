@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { EnhancedMistakePatternService, type EnhancedMistakePatternData } from './enhancedMistakePatternService';
 import { ConceptualAnchorService } from './conceptualAnchorService';
@@ -62,6 +63,10 @@ export class MistakePatternService {
     conceptMissedId?: string;
     conceptMissedDescription?: string;
     conceptConfidence?: number; // NEW: GPT confidence score
+    // NEW: Added misconceptionCategory property to fix TypeScript error
+    misconceptionCategory?: string;
+    concept_missed_id?: string;
+    concept_missed_description?: string;
   }): Promise<string | null> {
     try {
       console.log(`🔍 Recording mistake pattern for question ${mistakeData.questionNumber}`);
@@ -126,17 +131,21 @@ export class MistakePatternService {
         console.log(`🎯 Concept missed: ID ${mistakeData.conceptMissedId} - "${mistakeData.conceptMissedDescription}" (Confidence: ${conceptConfidence || 'N/A'})`);
       }
       
-      // Enhance the mistake data with detailed analysis including confidence
-      const enhancedData: EnhancedMistakePatternData = {
-        ...mistakeData,
-        misconceptionCategory: EnhancedMistakePatternService.analyzeMisconceptionCategory(
+      // Use provided misconception category or analyze it
+      const misconceptionCategory = mistakeData.misconceptionCategory || 
+        EnhancedMistakePatternService.analyzeMisconceptionCategory(
           mistakeData.questionType || 'unknown',
           mistakeData.studentAnswer,
           mistakeData.correctAnswer,
           mistakeData.questionContext,
           mistakeData.options,
           subject
-        ),
+        );
+      
+      // Enhance the mistake data with detailed analysis including confidence
+      const enhancedData: EnhancedMistakePatternData = {
+        ...mistakeData,
+        misconceptionCategory,
         errorSeverity: EnhancedMistakePatternService.determineErrorSeverity(
           mistakeData.isCorrect,
           mistakeData.questionType || 'unknown',
@@ -159,14 +168,7 @@ export class MistakePatternService {
         },
         remediationSuggestions: EnhancedMistakePatternService.generateSubjectSpecificRemediation(
           subject,
-          EnhancedMistakePatternService.analyzeMisconceptionCategory(
-            mistakeData.questionType || 'unknown',
-            mistakeData.studentAnswer,
-            mistakeData.correctAnswer,
-            mistakeData.questionContext,
-            mistakeData.options,
-            subject
-          ),
+          misconceptionCategory,
           mistakeData.skillTargeted
         ),
         // Conceptual anchor fields
@@ -174,8 +176,8 @@ export class MistakePatternService {
         conceptMasteryLevel: conceptMasteryLevel,
         conceptSource: conceptSource,
         // Concept missed data with confidence
-        conceptMissedId: mistakeData.conceptMissedId,
-        conceptMissedDescription: mistakeData.conceptMissedDescription,
+        conceptMissedId: mistakeData.conceptMissedId || mistakeData.concept_missed_id,
+        conceptMissedDescription: mistakeData.conceptMissedDescription || mistakeData.concept_missed_description,
         conceptConfidence: conceptConfidence, // NEW: Include confidence score
         // Misconception signature
         misconceptionSignature: misconceptionSignature
