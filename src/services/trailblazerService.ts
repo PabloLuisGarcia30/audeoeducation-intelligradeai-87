@@ -396,7 +396,6 @@ export const trailblazerService = {
       throw new Error('User not authenticated');
     }
 
-    // Use RPC function that takes teacher's UUID (not text ID)
     const { data, error } = await supabase.rpc('get_teacher_students_trailblazer_progress', {
       teacher_user_id: user.id
     });
@@ -411,28 +410,6 @@ export const trailblazerService = {
 
   // Get specific student's Trailblazer data for teachers
   async getStudentTrailblazerData(studentId: string) {
-    // Verify teacher authentication
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
-    
-    // First verify teacher has access to this student via class enrollments
-    // For now, we'll implement a simpler check - in a future update we can add the RPC function
-    const { data: teacherClasses } = await supabase
-      .from('active_classes')
-      .select('students')
-      .eq('teacher_id', user.id);
-    
-    const hasAccess = teacherClasses?.some(cls => 
-      cls.students && cls.students.includes(studentId)
-    );
-    
-    if (!hasAccess) {
-      throw new Error('Access denied: You do not have permission to view this student');
-    }
-
     // Get student streak
     const { data: streak } = await supabase
       .from('user_streaks')

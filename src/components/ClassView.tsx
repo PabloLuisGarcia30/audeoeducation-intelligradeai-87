@@ -75,7 +75,6 @@ export function ClassView({ onSelectStudent }: ClassViewProps) {
 
   const handleCreateClass = async (classData: { name: string; subject: string; grade: string; teacher: string; dayOfWeek?: string[]; classTime?: string; endTime?: string }) => {
     try {
-      // Pass the class data to the service which now handles authentication internally
       const newClass = await createActiveClass(classData);
       setClasses([...classes, newClass]);
       

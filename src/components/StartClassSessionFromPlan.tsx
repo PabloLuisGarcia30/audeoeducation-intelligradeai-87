@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -55,10 +56,11 @@ export function StartClassSessionFromPlan({ classId, className, onSessionStarted
         throw new Error("User not authenticated");
       }
 
-      // Create the class session with lesson plan reference (teacher_id is handled internally)
+      // Create the class session with lesson plan reference
       const session = await createClassSession({
         class_id: classId,
         lesson_plan_id: lessonPlan.id,
+        teacher_id: user.id,
         session_name: sessionName
       });
 

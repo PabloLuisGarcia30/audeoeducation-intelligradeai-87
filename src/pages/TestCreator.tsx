@@ -18,7 +18,6 @@ import { QuestionEditor } from "@/components/TestCreator/QuestionEditor";
 import { AISkillSelection } from "@/components/TestCreator/AISkillSelection";
 import { saveExamToDatabase, getAllActiveClasses, type ExamData, type ActiveClass, type ContentSkill } from "@/services/examService";
 import { generatePracticeTest, type GeneratePracticeTestRequest } from "@/services/practiceTestService";
-import { useNavigate } from "react-router-dom";
 
 interface PrintTestsDialogProps {
   selectedClass: ActiveClass;
@@ -125,7 +124,6 @@ const TestCreator = () => {
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [questionCount, setQuestionCount] = useState<number>(10);
   const [isGeneratingSingleQuestion, setIsGeneratingSingleQuestion] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const loadClasses = async () => {
@@ -377,7 +375,7 @@ const TestCreator = () => {
       await saveExamToDatabase(testData, classId);
       toast({
         title: "✅ Success!",
-        description: `Test and answer key saved successfully! Exam ID: ${testData.exam_id}`,
+        description: `Test and answer key saved successfully! Exam ID: ${testData.examId}`,
       });
     } catch (error) {
       console.error('Error saving test to database:', error);
@@ -403,21 +401,21 @@ const TestCreator = () => {
     const selectedClass = availableClasses.find(c => c.id === selectedClassId);
     const className = selectedClass?.name || 'Unknown Class';
     
-    const examData: ExamData = {
-      exam_id: examId,  // Use exam_id not examId
-      title: examTitle,
-      description: examDescription,
-      time_limit: parseInt(timeLimit),
-      total_points: questions.reduce((sum, q) => sum + q.points, 0),
-      class_id: selectedClass?.id,
-      class_name: selectedClass?.name
+    const testData: ExamData = {
+      examId,
+      title: testTitle,
+      description: testDescription,
+      className,
+      timeLimit,
+      totalPoints: questions.reduce((sum, q) => sum + q.points, 0),
+      questions,
     };
     
     try {
-      await saveTestToDatabase(examData, selectedClassId);
+      await saveTestToDatabase(testData, selectedClassId);
       toast({
         title: "🎉 Test Saved!",
-        description: `Successfully saved with ID: ${examData.exam_id}`,
+        description: `Successfully saved with ID: ${examId}`,
       });
       setCurrentStep('preview');
     } catch (error) {
@@ -1497,20 +1495,6 @@ const TestCreator = () => {
         </div>
       </div>
     );
-  };
-
-  const handleExamCreated = (examData: ExamData) => {
-    console.log('Exam created successfully:', examData);
-    
-    // Navigate to link generator with exam data
-    navigate('/student-link-generator', { 
-      state: { 
-        examId: examData.exam_id,  // Use exam_id not examId
-        examTitle: examData.title,
-        classId: selectedClass?.id,
-        className: selectedClass?.name
-      } 
-    });
   };
 
   return (

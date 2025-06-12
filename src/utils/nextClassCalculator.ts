@@ -1,16 +1,19 @@
 
-import { addDays, format, isAfter, startOfDay } from "date-fns";
+import { addDays, getDay, format, startOfDay } from "date-fns";
+import type { ActiveClassWithDuration } from "@/services/examService";
 
-// Simple interface without external dependencies
-interface SimpleClass {
-  name: string;
-  day_of_week?: string[];
-  class_time?: string;
-  end_time?: string;
+export interface NextClassInfo {
+  date: string; // YYYY-MM-DD format
+  time: string; // HH:MM format
+  formattedDate: string; // "June 12, 2025"
+  formattedTime: string; // "1:30 PM"
+  dayName: string; // "Wednesday"
+  isToday: boolean;
+  daysUntil: number;
 }
 
-export function calculateNextClass(classData: SimpleClass) {
-  if (!classData.day_of_week || classData.day_of_week.length === 0) {
+export function getNextClassDate(classData: ActiveClassWithDuration | null): NextClassInfo | null {
+  if (!classData?.day_of_week || !classData?.class_time || classData.day_of_week.length === 0) {
     return null;
   }
 
@@ -25,29 +28,71 @@ export function calculateNextClass(classData: SimpleClass) {
     'Saturday': 6
   };
 
-  // Find the next occurrence of any scheduled day
-  for (let i = 0; i < 14; i++) { // Check next 2 weeks
-    const checkDate = addDays(today, i);
-    const dayOfWeek = checkDate.getDay();
-    
-    const scheduledDay = classData.day_of_week.find(day => 
-      dayMap[day] === dayOfWeek
-    );
+  // Convert class days to numbers
+  const classDayNumbers = classData.day_of_week
+    .map(day => dayMap[day])
+    .filter(dayNum => dayNum !== undefined);
 
-    if (scheduledDay) {
-      return {
-        date: checkDate,
-        dayName: scheduledDay,
-        formattedDate: format(checkDate, 'MMM d, yyyy'),
-        time: classData.class_time || 'No time set'
-      };
-    }
+  if (classDayNumbers.length === 0) {
+    return null;
   }
 
-  return null;
-}
+  // Find the next occurrence of any class day
+  let nextClassDate = today;
+  let daysToAdd = 0;
+  let foundDay = false;
+  
+  for (let i = 0; i < 14; i++) { // Look up to 2 weeks ahead
+    const currentDay = getDay(nextClassDate);
+    
+    if (classDayNumbers.includes(currentDay)) {
+      // If it's today, check if class time hasn't passed yet
+      if (daysToAdd === 0) {
+        const now = new Date();
+        const [hours, minutes] = classData.class_time.split(':').map(Number);
+        const classTime = new Date();
+        classTime.setHours(hours, minutes, 0, 0);
+        
+        // If class time has passed today, continue looking for next occurrence
+        if (now > classTime) {
+          daysToAdd++;
+          nextClassDate = addDays(today, daysToAdd);
+          continue;
+        }
+      }
+      foundDay = true;
+      break;
+    }
+    
+    daysToAdd++;
+    nextClassDate = addDays(today, daysToAdd);
+  }
 
-export function getNextClassDate(classData: SimpleClass): string {
-  const nextClass = calculateNextClass(classData);
-  return nextClass ? nextClass.formattedDate : 'No upcoming class';
+  if (!foundDay) {
+    return null;
+  }
+
+  // Format the time
+  const formatTime = (timeString: string) => {
+    try {
+      const date = new Date(`2024-01-01 ${timeString}`);
+      return date.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    } catch {
+      return timeString;
+    }
+  };
+
+  return {
+    date: format(nextClassDate, 'yyyy-MM-dd'),
+    time: classData.class_time,
+    formattedDate: format(nextClassDate, 'MMMM d, yyyy'),
+    formattedTime: formatTime(classData.class_time),
+    dayName: format(nextClassDate, 'EEEE'),
+    isToday: daysToAdd === 0,
+    daysUntil: daysToAdd
+  };
 }

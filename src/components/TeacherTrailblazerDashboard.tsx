@@ -1,11 +1,10 @@
 
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTeacherTrailblazer } from '@/hooks/useTrailblazer';
-import { useAuth } from '@/contexts/AuthContext';
 import { 
   Users, 
   TrendingUp, 
@@ -15,11 +14,13 @@ import {
   Calendar,
   BarChart3
 } from 'lucide-react';
+import { TrailblazerStats } from './TrailblazerStats';
+import { ConceptMasteryDisplay } from './ConceptMasteryDisplay';
+import { TrailblazerAchievements } from './TrailblazerAchievements';
 
 export const TeacherTrailblazerDashboard = () => {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [showStudentDetail, setShowStudentDetail] = useState(false);
-  const { profile } = useAuth();
   
   const { studentsProgress, isLoading, getStudentData } = useTeacherTrailblazer();
 
@@ -80,11 +81,6 @@ export const TeacherTrailblazerDashboard = () => {
         <p className="text-gray-600">
           Monitor your students' independent learning progress and engagement
         </p>
-        {profile?.teacher_id && (
-          <Badge variant="outline" className="mt-2">
-            Teacher ID: {profile.teacher_id}
-          </Badge>
-        )}
       </div>
 
       {/* Class Statistics */}

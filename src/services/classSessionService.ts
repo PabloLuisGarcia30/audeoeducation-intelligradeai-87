@@ -1,11 +1,10 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface ClassSession {
   id: string;
   class_id: string;
   lesson_plan_id?: string;
-  teacher_id: string; // UUID of authenticated teacher
+  teacher_id: string;
   session_name: string;
   started_at: string;
   ended_at?: string;
@@ -56,21 +55,16 @@ export interface SessionMonitoringData {
 export async function createClassSession(sessionData: {
   class_id: string;
   lesson_plan_id?: string;
+  teacher_id: string;
   session_name: string;
 }): Promise<ClassSession> {
   try {
-    // Get the current authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      throw new Error('User not authenticated');
-    }
-    
     const { data, error } = await supabase
       .from('class_sessions')
       .insert({
         class_id: sessionData.class_id,
         lesson_plan_id: sessionData.lesson_plan_id,
-        teacher_id: user.id, // Use authenticated UUID
+        teacher_id: sessionData.teacher_id,
         session_name: sessionData.session_name
       })
       .select()
@@ -86,20 +80,13 @@ export async function createClassSession(sessionData: {
 
 export async function endClassSession(sessionId: string): Promise<void> {
   try {
-    // Get the current authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      throw new Error('User not authenticated');
-    }
-    
     const { error } = await supabase
       .from('class_sessions')
       .update({
         ended_at: new Date().toISOString(),
         is_active: false
       })
-      .eq('id', sessionId)
-      .eq('teacher_id', user.id); // Ensure only owner can end session
+      .eq('id', sessionId);
 
     if (error) throw error;
   } catch (error) {
@@ -108,18 +95,12 @@ export async function endClassSession(sessionId: string): Promise<void> {
   }
 }
 
-export async function getActiveClassSessions(): Promise<ClassSession[]> {
+export async function getActiveClassSessions(teacherId: string): Promise<ClassSession[]> {
   try {
-    // Get the current authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      throw new Error('User not authenticated');
-    }
-    
     const { data, error } = await supabase
       .from('class_sessions')
       .select('*')
-      .eq('teacher_id', user.id) // Use authenticated UUID
+      .eq('teacher_id', teacherId)
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
