@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TrailblazerSession {
@@ -246,14 +247,27 @@ export const trailblazerService = {
       throw error;
     }
 
-    // Update session's misconception_ids array
-    const { error: updateError } = await supabase.rpc('add_misconception_to_session', {
-      p_session_id: sessionId,
-      p_misconception_id: misconceptionId
-    });
+    // Update session's misconception_ids array using direct SQL update
+    const { data: sessionData } = await supabase
+      .from('trailblazer_sessions')
+      .select('misconception_ids')
+      .eq('id', sessionId)
+      .single();
 
-    if (updateError) {
-      console.error('Error updating session misconception ids:', updateError);
+    if (sessionData) {
+      const currentIds = sessionData.misconception_ids || [];
+      if (!currentIds.includes(misconceptionId)) {
+        const updatedIds = [...currentIds, misconceptionId];
+        
+        const { error: updateError } = await supabase
+          .from('trailblazer_sessions')
+          .update({ misconception_ids: updatedIds })
+          .eq('id', sessionId);
+
+        if (updateError) {
+          console.error('Error updating session misconception ids:', updateError);
+        }
+      }
     }
 
     return data;
