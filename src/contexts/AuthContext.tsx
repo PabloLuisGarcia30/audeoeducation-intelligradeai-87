@@ -13,7 +13,7 @@ export interface UserProfile {
   email: string;
   full_name: string;
   role: UserRole;
-  teacher_id?: string;
+  teacher_id?: string; // Human-readable ID for display only
   created_at: string;
   updated_at: string;
 }
