@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { SmartAnswerGradingService, type GradingResult } from './smartAnswerGradingService';
 import { MistakePatternService } from './mistakePatternService';
@@ -28,7 +29,7 @@ export interface QuestionResult {
     subtypeName?: string;
     confidence?: number;
     reasoning?: string;
-    misconceptionId?: string; // NEW: Track the actual misconception record ID
+    misconceptionId?: string; // FIXED: Added misconceptionId property
   };
 }
 
