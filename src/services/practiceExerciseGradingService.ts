@@ -28,6 +28,7 @@ export interface QuestionResult {
     subtypeName?: string;
     confidence?: number;
     reasoning?: string;
+    misconceptionId?: string; // NEW: Track the actual misconception record ID
   };
 }
 
@@ -38,6 +39,7 @@ export interface ExerciseSubmissionResult {
   questionResults: QuestionResult[];
   overallFeedback: string;
   completedAt: Date;
+  trailblazerMisconceptions?: string[]; // NEW: List of misconception IDs recorded
 }
 
 export class PracticeExerciseGradingService {
@@ -55,7 +57,7 @@ export class PracticeExerciseGradingService {
       exerciseType?: string;
       skillsTargeted?: string[];
     },
-    trailblazerSessionId?: string // NEW: Optional Trailblazer session ID
+    trailblazerSessionId?: string // Trailblazer session ID for integration
   ): Promise<ExerciseSubmissionResult> {
     try {
       console.log(`🎯 Grading exercise submission: "${exerciseTitle}" with ${answers.length} questions`);
@@ -64,6 +66,7 @@ export class PracticeExerciseGradingService {
       }
 
       const questionResults: QuestionResult[] = [];
+      const trailblazerMisconceptions: string[] = [];
       let totalScore = 0;
       let totalPossible = 0;
 
@@ -141,6 +144,29 @@ export class PracticeExerciseGradingService {
             await MistakePatternService.recordMistakePattern(mistakeData);
           }
 
+          // NEW: Record misconception in Trailblazer session if applicable
+          if (trailblazerSessionId && !gradingResult.isCorrect && gradingResult.misconceptionAnalysis?.misconceptionId) {
+            try {
+              await trailblazerService.recordSessionMisconception(
+                trailblazerSessionId,
+                gradingResult.misconceptionAnalysis.misconceptionId,
+                i + 1 // question sequence
+              );
+              
+              trailblazerMisconceptions.push(gradingResult.misconceptionAnalysis.misconceptionId);
+              
+              // Update the question result with the misconception ID
+              questionResult.misconceptionAnalysis = {
+                ...questionResult.misconceptionAnalysis,
+                misconceptionId: gradingResult.misconceptionAnalysis.misconceptionId
+              };
+              
+              console.log(`🧠 Recorded misconception ${gradingResult.misconceptionAnalysis.misconceptionId} for Trailblazer session ${trailblazerSessionId}`);
+            } catch (error) {
+              console.error('Error recording Trailblazer misconception:', error);
+            }
+          }
+
           console.log(`✅ Question ${i + 1} graded: ${gradingResult.isCorrect ? 'Correct' : 'Incorrect'} (${pointsEarned}/${answer.points} points)`);
           
         } catch (error) {
@@ -176,8 +202,8 @@ export class PracticeExerciseGradingService {
       );
 
       console.log(`🎯 Exercise grading completed: ${totalScore}/${totalPossible} points (${percentageScore.toFixed(1)}%)`);
-      if (trailblazerSessionId) {
-        console.log(`🧠 Misconceptions will be linked to Trailblazer session: ${trailblazerSessionId}`);
+      if (trailblazerSessionId && trailblazerMisconceptions.length > 0) {
+        console.log(`🧠 Recorded ${trailblazerMisconceptions.length} misconceptions in Trailblazer session: ${trailblazerSessionId}`);
       }
 
       return {
@@ -186,7 +212,8 @@ export class PracticeExerciseGradingService {
         percentageScore,
         questionResults,
         overallFeedback,
-        completedAt: new Date()
+        completedAt: new Date(),
+        trailblazerMisconceptions: trailblazerMisconceptions.length > 0 ? trailblazerMisconceptions : undefined
       };
 
     } catch (error) {
@@ -295,5 +322,30 @@ export class PracticeExerciseGradingService {
     return feedback;
   }
 
-  // Other existing methods
+  /**
+   * NEW: Grade an exercise submission specifically for Trailblazer sessions
+   * This is a convenience method that automatically handles Trailblazer integration
+   */
+  static async gradeTrailblazerExercise(
+    answers: PracticeExerciseAnswer[],
+    exerciseTitle: string,
+    trailblazerSessionId: string,
+    skillName: string,
+    subject?: string,
+    grade?: string
+  ): Promise<ExerciseSubmissionResult> {
+    return this.gradeExerciseSubmission(
+      answers,
+      exerciseTitle,
+      undefined, // No student exercise ID for Trailblazer
+      skillName,
+      {
+        subject,
+        grade,
+        exerciseType: 'trailblazer_practice',
+        skillsTargeted: [skillName]
+      },
+      trailblazerSessionId
+    );
+  }
 }

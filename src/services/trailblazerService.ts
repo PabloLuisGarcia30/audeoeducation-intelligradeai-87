@@ -221,10 +221,11 @@ export const trailblazerService = {
       throw error;
     }
 
+    console.log(`🧠 Started Trailblazer session ${data.id} with misconception tracking enabled`);
     return data;
   },
 
-  // NEW: Record misconception during active session
+  // Record misconception during active session with enhanced logging
   async recordSessionMisconception(
     sessionId: string,
     misconceptionId: string,
@@ -265,6 +266,8 @@ export const trailblazerService = {
 
         if (updateError) {
           console.error('Error updating session misconception ids:', updateError);
+        } else {
+          console.log(`🧠 Added misconception ${misconceptionId} to session ${sessionId} (total: ${updatedIds.length})`);
         }
       }
     }
@@ -272,7 +275,7 @@ export const trailblazerService = {
     return data;
   },
 
-  // NEW: Get misconceptions for a session
+  // Get misconceptions for a session
   async getSessionMisconceptions(sessionId: string): Promise<SessionMisconception[]> {
     const { data, error } = await supabase
       .from('trailblazer_session_misconceptions')
@@ -295,13 +298,27 @@ export const trailblazerService = {
     scoreImprovement?: number,
     misconceptionSummary?: any
   ): Promise<void> {
+    // Get misconceptions for summary if not provided
+    let finalMisconceptionSummary = misconceptionSummary;
+    if (!finalMisconceptionSummary) {
+      const misconceptions = await this.getSessionMisconceptions(sessionId);
+      finalMisconceptionSummary = {
+        total_misconceptions: misconceptions.length,
+        detected_count: misconceptions.filter(m => m.resolution_status === 'detected').length,
+        resolved_count: misconceptions.filter(m => m.resolution_status === 'resolved').length,
+        persistent_count: misconceptions.filter(m => m.resolution_status === 'persistent').length,
+        misconception_ids: misconceptions.map(m => m.misconception_id),
+        session_completed_at: new Date().toISOString()
+      };
+    }
+
     const { error } = await supabase
       .from('trailblazer_sessions')
       .update({
         status: 'completed',
         actual_duration_minutes: actualDuration,
         score_improvement: scoreImprovement,
-        misconception_summary: misconceptionSummary || {}
+        misconception_summary: finalMisconceptionSummary
       })
       .eq('id', sessionId);
 
@@ -310,6 +327,8 @@ export const trailblazerService = {
       throw error;
     }
 
+    console.log(`🧠 Completed Trailblazer session ${sessionId} with ${finalMisconceptionSummary.total_misconceptions || 0} misconceptions tracked`);
+
     // Update user streak
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -317,7 +336,7 @@ export const trailblazerService = {
     }
   },
 
-  // NEW: Complete session with comprehensive misconception analysis
+  // Complete session with comprehensive misconception analysis
   async completeSessionWithMisconceptions(
     sessionId: string,
     actualDuration: number,
@@ -348,21 +367,27 @@ export const trailblazerService = {
         total_misconceptions: misconceptions.length,
         resolved_count: misconceptions.filter(m => m.resolution_status === 'resolved').length,
         persistent_count: misconceptions.filter(m => m.resolution_status === 'persistent').length,
+        detected_count: misconceptions.filter(m => m.resolution_status === 'detected').length,
         misconception_types: misconceptions.map(m => m.misconception_id),
-        session_completed_at: new Date().toISOString()
+        session_completed_at: new Date().toISOString(),
+        resolution_analysis: misconceptionEvents ? {
+          total_analyzed: misconceptionEvents.length,
+          resolved_by_student: misconceptionEvents.filter(e => e.resolved).length,
+          needs_further_work: misconceptionEvents.filter(e => !e.resolved).length
+        } : undefined
       };
 
       // Complete the session with summary
       await this.completeSession(sessionId, actualDuration, scoreImprovement, misconceptionSummary);
 
-      console.log(`✅ Session ${sessionId} completed with ${misconceptions.length} misconceptions tracked`);
+      console.log(`✅ Session ${sessionId} completed with ${misconceptions.length} misconceptions tracked and ${misconceptionEvents?.length || 0} resolution events analyzed`);
     } catch (error) {
       console.error('Error completing session with misconceptions:', error);
       throw error;
     }
   },
 
-  // NEW: Get current active session for user
+  // Get current active session for user
   async getCurrentActiveSession(): Promise<TrailblazerSession | null> {
     const { data: { user } } = await supabase.auth.getUser();
     
