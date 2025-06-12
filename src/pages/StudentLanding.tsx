@@ -2,7 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, GraduationCap } from "lucide-react";
+import { LayoutDashboard, GraduationCap, Compass, PlayCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const StudentLanding = () => {
@@ -22,8 +22,8 @@ const StudentLanding = () => {
           </p>
         </div>
 
-        {/* Two Card Options */}
-        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Three Card Options */}
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Dashboard Card */}
           <Card className="hover:shadow-lg transition-shadow cursor-pointer group">
             <CardHeader className="text-center pb-4">
@@ -44,6 +44,31 @@ const StudentLanding = () => {
                 size="lg"
               >
                 Open Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Trailblazer Learner Card */}
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer group bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+            <CardHeader className="text-center pb-4">
+              <div className="mx-auto mb-4 p-4 bg-green-100 rounded-full w-16 h-16 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                <Compass className="h-8 w-8 text-green-600" />
+              </div>
+              <CardTitle className="text-2xl font-bold text-gray-900">
+                Trailblazer Learner
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+              <p className="text-gray-600 mb-6 leading-relaxed">
+                Explore advanced learning paths, unlock new challenges, and blaze your own trail through personalized education.
+              </p>
+              <Button 
+                onClick={() => navigate('/student-dashboard/trailblazer')}
+                className="w-full bg-green-600 hover:bg-green-700"
+                size="lg"
+              >
+                <PlayCircle className="h-4 w-4 mr-2" />
+                Start Journey
               </Button>
             </CardContent>
           </Card>
