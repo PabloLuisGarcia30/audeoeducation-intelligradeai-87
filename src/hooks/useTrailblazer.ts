@@ -58,7 +58,23 @@ export const useTrailblazer = () => {
     });
   };
 
-  // Enhanced start session mutation with class context
+  // NEW: Get current active session
+  const { data: activeSession, isLoading: activeSessionLoading } = useQuery({
+    queryKey: ['trailblazer', 'activeSession'],
+    queryFn: trailblazerService.getCurrentActiveSession,
+    enabled: !!user,
+  });
+
+  // NEW: Get session misconceptions
+  const getSessionMisconceptions = (sessionId: string) => {
+    return useQuery({
+      queryKey: ['trailblazer', 'sessionMisconceptions', sessionId],
+      queryFn: () => trailblazerService.getSessionMisconceptions(sessionId),
+      enabled: !!sessionId,
+    });
+  };
+
+  // Enhanced start session mutation with misconception tracking preparation
   const startSessionMutation = useMutation({
     mutationFn: ({ goalType, focusConcept, durationMinutes, classId, subject, grade }: {
       goalType: string;
@@ -73,19 +89,48 @@ export const useTrailblazer = () => {
     },
   });
 
-  // Complete session mutation
+  // NEW: Record misconception during session
+  const recordMisconceptionMutation = useMutation({
+    mutationFn: ({ sessionId, misconceptionId, questionSequence }: {
+      sessionId: string;
+      misconceptionId: string;
+      questionSequence?: number;
+    }) => trailblazerService.recordSessionMisconception(sessionId, misconceptionId, questionSequence),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['trailblazer', 'sessionMisconceptions', variables.sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['trailblazer', 'activeSession'] });
+    },
+  });
+
+  // Enhanced complete session mutation with misconception support
   const completeSessionMutation = useMutation({
-    mutationFn: ({ sessionId, actualDuration, scoreImprovement }: {
+    mutationFn: ({ sessionId, actualDuration, scoreImprovement, misconceptionEvents }: {
       sessionId: string;
       actualDuration: number;
       scoreImprovement?: number;
-    }) => trailblazerService.completeSession(sessionId, actualDuration, scoreImprovement),
+      misconceptionEvents?: Array<{
+        misconceptionId: string;
+        questionSequence?: number;
+        resolved: boolean;
+      }>;
+    }) => {
+      if (misconceptionEvents) {
+        return trailblazerService.completeSessionWithMisconceptions(
+          sessionId, 
+          actualDuration, 
+          scoreImprovement, 
+          misconceptionEvents
+        );
+      } else {
+        return trailblazerService.completeSession(sessionId, actualDuration, scoreImprovement);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trailblazer'] });
     },
   });
 
-  const isLoading = streakLoading || conceptsLoading || sessionsLoading || achievementsLoading || classesLoading;
+  const isLoading = streakLoading || conceptsLoading || sessionsLoading || achievementsLoading || classesLoading || activeSessionLoading;
 
   return {
     // Data
@@ -95,16 +140,20 @@ export const useTrailblazer = () => {
     achievements,
     enrolledClasses,
     getClassConcepts,
+    activeSession,
+    getSessionMisconceptions,
     
     // Loading states
     isLoading,
     
     // Mutations
     startSession: startSessionMutation.mutateAsync,
+    recordSessionMisconception: recordMisconceptionMutation.mutateAsync,
     completeSession: completeSessionMutation.mutateAsync,
     
     // Mutation states
     isStartingSession: startSessionMutation.isPending,
+    isRecordingMisconception: recordMisconceptionMutation.isPending,
     isCompletingSession: completeSessionMutation.isPending,
   };
 };

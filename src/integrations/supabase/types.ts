@@ -2463,6 +2463,54 @@ export type Database = {
         }
         Relationships: []
       }
+      trailblazer_session_misconceptions: {
+        Row: {
+          created_at: string | null
+          id: string
+          misconception_id: string
+          question_sequence: number | null
+          resolution_status: string | null
+          session_id: string
+          time_occurred: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          misconception_id: string
+          question_sequence?: number | null
+          resolution_status?: string | null
+          session_id: string
+          time_occurred?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          misconception_id?: string
+          question_sequence?: number | null
+          resolution_status?: string | null
+          session_id?: string
+          time_occurred?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trailblazer_session_misconceptions_misconception_id_fkey"
+            columns: ["misconception_id"]
+            isOneToOne: false
+            referencedRelation: "student_misconceptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trailblazer_session_misconceptions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "trailblazer_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trailblazer_sessions: {
         Row: {
           actual_duration_minutes: number | null
@@ -2473,6 +2521,8 @@ export type Database = {
           goal_type: string
           grade: string | null
           id: string
+          misconception_ids: string[] | null
+          misconception_summary: Json | null
           mistake_types_encountered: Json | null
           score_improvement: number | null
           session_date: string | null
@@ -2490,6 +2540,8 @@ export type Database = {
           goal_type: string
           grade?: string | null
           id?: string
+          misconception_ids?: string[] | null
+          misconception_summary?: Json | null
           mistake_types_encountered?: Json | null
           score_improvement?: number | null
           session_date?: string | null
@@ -2507,6 +2559,8 @@ export type Database = {
           goal_type?: string
           grade?: string | null
           id?: string
+          misconception_ids?: string[] | null
+          misconception_summary?: Json | null
           mistake_types_encountered?: Json | null
           score_improvement?: number | null
           session_date?: string | null

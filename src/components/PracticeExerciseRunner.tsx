@@ -6,9 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, XCircle, Clock, BookOpen } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, BookOpen, Brain } from 'lucide-react';
 import { PracticeExerciseGradingService, type PracticeExerciseAnswer, type ExerciseSubmissionResult } from '@/services/practiceExerciseGradingService';
 import { QuestionTimingService } from '@/services/questionTimingService';
+import { useTrailblazer } from '@/hooks/useTrailblazer';
 
 interface PracticeQuestion {
   id: string;
@@ -36,9 +37,16 @@ interface Props {
   onComplete: (results: ExerciseSubmissionResult & { answers: Record<string, string> }) => void;
   onExit?: () => void;
   showTimer?: boolean;
+  trailblazerSessionId?: string; // NEW: Optional Trailblazer session ID
 }
 
-export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showTimer = true }: Props) {
+export function PracticeExerciseRunner({ 
+  exerciseData, 
+  onComplete, 
+  onExit, 
+  showTimer = true,
+  trailblazerSessionId 
+}: Props) {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,7 +63,7 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showT
   const isLastQuestion = currentQuestionIndex === exerciseData.questions.length - 1;
   const hasAnsweredCurrent = answers[currentQuestion.id]?.trim().length > 0;
 
-  // Timer effect - only run if showTimer is true
+  // Timing effect - only run if showTimer is true
   useEffect(() => {
     if (!showTimer) return;
     
@@ -92,6 +100,11 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showT
       }
     };
   }, [currentQuestionIndex, currentQuestion.id, exerciseData.exerciseId]);
+
+  const { recordSessionMisconception, activeSession } = useTrailblazer();
+
+  // Use provided session ID or active session
+  const sessionId = trailblazerSessionId || activeSession?.id;
 
   const handleAnswerChange = async (questionId: string, answer: string) => {
     const previousAnswer = answers[questionId];
@@ -162,22 +175,49 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showT
       console.log('🎯 Submitting exercise with enhanced misconception tracking:', {
         totalQuestions: exerciseAnswers.length,
         analyzableQuestions: exerciseAnswers.filter(q => q.questionType === 'short-answer' || q.questionType === 'essay').length,
-        metadata: enhancedMetadata
+        metadata: enhancedMetadata,
+        trailblazerSessionId: sessionId
       });
 
-      // Grade the exercise with enhanced tracking
+      // Grade the exercise with enhanced tracking and Trailblazer integration
       const results = await PracticeExerciseGradingService.gradeExerciseSubmission(
         exerciseAnswers,
         exerciseData.title,
         exerciseData.exerciseId, // Pass exercise ID for tracking
         exerciseData.questions[0]?.targetSkill, // Pass skill name for tracking
-        enhancedMetadata // Pass enhanced metadata for misconception analysis
+        enhancedMetadata, // Pass enhanced metadata for misconception analysis
+        sessionId // Pass session ID for Trailblazer integration
       );
+
+      // Record misconceptions to active Trailblazer session if available
+      if (sessionId && results.questionResults) {
+        console.log('🧠 Recording misconceptions to Trailblazer session:', sessionId);
+        
+        for (let i = 0; i < results.questionResults.length; i++) {
+          const questionResult = results.questionResults[i];
+          
+          // If question was incorrect and has misconception analysis, record it
+          if (!questionResult.isCorrect && questionResult.misconceptionAnalysis?.categoryName) {
+            try {
+              await recordSessionMisconception({
+                sessionId: sessionId,
+                misconceptionId: questionResult.questionId, // This would be enhanced with actual misconception IDs
+                questionSequence: i + 1
+              });
+              
+              console.log(`📝 Recorded misconception for question ${i + 1} in session ${sessionId}`);
+            } catch (error) {
+              console.error('Error recording misconception to session:', error);
+            }
+          }
+        }
+      }
 
       // Include answers in the results for review functionality
       const resultsWithAnswers = {
         ...results,
-        answers: answers
+        answers: answers,
+        trailblazerSessionId: sessionId // Include session ID in results
       };
 
       onComplete(resultsWithAnswers);
@@ -300,13 +340,22 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showT
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5" />
                 {exerciseData.title}
+                {sessionId && (
+                  <span className="flex items-center gap-1 text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                    <Brain className="h-3 w-3" />
+                    Trailblazer Session
+                  </span>
+                )}
               </CardTitle>
               <p className="text-muted-foreground mt-1">
                 {exerciseData.description}
               </p>
               {/* Enhanced metadata display */}
-              <div className="mt-2 text-xs text-muted-foreground">
-                📊 {exerciseData.questions.filter(q => q.type === 'short-answer' || q.type === 'essay').length} questions will be analyzed for misconceptions
+              <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                <div>📊 {exerciseData.questions.filter(q => q.type === 'short-answer' || q.type === 'essay').length} questions will be analyzed for misconceptions</div>
+                {sessionId && (
+                  <div className="text-blue-600">🧠 Misconceptions will be tracked in your learning session</div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">

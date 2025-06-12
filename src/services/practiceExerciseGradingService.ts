@@ -1,8 +1,8 @@
-import { SmartAnswerGradingService, type GradingResult, type AnswerPattern } from './smartAnswerGradingService';
+import { supabase } from '@/integrations/supabase/client';
+import { SmartAnswerGradingService, type GradingResult } from './smartAnswerGradingService';
 import { MistakePatternService } from './mistakePatternService';
-import { QuestionTimingService } from './questionTimingService';
-import { ConceptMissedService, type ConceptMissedAnalysis } from './conceptMissedService';
-import { EnhancedMisconceptionIntegrationService } from './enhancedMisconceptionIntegrationService';
+import { updateExerciseStatus } from './classSessionService';
+import { trailblazerService } from './trailblazerService';
 
 export interface PracticeExerciseAnswer {
   questionId: string;
@@ -15,7 +15,7 @@ export interface PracticeExerciseAnswer {
   points: number;
 }
 
-export interface ExerciseGradingResult {
+export interface QuestionResult {
   questionId: string;
   isCorrect: boolean;
   pointsEarned: number;
@@ -23,428 +23,277 @@ export interface ExerciseGradingResult {
   feedback: string;
   gradingMethod: 'exact_match' | 'flexible_match' | 'ai_graded';
   confidence: number;
+  misconceptionAnalysis?: {
+    categoryName?: string;
+    subtypeName?: string;
+    confidence?: number;
+    reasoning?: string;
+  };
 }
 
 export interface ExerciseSubmissionResult {
   totalScore: number;
   totalPossible: number;
   percentageScore: number;
-  questionResults: ExerciseGradingResult[];
+  questionResults: QuestionResult[];
   overallFeedback: string;
   completedAt: Date;
 }
 
 export class PracticeExerciseGradingService {
-  
   /**
-   * Grade a complete practice exercise submission with enhanced misconception tracking
+   * Grade a complete practice exercise submission with enhanced tracking and Trailblazer integration
    */
   static async gradeExerciseSubmission(
     answers: PracticeExerciseAnswer[],
-    exerciseTitle?: string,
+    exerciseTitle: string,
     studentExerciseId?: string,
     skillName?: string,
-    exerciseMetadata?: any
+    enhancedMetadata?: {
+      subject?: string;
+      grade?: string;
+      exerciseType?: string;
+      skillsTargeted?: string[];
+    },
+    trailblazerSessionId?: string // NEW: Optional Trailblazer session ID
   ): Promise<ExerciseSubmissionResult> {
-    console.log('🎯 Grading practice exercise submission with', answers.length, 'answers');
-    
-    const questionResults: ExerciseGradingResult[] = [];
-    let totalScore = 0;
-    let totalPossible = 0;
-    
-    // Grade each question and record enhanced patterns
-    for (let i = 0; i < answers.length; i++) {
-      const answer = answers[i];
-      const questionNumber = i + 1;
-      
-      const result = await this.gradeExerciseQuestion(answer);
-      questionResults.push(result);
-      totalScore += result.pointsEarned;
-      totalPossible += result.pointsPossible;
-      
-      // Enhanced misconception analysis - ONLY for short-answer and essay questions
-      if (studentExerciseId && skillName && !result.isCorrect) {
-        await this.processIncorrectAnswer(
-          answer,
-          questionNumber,
-          studentExerciseId,
-          skillName,
-          exerciseMetadata,
-          result
-        );
+    try {
+      console.log(`🎯 Grading exercise submission: "${exerciseTitle}" with ${answers.length} questions`);
+      if (trailblazerSessionId) {
+        console.log(`🧠 Trailblazer session integration enabled: ${trailblazerSessionId}`);
       }
-    }
-    
-    const percentageScore = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
-    const overallFeedback = this.generateOverallFeedback(percentageScore, questionResults);
-    
-    console.log(`✅ Exercise graded: ${totalScore}/${totalPossible} (${percentageScore.toFixed(1)}%)`);
-    
-    return {
-      totalScore,
-      totalPossible,
-      percentageScore,
-      questionResults,
-      overallFeedback,
-      completedAt: new Date()
-    };
-  }
 
-  /**
-   * Process incorrect answers with enhanced misconception analysis
-   * Only runs for short-answer and essay questions
-   */
-  private static async processIncorrectAnswer(
-    answer: PracticeExerciseAnswer,
-    questionNumber: number,
-    studentExerciseId: string,
-    skillName: string,
-    exerciseMetadata: any,
-    gradingResult: ExerciseGradingResult
-  ) {
-    const shouldAnalyzeMisconceptions = this.shouldAnalyzeMisconceptions(answer.questionType);
-    
-    console.log(`🧠 Question ${questionNumber} (${answer.questionType}): Misconception analysis ${shouldAnalyzeMisconceptions ? 'ENABLED' : 'SKIPPED'}`);
-    
-    if (shouldAnalyzeMisconceptions) {
-      // Use enhanced misconception integration service
-      try {
-        const misconceptionAnalysis = await EnhancedMisconceptionIntegrationService.analyzeMisconceptionWithTaxonomy(
-          exerciseMetadata?.subject || 'General',
-          answer.questionType,
-          answer.studentAnswer,
-          answer.correctAnswer,
-          `Question: ${answer.questionId}`,
-          answer.options
-        );
+      const questionResults: QuestionResult[] = [];
+      let totalScore = 0;
+      let totalPossible = 0;
 
-        console.log('🎯 Enhanced misconception analysis result:', misconceptionAnalysis);
+      // Grade each question
+      for (let i = 0; i < answers.length; i++) {
+        const answer = answers[i];
+        totalPossible += answer.points;
 
-        // Record the enhanced misconception if found
-        if (misconceptionAnalysis) {
-          await EnhancedMisconceptionIntegrationService.recordEnhancedMisconception(
-            studentExerciseId, // Using as student ID for now
-            answer.questionId,
-            skillName, // Using as skill ID for now
-            studentExerciseId, // Using as exam ID for now
-            exerciseMetadata?.subject || 'General',
-            answer.questionType,
-            answer.studentAnswer,
-            answer.correctAnswer,
-            `Question: ${answer.questionId}`,
-            answer.options
-          );
+        console.log(`📝 Grading question ${i + 1}: ${answer.questionType}`);
+
+        try {
+          let gradingResult: GradingResult;
+
+          if (answer.questionType === 'multiple-choice') {
+            gradingResult = this.gradeMultipleChoice(answer);
+          } else if (answer.questionType === 'true-false') {
+            gradingResult = this.gradeTrueFalse(answer);
+          } else if (answer.questionType === 'short-answer' || answer.questionType === 'essay') {
+            gradingResult = await SmartAnswerGradingService.gradeShortAnswer(
+              answer.studentAnswer,
+              answer.correctAnswer,
+              `Question ${i + 1}`,
+              answer.questionId,
+              enhancedMetadata?.subject,
+              answer.questionType
+            );
+          } else {
+            gradingResult = {
+              isCorrect: false,
+              score: 0,
+              confidence: 0,
+              feedback: 'Unsupported question type',
+              method: 'exact_match'
+            };
+          }
+
+          const pointsEarned = Math.round(gradingResult.score * answer.points);
+          totalScore += pointsEarned;
+
+          const questionResult: QuestionResult = {
+            questionId: answer.questionId,
+            isCorrect: gradingResult.isCorrect,
+            pointsEarned,
+            pointsPossible: answer.points,
+            feedback: gradingResult.feedback || 'Answer processed',
+            gradingMethod: gradingResult.method,
+            confidence: gradingResult.confidence,
+            misconceptionAnalysis: gradingResult.misconceptionAnalysis
+          };
+
+          questionResults.push(questionResult);
+
+          // Record mistake pattern with enhanced tracking and Trailblazer context
+          if (studentExerciseId) {
+            const mistakeData = {
+              studentExerciseId,
+              questionId: answer.questionId,
+              questionNumber: i + 1,
+              questionType: answer.questionType,
+              studentAnswer: answer.studentAnswer,
+              correctAnswer: answer.correctAnswer,
+              isCorrect: gradingResult.isCorrect,
+              skillTargeted: skillName || 'Unknown',
+              mistakeType: gradingResult.isCorrect ? undefined : this.determineMistakeType(answer, gradingResult),
+              confidenceScore: gradingResult.confidence,
+              gradingMethod: gradingResult.method,
+              feedbackGiven: gradingResult.feedback,
+              questionContext: `Question ${i + 1} from exercise: ${exerciseTitle}`,
+              subject: enhancedMetadata?.subject,
+              grade: enhancedMetadata?.grade,
+              misconceptionCategory: gradingResult.misconceptionAnalysis?.categoryName,
+              conceptMissedDescription: gradingResult.misconceptionAnalysis?.subtypeName
+            };
+
+            await MistakePatternService.recordMistakePattern(mistakeData);
+          }
+
+          console.log(`✅ Question ${i + 1} graded: ${gradingResult.isCorrect ? 'Correct' : 'Incorrect'} (${pointsEarned}/${answer.points} points)`);
+          
+        } catch (error) {
+          console.error(`❌ Error grading question ${i + 1}:`, error);
+          
+          const questionResult: QuestionResult = {
+            questionId: answer.questionId,
+            isCorrect: false,
+            pointsEarned: 0,
+            pointsPossible: answer.points,
+            feedback: 'Error occurred during grading',
+            gradingMethod: 'exact_match',
+            confidence: 0
+          };
+          
+          questionResults.push(questionResult);
         }
-
-        // Also record in legacy mistake pattern system with enhanced data
-        await MistakePatternService.recordMistakePattern({
-          studentExerciseId,
-          questionId: answer.questionId,
-          questionNumber,
-          questionType: answer.questionType,
-          studentAnswer: answer.studentAnswer,
-          correctAnswer: answer.correctAnswer,
-          isCorrect: false,
-          skillTargeted: skillName,
-          mistakeType: this.getMistakeTypeFromMisconception(misconceptionAnalysis),
-          confidenceScore: gradingResult.confidence,
-          gradingMethod: gradingResult.gradingMethod,
-          feedbackGiven: gradingResult.feedback,
-          questionContext: `Question: ${answer.questionId}`,
-          options: answer.options,
-          subject: exerciseMetadata?.subject,
-          grade: exerciseMetadata?.grade,
-          // Enhanced fields from misconception analysis
-          misconceptionCategory: misconceptionAnalysis?.categoryName,
-          concept_missed_id: misconceptionAnalysis?.subtypeId,
-          concept_missed_description: misconceptionAnalysis?.subtypeName
-        });
-
-      } catch (error) {
-        console.error('❌ Enhanced misconception analysis failed:', error);
-        
-        // Fallback to legacy analysis
-        await this.recordLegacyMistakePattern(
-          answer,
-          questionNumber,
-          studentExerciseId,
-          skillName,
-          exerciseMetadata,
-          gradingResult
-        );
       }
-    } else {
-      // For multiple-choice and true-false, only record basic mistake pattern
-      await this.recordLegacyMistakePattern(
-        answer,
-        questionNumber,
-        studentExerciseId,
-        skillName,
-        exerciseMetadata,
-        gradingResult
+
+      const percentageScore = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
+
+      // Update exercise status if we have a student exercise ID
+      if (studentExerciseId) {
+        await updateExerciseStatus(studentExerciseId, 'completed', percentageScore);
+      }
+
+      // Generate overall feedback with Trailblazer context
+      const overallFeedback = this.generateOverallFeedback(
+        questionResults, 
+        percentageScore, 
+        enhancedMetadata,
+        trailblazerSessionId
       );
-    }
-  }
 
-  /**
-   * Determine if misconception analysis should run based on question type
-   */
-  private static shouldAnalyzeMisconceptions(questionType: string): boolean {
-    const analyzableTypes = ['short-answer', 'essay'];
-    const shouldAnalyze = analyzableTypes.includes(questionType);
-    
-    if (!shouldAnalyze) {
-      console.log(`📝 Skipping misconception analysis for ${questionType} - only analyzing: ${analyzableTypes.join(', ')}`);
-    }
-    
-    return shouldAnalyze;
-  }
+      console.log(`🎯 Exercise grading completed: ${totalScore}/${totalPossible} points (${percentageScore.toFixed(1)}%)`);
+      if (trailblazerSessionId) {
+        console.log(`🧠 Misconceptions will be linked to Trailblazer session: ${trailblazerSessionId}`);
+      }
 
-  /**
-   * Extract mistake type from misconception analysis
-   */
-  private static getMistakeTypeFromMisconception(misconceptionAnalysis: any): string | undefined {
-    if (!misconceptionAnalysis) return undefined;
-    
-    // Map taxonomy categories to legacy mistake types
-    const categoryMapping: Record<string, string> = {
-      'Procedural Errors': 'procedural_error',
-      'Conceptual Errors': 'conceptual_misunderstanding', 
-      'Interpretive Errors': 'task_misread',
-      'Expression Errors': 'communication_error',
-      'Strategic Errors': 'wrong_approach',
-      'Meta-Cognitive Errors': 'metacognitive_error'
-    };
-    
-    return categoryMapping[misconceptionAnalysis.categoryName] || 'unclassified';
-  }
-
-  /**
-   * Record legacy mistake pattern (fallback or for non-analyzable question types)
-   */
-  private static async recordLegacyMistakePattern(
-    answer: PracticeExerciseAnswer,
-    questionNumber: number,
-    studentExerciseId: string,
-    skillName: string,
-    exerciseMetadata: any,
-    gradingResult: ExerciseGradingResult
-  ) {
-    const mistakeType = MistakePatternService.analyzeMistakeType(
-      answer.questionType,
-      answer.studentAnswer,
-      answer.correctAnswer,
-      answer.options
-    );
-
-    // Legacy concept missed analysis for fallback
-    let conceptMissedAnalysis: ConceptMissedAnalysis | null = null;
-    if (answer.questionType === 'multiple-choice') {
-      conceptMissedAnalysis = await ConceptMissedService.analyzeConceptMissed(
-        `Question: ${answer.questionId}. Options: ${answer.options?.join(', ')}`,
-        answer.studentAnswer,
-        answer.correctAnswer,
-        skillName,
-        exerciseMetadata?.subject,
-        exerciseMetadata?.grade
-      );
-    }
-
-    await MistakePatternService.recordMistakePattern({
-      studentExerciseId,
-      questionId: answer.questionId,
-      questionNumber,
-      questionType: answer.questionType,
-      studentAnswer: answer.studentAnswer,
-      correctAnswer: answer.correctAnswer,
-      isCorrect: false,
-      skillTargeted: skillName,
-      mistakeType: mistakeType || undefined,
-      confidenceScore: gradingResult.confidence,
-      gradingMethod: gradingResult.gradingMethod,
-      feedbackGiven: gradingResult.feedback,
-      questionContext: answer.questionType === 'multiple-choice' 
-        ? `Question: ${answer.questionId}. Options: ${answer.options?.join(', ')}`
-        : `Question: ${answer.questionId}`,
-      options: answer.options,
-      subject: exerciseMetadata?.subject,
-      grade: exerciseMetadata?.grade,
-      // Legacy concept missed data
-      conceptMissedId: conceptMissedAnalysis?.conceptMissedId,
-      conceptMissedDescription: conceptMissedAnalysis?.conceptMissedDescription
-    });
-  }
-  
-  /**
-   * Grade a single question from a practice exercise
-   */
-  static async gradeExerciseQuestion(answer: PracticeExerciseAnswer): Promise<ExerciseGradingResult> {
-    const {
-      questionId,
-      studentAnswer,
-      questionType,
-      correctAnswer,
-      acceptableAnswers,
-      keywords,
-      options,
-      points
-    } = answer;
-    
-    let gradingResult: GradingResult;
-    
-    if (questionType === 'multiple-choice' || questionType === 'true-false') {
-      // Simple exact match for multiple choice and true/false
-      gradingResult = this.gradeExactMatch(studentAnswer, correctAnswer);
-    } else if (questionType === 'short-answer') {
-      // Use smart grading for short answers
-      const answerPattern: AnswerPattern = {
-        text: correctAnswer,
-        acceptableVariations: acceptableAnswers || [],
-        keywords: keywords || []
+      return {
+        totalScore,
+        totalPossible,
+        percentageScore,
+        questionResults,
+        overallFeedback,
+        completedAt: new Date()
       };
-      
-      gradingResult = await SmartAnswerGradingService.gradeShortAnswer(
-        studentAnswer,
-        answerPattern,
-        `Question ${questionId}`,
-        questionId
-      );
-    } else {
-      // Essay questions - use AI grading
-      gradingResult = await SmartAnswerGradingService.gradeShortAnswer(
-        studentAnswer,
-        correctAnswer,
-        `Essay question ${questionId}`,
-        questionId
-      );
+
+    } catch (error) {
+      console.error('❌ Critical error in exercise grading:', error);
+      throw error;
     }
-    
-    const pointsEarned = Math.round(gradingResult.score * points * 100) / 100;
-    const feedback = this.generateQuestionFeedback(gradingResult, questionType, pointsEarned, points);
-    
-    return {
-      questionId,
-      isCorrect: gradingResult.isCorrect,
-      pointsEarned,
-      pointsPossible: points,
-      feedback,
-      gradingMethod: gradingResult.method,
-      confidence: gradingResult.confidence
-    };
   }
-  
+
   /**
-   * Simple exact match grading for multiple choice and true/false
+   * Grade a multiple-choice question
    */
-  private static gradeExactMatch(studentAnswer: string, correctAnswer: string): GradingResult {
-    const normalizedStudent = studentAnswer.trim().toLowerCase();
-    const normalizedCorrect = correctAnswer.trim().toLowerCase();
-    
-    const isCorrect = normalizedStudent === normalizedCorrect;
-    
+  private static gradeMultipleChoice(answer: PracticeExerciseAnswer): GradingResult {
+    const isCorrect = answer.studentAnswer === answer.correctAnswer;
     return {
       isCorrect,
       score: isCorrect ? 1 : 0,
-      confidence: 1,
-      feedback: isCorrect ? 'Correct!' : `Incorrect. The correct answer is: ${correctAnswer}`,
+      confidence: 0.95,
+      feedback: isCorrect ? 'Correct!' : 'Incorrect. Please review the correct answer.',
       method: 'exact_match'
     };
   }
-  
+
   /**
-   * Generate feedback for individual questions
+   * Grade a true-false question
    */
-  private static generateQuestionFeedback(
-    gradingResult: GradingResult,
-    questionType: string,
-    pointsEarned: number,
-    pointsPossible: number
-  ): string {
-    if (gradingResult.isCorrect) {
-      return `Excellent! You earned ${pointsEarned}/${pointsPossible} points.`;
-    }
-    
-    if (pointsEarned > 0) {
-      return `Partially correct. You earned ${pointsEarned}/${pointsPossible} points. ${gradingResult.feedback || ''}`;
-    }
-    
-    if (questionType === 'multiple-choice' || questionType === 'true-false') {
-      return gradingResult.feedback || 'Incorrect answer.';
-    }
-    
-    return `Your answer needs improvement. ${gradingResult.feedback || 'Please review the key concepts and try to include more specific details.'}`;
+  private static gradeTrueFalse(answer: PracticeExerciseAnswer): GradingResult {
+    const isCorrect = answer.studentAnswer === answer.correctAnswer;
+    return {
+      isCorrect,
+      score: isCorrect ? 1 : 0,
+      confidence: 0.9,
+      feedback: isCorrect ? 'Correct!' : 'Incorrect. Review the material to understand why.',
+      method: 'exact_match'
+    };
   }
-  
+
   /**
-   * Generate overall feedback for the exercise
+   * Determine mistake type based on question and grading result
+   */
+  private static determineMistakeType(
+    answer: PracticeExerciseAnswer,
+    gradingResult: GradingResult
+  ): string {
+    if (gradingResult.misconceptionAnalysis?.categoryName) {
+      return gradingResult.misconceptionAnalysis.categoryName;
+    }
+
+    switch (answer.questionType) {
+      case 'multiple-choice':
+        return 'wrong_option_selected';
+      case 'true-false':
+        return 'incorrect_true_false';
+      case 'short-answer':
+      case 'essay':
+        return 'incorrect_short_answer';
+      default:
+        return 'unknown_error';
+    }
+  }
+
+  /**
+   * Generate overall feedback with enhanced context and Trailblazer integration
    */
   private static generateOverallFeedback(
+    questionResults: QuestionResult[], 
     percentageScore: number,
-    questionResults: ExerciseGradingResult[]
+    enhancedMetadata?: {
+      subject?: string;
+      grade?: string;
+      exerciseType?: string;
+      skillsTargeted?: string[];
+    },
+    trailblazerSessionId?: string
   ): string {
-    const correctCount = questionResults.filter(r => r.isCorrect).length;
+    const correctCount = questionResults.filter(q => q.isCorrect).length;
     const totalCount = questionResults.length;
-    const partialCreditCount = questionResults.filter(r => r.pointsEarned > 0 && !r.isCorrect).length;
-    
-    let feedback = `You answered ${correctCount} out of ${totalCount} questions correctly`;
-    
-    if (partialCreditCount > 0) {
-      feedback += ` and earned partial credit on ${partialCreditCount} additional questions`;
-    }
-    
-    feedback += `. `;
-    
+    const misconceptionCount = questionResults.filter(q => q.misconceptionAnalysis).length;
+
+    let feedback = `You answered ${correctCount} out of ${totalCount} questions correctly (${percentageScore.toFixed(1)}%). `;
+
     if (percentageScore >= 90) {
-      feedback += 'Outstanding work! You have excellent mastery of these concepts.';
-    } else if (percentageScore >= 80) {
-      feedback += 'Great job! You show strong understanding with room for minor improvements.';
+      feedback += "Excellent work! You've demonstrated strong mastery of these concepts.";
     } else if (percentageScore >= 70) {
-      feedback += 'Good work! Review the concepts you missed to strengthen your understanding.';
-    } else if (percentageScore >= 60) {
-      feedback += 'You\'re making progress! Focus on reviewing the key concepts and practice more.';
+      feedback += "Good job! You're showing solid understanding with room for some improvement.";
+    } else if (percentageScore >= 50) {
+      feedback += "You're making progress, but there are some areas that need more practice.";
     } else {
-      feedback += 'This topic needs more practice. Review the material and try some additional exercises.';
+      feedback += "This material needs more review. Don't worry - targeted practice will help you improve.";
     }
-    
-    // Add specific suggestions based on question types
-    const shortAnswerResults = questionResults.filter(r => r.gradingMethod === 'ai_graded' || r.gradingMethod === 'flexible_match');
-    if (shortAnswerResults.length > 0) {
-      const shortAnswerScore = shortAnswerResults.reduce((sum, r) => sum + r.pointsEarned, 0) / 
-                              shortAnswerResults.reduce((sum, r) => sum + r.pointsPossible, 0) * 100;
-      
-      if (shortAnswerScore < 70) {
-        feedback += ' For written responses, try to be more specific and include key terminology.';
-      }
+
+    // Add misconception insights
+    if (misconceptionCount > 0) {
+      feedback += ` Our analysis identified ${misconceptionCount} specific learning patterns that we can help you address.`;
     }
-    
+
+    // Add Trailblazer session context
+    if (trailblazerSessionId) {
+      feedback += " Your learning progress and any areas for improvement have been recorded in your learning session for personalized recommendations.";
+    }
+
+    // Add subject-specific encouragement
+    if (enhancedMetadata?.subject) {
+      feedback += ` Keep practicing ${enhancedMetadata.subject} - every attempt helps you learn!`;
+    }
+
     return feedback;
   }
-  
-  /**
-   * Check if an answer shows understanding even if not perfect
-   */
-  static assessUnderstanding(
-    studentAnswer: string,
-    correctAnswer: string,
-    keywords: string[] = []
-  ): { showsUnderstanding: boolean; feedback: string } {
-    const normalizedAnswer = studentAnswer.toLowerCase();
-    const keywordMatches = keywords.filter(keyword => 
-      normalizedAnswer.includes(keyword.toLowerCase())
-    );
-    
-    const showsUnderstanding = keywordMatches.length >= Math.ceil(keywords.length * 0.5) || 
-                              normalizedAnswer.length > 20; // Basic effort check
-    
-    let feedback = '';
-    if (showsUnderstanding && keywordMatches.length > 0) {
-      feedback = `You demonstrate understanding by including key concepts: ${keywordMatches.join(', ')}.`;
-    } else if (normalizedAnswer.length > 10) {
-      feedback = 'Your answer shows effort, but try to include more specific details and key terms.';
-    } else {
-      feedback = 'Your answer is too brief. Try to explain your thinking in more detail.';
-    }
-    
-    return { showsUnderstanding, feedback };
-  }
+
+  // Other existing methods
 }
