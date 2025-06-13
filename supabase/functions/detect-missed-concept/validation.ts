@@ -1,5 +1,5 @@
 
-import { z } from 'zod';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 export const misconceptionDetectionSchema = z.object({
   questionContext: z.string().min(1, 'Question context is required'),
