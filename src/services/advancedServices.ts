@@ -1,4 +1,3 @@
-
 // Barrel export for advanced services including new unified grading services
 export { PerformanceMonitoringService } from './performanceMonitoringService';
 export { SmartOcrService } from './smartOcrService';
@@ -16,6 +15,9 @@ export { gradeBatchUnified, gradeComplexQuestions } from './grading/UnifiedBatch
 export { OpenAIGraderAdapter } from './grading/adapters/OpenAIGraderAdapter';
 export { DistilBERTGraderAdapter } from './grading/adapters/DistilBERTGraderAdapter';
 export { getCachedResults, writeResults, getCacheStats, cleanupCache } from './grading/cache/GradingCache';
+
+// New unified practice exercise grading
+export { PracticeExerciseGradingServiceUnified } from './practiceExerciseGradingServiceUnified';
 
 // New caching services
 export { SkillAwareCacheService } from './skillAwareCacheService';

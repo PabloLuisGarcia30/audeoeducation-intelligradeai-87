@@ -7,7 +7,7 @@ import { QuestionInput, GradedAnswer } from '../types';
 import { supabase } from "@/integrations/supabase/client";
 
 // L1 in-memory cache
-const memoryCache = new Map<string, GradedAnswer>();
+const memoryCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_MEMORY_CACHE_SIZE = 1000;
 
@@ -15,6 +15,17 @@ interface CacheEntry {
   result: GradedAnswer;
   timestamp: number;
   hitCount: number;
+}
+
+interface QuestionCacheRow {
+  id: string;
+  cache_key: string;
+  question_id: string;
+  result: GradedAnswer;
+  model: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /**
@@ -31,7 +42,8 @@ export async function getCachedResults(questions: QuestionInput[]): Promise<Reco
     const cached = memoryCache.get(key);
     
     if (cached && isValidCacheEntry(cached)) {
-      results[question.id] = cached;
+      results[question.id] = cached.result;
+      cached.hitCount++;
     } else {
       uncachedKeys.push(key);
       memoryCache.delete(key); // Remove expired entries
@@ -45,15 +57,22 @@ export async function getCachedResults(questions: QuestionInput[]): Promise<Reco
         .from('question_cache')
         .select('*')
         .in('cache_key', uncachedKeys)
-        .gt('expires_at', new Date().toISOString());
+        .gt('expires_at', new Date().toISOString()) as { data: QuestionCacheRow[] | null, error: any };
 
       if (!error && data) {
         for (const row of data) {
           const result = row.result as GradedAnswer;
-          results[result.questionId] = result;
-          
-          // Populate L1 cache
-          memoryCache.set(row.cache_key, result);
+          const questionId = result.questionId;
+          if (questionId) {
+            results[questionId] = result;
+            
+            // Populate L1 cache
+            memoryCache.set(row.cache_key, {
+              result,
+              timestamp: Date.now(),
+              hitCount: 1
+            });
+          }
         }
       }
     } catch (error) {
@@ -70,7 +89,7 @@ export async function getCachedResults(questions: QuestionInput[]): Promise<Reco
 export async function writeResults(results: GradedAnswer[], questions: QuestionInput[]): Promise<void> {
   if (results.length === 0) return;
 
-  const cacheEntries = results.map((result, index) => {
+  const cacheEntries = results.map((result) => {
     const question = questions.find(q => q.id === result.questionId);
     if (!question) return null;
 
@@ -78,7 +97,11 @@ export async function writeResults(results: GradedAnswer[], questions: QuestionI
     const expiresAt = new Date(Date.now() + CACHE_TTL_MS);
 
     // Write to L1 cache
-    memoryCache.set(key, result);
+    memoryCache.set(key, {
+      result,
+      timestamp: Date.now(),
+      hitCount: 1
+    });
     
     return {
       cache_key: key,
@@ -134,10 +157,15 @@ export async function getCacheStats(): Promise<{
     console.warn('Failed to get L2 cache size:', error);
   }
 
+  // Calculate hit rate from L1 cache
+  const totalHits = Array.from(memoryCache.values()).reduce((sum, entry) => sum + entry.hitCount, 0);
+  const totalEntries = memoryCache.size;
+  const hitRate = totalEntries > 0 ? totalHits / (totalHits + totalEntries) : 0;
+
   return {
     l1Size: memoryCache.size,
     l2Size,
-    hitRate: 0.85, // TODO: Implement proper hit rate tracking
+    hitRate,
     memoryUsage: memoryCache.size * 1024 // Rough estimate
   };
 }
@@ -148,8 +176,8 @@ export async function getCacheStats(): Promise<{
 export async function cleanupCache(): Promise<void> {
   // Clean L1 cache
   const now = Date.now();
-  for (const [key, value] of memoryCache.entries()) {
-    if (!isValidCacheEntry(value)) {
+  for (const [key, entry] of memoryCache.entries()) {
+    if (!isValidCacheEntry(entry)) {
       memoryCache.delete(key);
     }
   }
@@ -170,8 +198,7 @@ function generateCacheKey(question: QuestionInput): string {
   return `${question.id}-${question.studentAnswer}-${question.correctAnswer || ''}-${question.skillTags.join(',')}`;
 }
 
-function isValidCacheEntry(entry: any): boolean {
-  // For L1 cache, we don't have timestamp, so assume valid
-  // In a real implementation, you'd want to track timestamps
-  return entry && typeof entry === 'object' && entry.questionId;
+function isValidCacheEntry(entry: CacheEntry): boolean {
+  const age = Date.now() - entry.timestamp;
+  return age < CACHE_TTL_MS && entry.result && typeof entry.result === 'object' && entry.result.questionId;
 }
