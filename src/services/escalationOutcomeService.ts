@@ -44,7 +44,30 @@ export class EscalationOutcomeService {
         return [];
       }
 
-      return data || [];
+      // Type cast the database response to our interface
+      return (data || []).map(item => ({
+        id: item.id,
+        student_id: item.student_id,
+        exam_id: item.exam_id,
+        question_id: item.question_id,
+        session_id: item.session_id,
+        escalation_type: item.escalation_type as EscalationOutcome['escalation_type'],
+        original_service: item.original_service,
+        ambiguity_description: item.ambiguity_description,
+        selected_solution: item.selected_solution,
+        fallback_path: item.fallback_path,
+        original_confidence: item.original_confidence,
+        final_confidence: item.final_confidence,
+        models_used: item.models_used,
+        processing_time_ms: item.processing_time_ms,
+        success: item.success,
+        quality_score: item.quality_score,
+        cost_impact: item.cost_impact,
+        context: item.context as Record<string, any>,
+        metadata: item.metadata as Record<string, any>,
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      }));
     } catch (error) {
       console.error('Failed to fetch student escalations:', error);
       return [];
@@ -66,7 +89,30 @@ export class EscalationOutcomeService {
         return this.getEmptyAnalytics();
       }
 
-      const escalations = data || [];
+      // Type cast and process the data
+      const escalations = (data || []).map(item => ({
+        id: item.id,
+        student_id: item.student_id,
+        exam_id: item.exam_id,
+        question_id: item.question_id,
+        session_id: item.session_id,
+        escalation_type: item.escalation_type as EscalationOutcome['escalation_type'],
+        original_service: item.original_service,
+        ambiguity_description: item.ambiguity_description,
+        selected_solution: item.selected_solution,
+        fallback_path: item.fallback_path,
+        original_confidence: item.original_confidence,
+        final_confidence: item.final_confidence,
+        models_used: item.models_used,
+        processing_time_ms: item.processing_time_ms,
+        success: item.success,
+        quality_score: item.quality_score,
+        cost_impact: item.cost_impact,
+        context: item.context as Record<string, any>,
+        metadata: item.metadata as Record<string, any>,
+        created_at: item.created_at,
+        updated_at: item.updated_at
+      }));
       
       // Calculate analytics
       const escalationsByType: Record<string, number> = {};
@@ -123,20 +169,41 @@ export class EscalationOutcomeService {
   }
 
   /**
-   * Get escalation trends over time
+   * Get escalation trends over time (simplified version without RPC)
    */
   static async getEscalationTrends(days: number = 30): Promise<EscalationTrend[]> {
     try {
-      const { data, error } = await supabase.rpc('get_escalation_trends', {
-        p_days: days
-      });
+      const { data, error } = await supabase
+        .from('escalation_outcomes')
+        .select('*')
+        .gte('created_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: true });
 
       if (error) {
         console.error('Error fetching escalation trends:', error);
         return [];
       }
 
-      return data || [];
+      // Group escalations by date and calculate trends
+      const trendMap: Record<string, { count: number; successes: number; qualities: number[] }> = {};
+      
+      (data || []).forEach(item => {
+        const date = new Date(item.created_at).toISOString().split('T')[0];
+        if (!trendMap[date]) {
+          trendMap[date] = { count: 0, successes: 0, qualities: [] };
+        }
+        
+        trendMap[date].count++;
+        if (item.success) trendMap[date].successes++;
+        if (item.quality_score) trendMap[date].qualities.push(item.quality_score);
+      });
+
+      return Object.entries(trendMap).map(([date, stats]) => ({
+        date,
+        escalation_count: stats.count,
+        success_rate: stats.count > 0 ? (stats.successes / stats.count) * 100 : 0,
+        average_quality: stats.qualities.length > 0 ? stats.qualities.reduce((a, b) => a + b, 0) / stats.qualities.length : 0
+      }));
     } catch (error) {
       console.error('Failed to fetch escalation trends:', error);
       return [];
