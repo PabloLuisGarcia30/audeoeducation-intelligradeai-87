@@ -71,6 +71,114 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+// --- OPTIMIZED JOB CREATION WITH PAYLOAD SEPARATION ---
+async function createJobWithPayload(jobData: any, payloadData: any) {
+  // Insert job metadata only (no large fields)
+  const { data: job, error: jobError } = await supabase
+    .from('jobs')
+    .insert({
+      id: jobData.id,
+      status: jobData.status,
+      priority: jobData.priority,
+      progress: jobData.progress,
+      created_at: jobData.created_at,
+      started_at: jobData.started_at,
+      completed_at: jobData.completed_at,
+      retry_count: jobData.retry_count,
+      max_retries: jobData.max_retries,
+      // Remove large fields - they go to job_payloads
+      files: [], // Keep minimal for backwards compatibility
+      results: [],
+      errors: []
+    })
+    .select()
+    .single();
+
+  if (jobError) {
+    throw new Error(`Failed to create job: ${jobError.message}`);
+  }
+
+  // Insert payload data separately
+  const { error: payloadError } = await supabase
+    .from('job_payloads')
+    .insert({
+      job_id: jobData.id,
+      files_data: payloadData.files,
+      results_data: payloadData.results || [],
+      errors_data: payloadData.errors || [],
+      request_metadata: payloadData.metadata || {}
+    });
+
+  if (payloadError) {
+    console.error('Failed to create job payload:', payloadError);
+    // Clean up job if payload creation fails
+    await supabase.from('jobs').delete().eq('id', jobData.id);
+    throw new Error(`Failed to create job payload: ${payloadError.message}`);
+  }
+
+  return job;
+}
+
+// --- OPTIMIZED JOB RETRIEVAL WITH PAYLOAD JOIN ---
+async function getJobWithPayload(jobId: string) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select(`
+      *,
+      job_payloads (
+        files_data,
+        results_data,
+        errors_data,
+        request_metadata
+      )
+    `)
+    .eq('id', jobId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to get job: ${error.message}`);
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  // Reconstruct the original format for backwards compatibility
+  const payload = data.job_payloads?.[0];
+  return {
+    ...data,
+    files: payload?.files_data || data.files || [],
+    results: payload?.results_data || data.results || [],
+    errors: payload?.errors_data || data.errors || [],
+    metadata: payload?.request_metadata || {}
+  };
+}
+
+// --- OPTIMIZED JOB UPDATE WITH PAYLOAD ---
+async function updateJobWithPayload(jobId: string, jobUpdates: any, payloadUpdates?: any) {
+  // Update job metadata
+  const { error: jobError } = await supabase
+    .from('jobs')
+    .update(jobUpdates)
+    .eq('id', jobId);
+
+  if (jobError) {
+    throw new Error(`Failed to update job: ${jobError.message}`);
+  }
+
+  // Update payload if provided
+  if (payloadUpdates) {
+    const { error: payloadError } = await supabase
+      .from('job_payloads')
+      .update(payloadUpdates)
+      .eq('job_id', jobId);
+
+    if (payloadError) {
+      console.warn('Failed to update job payload:', payloadError);
+    }
+  }
+}
+
 // --- MAIN SERVER ---
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -115,14 +223,11 @@ async function handleJobSubmission(req: Request) {
   const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const createdAt = nowIso();
   
-  const job = {
+  const jobData = {
     id: jobId,
-    files,
     priority,
     status: 'pending',
     progress: 0,
-    results: [],
-    errors: [],
     created_at: createdAt,
     started_at: null,
     completed_at: null,
@@ -130,15 +235,19 @@ async function handleJobSubmission(req: Request) {
     max_retries: maxRetries
   };
 
-  const { error } = await supabase.from('jobs').insert([job]);
-  if (error) {
-    throw new Error(`Failed to create job: ${error.message}`);
-  }
+  const payloadData = {
+    files,
+    results: [],
+    errors: [],
+    metadata: { priority, maxRetries }
+  };
+
+  await createJobWithPayload(jobData, payloadData);
 
   // Trigger processing with atomic concurrency control
   processNextJobsAtomic().catch(console.error);
 
-  // Enhanced queue position/ETA calculation
+  // Enhanced queue position/ETA calculation using optimized indexes
   const { count: pendingCount } = await supabase
     .from('jobs')
     .select('id', { count: 'exact', head: true })
@@ -153,7 +262,8 @@ async function handleJobSubmission(req: Request) {
     estimatedWait: estimatedWait,
     atomicProcessingEnabled: true,
     maxConcurrentJobs: MAX_CONCURRENT_JOBS,
-    maxFilesPerBatch: MAX_FILES_PER_BATCH
+    maxFilesPerBatch: MAX_FILES_PER_BATCH,
+    optimizedIndexing: true
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
@@ -168,13 +278,9 @@ async function handleStatusCheck(url: URL) {
     });
   }
 
-  const { data: job, error } = await supabase
-    .from('jobs')
-    .select('*')
-    .eq('id', jobId)
-    .maybeSingle();
+  const job = await getJobWithPayload(jobId);
 
-  if (error || !job) {
+  if (!job) {
     return new Response(JSON.stringify({ error: 'Job not found' }), {
       status: 404,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -186,7 +292,8 @@ async function handleStatusCheck(url: URL) {
     atomicProcessingStats: {
       concurrencyControlEnabled: true,
       maxConcurrentJobs: MAX_CONCURRENT_JOBS,
-      maxFilesPerBatch: MAX_FILES_PER_BATCH
+      maxFilesPerBatch: MAX_FILES_PER_BATCH,
+      optimizedIndexing: true
     }
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -198,7 +305,7 @@ async function handleQueueStats() {
     // Use atomic function to get processing count
     const { data: processingCount } = await supabase.rpc('get_processing_job_count');
     
-    // Get other counts
+    // Get other counts using optimized indexes
     const [total, pending, completed, failed] = await Promise.all([
       supabase.from('jobs').select('id', { count: 'exact', head: true }),
       supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
@@ -217,7 +324,9 @@ async function handleQueueStats() {
       maxApiCallsPerMinute: MAX_API_CALLS_PER_MINUTE,
       maxFilesPerBatch: MAX_FILES_PER_BATCH,
       concurrencyControl: "Atomic with Row-Level Locking",
-      raceConditionPrevention: "Enabled"
+      raceConditionPrevention: "Enabled",
+      optimizedIndexing: "Active",
+      payloadSeparation: "Enabled"
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
@@ -234,13 +343,14 @@ async function handleProcessNext() {
   await processNextJobsAtomic();
   return new Response(JSON.stringify({ 
     message: 'Atomic processing triggered',
-    concurrencyControlEnabled: true
+    concurrencyControlEnabled: true,
+    optimizedIndexing: true
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
 }
 
-// --- ATOMIC JOB PROCESSING WITH CONCURRENCY CONTROL ---
+// --- ATOMIC JOB PROCESSING WITH OPTIMIZED QUERIES ---
 
 async function processNextJobsAtomic() {
   try {
@@ -283,7 +393,7 @@ async function processNextJobsAtomic() {
 
       console.log(`🎯 Available slots: ${availableSlots} (current: ${currentProcessingCount}/${MAX_CONCURRENT_JOBS})`);
 
-      // Step 4: Atomically claim pending jobs with row-level locking
+      // Step 4: Atomically claim pending jobs with optimized query using new indexes
       const { data: claimedJobs, error: claimError } = await supabase.rpc('claim_pending_jobs', { 
         batch_size: availableSlots 
       });
@@ -298,23 +408,28 @@ async function processNextJobsAtomic() {
         return;
       }
 
-      console.log(`✅ Atomically claimed ${claimedJobs.length} jobs`);
+      console.log(`✅ Atomically claimed ${claimedJobs.length} jobs using optimized indexes`);
 
-      // Step 5: Launch processing for each claimed job (non-blocking)
+      // Step 5: Launch processing for each claimed job with payload retrieval
       for (const job of claimedJobs) {
-        console.log(`🚀 Starting job ${job.id} with ${job.files.length} files`);
+        console.log(`🚀 Starting job ${job.id} with optimized structure`);
+        
+        // Get full job data with payload
+        const fullJob = await getJobWithPayload(job.id);
+        if (!fullJob) {
+          console.error(`Failed to get job payload for ${job.id}`);
+          continue;
+        }
         
         // Launch processing in background (no await)
-        processJobWithOptimization(job).catch(async (error) => {
+        processJobWithOptimization(fullJob).catch(async (error) => {
           console.error(`❌ Job ${job.id} failed:`, error);
-          await supabase
-            .from('jobs')
-            .update({ 
-              status: 'failed', 
-              errors: [error.message], 
-              completed_at: nowIso() 
-            })
-            .eq('id', job.id);
+          await updateJobWithPayload(job.id, { 
+            status: 'failed', 
+            completed_at: nowIso() 
+          }, {
+            errors_data: [error.message]
+          });
         });
 
         // Record API call for rate limiting
@@ -339,7 +454,7 @@ async function processNextJobsAtomic() {
 }
 
 async function processJobWithOptimization(job: any) {
-  console.log(`🔄 Processing job ${job.id} with ${job.files.length} files`);
+  console.log(`🔄 Processing job ${job.id} with ${job.files.length} files using optimized structure`);
   
   const totalFiles = job.files.length;
   let allResults: any[] = [];
@@ -402,18 +517,16 @@ async function processJobWithOptimization(job: any) {
     allResults = allResults.concat(results);
     processedFiles += group.length;
     
-    // Update job progress in database
+    // Update job progress using optimized structure
     const progress = Math.round((processedFiles / totalFiles) * 100);
     
-    await supabase
-      .from('jobs')
-      .update({
-        results: allResults,
-        progress: progress
-      })
-      .eq('id', job.id);
+    await updateJobWithPayload(job.id, {
+      progress: progress
+    }, {
+      results_data: allResults
+    });
 
-    console.log(`📊 Job ${job.id} progress: ${progress}% (${processedFiles}/${totalFiles} files)`);
+    console.log(`📊 Job ${job.id} progress: ${progress}% (${processedFiles}/${totalFiles} files) - optimized storage`);
     
     // Record API call for this batch
     apiCallTracker.recordCall();
@@ -424,34 +537,66 @@ async function processJobWithOptimization(job: any) {
     }
   }
 
-  // Mark job complete
-  console.log(`🎉 Completing job ${job.id} with ${allResults.length} results`);
+  // Mark job complete with optimized structure
+  console.log(`🎉 Completing job ${job.id} with ${allResults.length} results using optimized storage`);
   
-  await supabase
-    .from('jobs')
-    .update({ 
-      status: 'completed', 
-      completed_at: nowIso(), 
-      progress: 100 
-    })
-    .eq('id', job.id);
+  await updateJobWithPayload(job.id, { 
+    status: 'completed', 
+    completed_at: nowIso(), 
+    progress: 100 
+  }, {
+    results_data: allResults
+  });
 
-  console.log(`✅ Job ${job.id} completed successfully with atomic processing`);
+  console.log(`✅ Job ${job.id} completed successfully with optimized atomic processing`);
 }
 
 async function cleanupOldJobs() {
   try {
     const cutoff = new Date(Date.now() - JOB_CLEANUP_DAYS * 86400000).toISOString();
     
-    const { error } = await supabase
+    // First get job IDs to clean up
+    const { data: jobsToCleanup, error: selectError } = await supabase
       .from('jobs')
-      .delete()
+      .select('id')
       .lt('completed_at', cutoff)
       .or('status.eq.completed,status.eq.failed');
 
-    if (error) {
-      console.error('Failed to cleanup old jobs:', error);
+    if (selectError) {
+      console.error('Failed to select old jobs for cleanup:', selectError);
+      return;
     }
+
+    if (!jobsToCleanup || jobsToCleanup.length === 0) {
+      return;
+    }
+
+    console.log(`🧹 Cleaning up ${jobsToCleanup.length} old jobs`);
+
+    // Delete job payloads first (will cascade from job deletion, but being explicit)
+    const jobIds = jobsToCleanup.map(job => job.id);
+    
+    const { error: payloadDeleteError } = await supabase
+      .from('job_payloads')
+      .delete()
+      .in('job_id', jobIds);
+
+    if (payloadDeleteError) {
+      console.error('Failed to cleanup job payloads:', payloadDeleteError);
+    }
+
+    // Delete jobs (this should cascade to payloads anyway)
+    const { error: jobDeleteError } = await supabase
+      .from('jobs')
+      .delete()
+      .in('id', jobIds);
+
+    if (jobDeleteError) {
+      console.error('Failed to cleanup old jobs:', jobDeleteError);
+    } else {
+      console.log(`✅ Cleaned up ${jobsToCleanup.length} old jobs with optimized structure`);
+    }
+
   } catch (error) {
     console.error('Error in cleanupOldJobs:', error);
   }

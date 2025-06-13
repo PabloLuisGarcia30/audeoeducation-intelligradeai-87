@@ -1407,6 +1407,41 @@ export type Database = {
         }
         Relationships: []
       }
+      job_payloads: {
+        Row: {
+          created_at: string | null
+          errors_data: Json | null
+          files_data: Json | null
+          job_id: string
+          request_metadata: Json | null
+          results_data: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          errors_data?: Json | null
+          files_data?: Json | null
+          job_id: string
+          request_metadata?: Json | null
+          results_data?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          errors_data?: Json | null
+          files_data?: Json | null
+          job_id?: string
+          request_metadata?: Json | null
+          results_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_payloads_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           completed_at: string | null
@@ -3788,6 +3823,17 @@ export type Database = {
       }
     }
     Views: {
+      job_performance_stats: {
+        Row: {
+          avg_duration_seconds: number | null
+          job_count: number | null
+          max_duration_seconds: number | null
+          newest_job: string | null
+          oldest_job: string | null
+          status: string | null
+        }
+        Relationships: []
+      }
       question_misconceptions: {
         Row: {
           choice_misconceptions: Json | null
