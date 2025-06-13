@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface BehaviorSignals {
@@ -317,28 +316,25 @@ export class SupercoachService {
    */
   static async markMiniLessonViewed(miniLessonId: string): Promise<void> {
     try {
-      // Fix: Use standard SQL instead of supabase.sql
-      const { error } = await supabase.rpc('increment_mini_lesson_views', {
-        lesson_id: miniLessonId
-      });
+      // Fix: Use simple manual update instead of non-existent RPC
+      const { data: currentLesson } = await supabase
+        .from('mini_lessons')
+        .select('viewed_count')
+        .eq('id', miniLessonId)
+        .single();
+
+      const newCount = (currentLesson?.viewed_count || 0) + 1;
+      
+      const { error } = await supabase
+        .from('mini_lessons')
+        .update({
+          viewed_count: newCount,
+          last_viewed_at: new Date().toISOString()
+        })
+        .eq('id', miniLessonId);
 
       if (error) {
-        // Fallback to manual update if RPC doesn't exist
-        const { data: currentLesson } = await supabase
-          .from('mini_lessons')
-          .select('viewed_count')
-          .eq('id', miniLessonId)
-          .single();
-
-        const newCount = (currentLesson?.viewed_count || 0) + 1;
-        
-        await supabase
-          .from('mini_lessons')
-          .update({
-            viewed_count: newCount,
-            last_viewed_at: new Date().toISOString()
-          })
-          .eq('id', miniLessonId);
+        console.error('❌ Error marking mini-lesson as viewed:', error);
       }
     } catch (error) {
       console.error('❌ Exception marking mini-lesson as viewed:', error);
