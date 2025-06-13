@@ -38,7 +38,7 @@ export class PracticeExerciseGradingServiceUnified {
     // Convert PracticeExerciseAnswer to QuestionInput format
     const questions: QuestionInput[] = answers.map((answer, index) => ({
       id: answer.questionId || `q${index + 1}`,
-      prompt: answer.questionText || `Question ${index + 1}`,
+      prompt: answer.question || answer.questionText || `Question ${index + 1}`,
       studentAnswer: answer.studentAnswer || '',
       skillTags: enhancedMetadata?.skillsTargeted || [skillName || 'general'],
       correctAnswer: answer.correctAnswer || '',

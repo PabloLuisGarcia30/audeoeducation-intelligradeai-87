@@ -12,9 +12,10 @@ interface PracticeExerciseRunnerProps {
   exerciseData: any;
   onComplete: (results: any) => void;
   onExit: () => void;
+  showTimer?: boolean;
 }
 
-export function PracticeExerciseRunner({ exerciseData, onComplete, onExit }: PracticeExerciseRunnerProps) {
+export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showTimer = false }: PracticeExerciseRunnerProps) {
   const [answers, setAnswers] = useState<string[]>(Array(exerciseData.questions.length).fill(''));
   const [isComplete, setIsComplete] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,7 +49,7 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit }: Pra
 
       const answersData = exerciseData.questions.map((question: any, index: number) => ({
         questionId: question.id || `q${index + 1}`,
-        questionText: question.question,
+        question: question.question,
         studentAnswer: answers[index] || '',
         correctAnswer: question.correctAnswer || '',
         points: question.points || 1,
@@ -104,6 +105,11 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit }: Pra
     <Card className="w-full">
       <CardHeader>
         <CardTitle>{exerciseData.title || 'Practice Exercise'}</CardTitle>
+        {showTimer && (
+          <div className="text-sm text-gray-600">
+            Timer functionality would go here
+          </div>
+        )}
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-4">
@@ -158,6 +164,11 @@ export function PracticeExerciseRunner({ exerciseData, onComplete, onExit }: Pra
               You got {submissionResult.correctAnswers} out of {submissionResult.totalQuestions} questions correct.
             </p>
             <p>Percentage Score: {submissionResult.percentageScore.toFixed(2)}%</p>
+            {submissionResult.unifiedGradingUsed && (
+              <div className="mt-2 text-sm text-blue-600">
+                ✨ Graded with AI • {submissionResult.cacheHits} cache hits • {submissionResult.processingTime}ms
+              </div>
+            )}
           </div>
         )}
       </CardContent>

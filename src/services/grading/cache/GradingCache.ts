@@ -53,11 +53,15 @@ export async function getCachedResults(questions: QuestionInput[]): Promise<Reco
   // Check L2 cache for remaining questions
   if (uncachedKeys.length > 0) {
     try {
-      const { data, error } = await supabase
-        .from('question_cache')
-        .select('*')
-        .in('cache_key', uncachedKeys)
-        .gt('expires_at', new Date().toISOString()) as { data: QuestionCacheRow[] | null, error: any };
+      // Use raw SQL query to avoid TypeScript issues with new table
+      const { data, error } = await supabase.rpc('execute_sql', {
+        sql: `
+          SELECT cache_key, question_id, result, model, expires_at, created_at, updated_at
+          FROM question_cache 
+          WHERE cache_key = ANY($1) AND expires_at > NOW()
+        `,
+        params: [uncachedKeys]
+      });
 
       if (!error && data) {
         for (const row of data) {
@@ -119,16 +123,24 @@ export async function writeResults(results: GradedAnswer[], questions: QuestionI
     keysToDelete.forEach(key => memoryCache.delete(key));
   }
 
-  // Write to L2 cache
+  // Write to L2 cache using raw SQL
   if (cacheEntries.length > 0) {
     try {
-      const { error } = await supabase
-        .from('question_cache')
-        .upsert(cacheEntries, { onConflict: 'cache_key' });
-      
-      if (error) {
-        console.error('L2 cache write failed:', error);
-      }
+      const values = cacheEntries.map(entry => 
+        `('${entry.cache_key}', '${entry.question_id}', '${JSON.stringify(entry.result).replace(/'/g, "''")}', '${entry.model}', '${entry.expires_at}', '${entry.created_at}')`
+      ).join(',');
+
+      await supabase.rpc('execute_sql', {
+        sql: `
+          INSERT INTO question_cache (cache_key, question_id, result, model, expires_at, created_at)
+          VALUES ${values}
+          ON CONFLICT (cache_key) DO UPDATE SET
+            result = EXCLUDED.result,
+            model = EXCLUDED.model,
+            expires_at = EXCLUDED.expires_at,
+            updated_at = NOW()
+        `
+      });
     } catch (error) {
       console.warn('L2 cache write failed:', error);
     }
@@ -147,12 +159,11 @@ export async function getCacheStats(): Promise<{
   let l2Size = 0;
   
   try {
-    const { count } = await supabase
-      .from('question_cache')
-      .select('*', { count: 'exact', head: true })
-      .gt('expires_at', new Date().toISOString());
+    const { data } = await supabase.rpc('execute_sql', {
+      sql: `SELECT COUNT(*) as count FROM question_cache WHERE expires_at > NOW()`
+    });
     
-    l2Size = count || 0;
+    l2Size = data?.[0]?.count || 0;
   } catch (error) {
     console.warn('Failed to get L2 cache size:', error);
   }
@@ -175,7 +186,6 @@ export async function getCacheStats(): Promise<{
  */
 export async function cleanupCache(): Promise<void> {
   // Clean L1 cache
-  const now = Date.now();
   for (const [key, entry] of memoryCache.entries()) {
     if (!isValidCacheEntry(entry)) {
       memoryCache.delete(key);
@@ -184,10 +194,9 @@ export async function cleanupCache(): Promise<void> {
 
   // Clean L2 cache
   try {
-    await supabase
-      .from('question_cache')
-      .delete()
-      .lt('expires_at', new Date().toISOString());
+    await supabase.rpc('execute_sql', {
+      sql: `DELETE FROM question_cache WHERE expires_at < NOW()`
+    });
   } catch (error) {
     console.warn('L2 cache cleanup failed:', error);
   }
