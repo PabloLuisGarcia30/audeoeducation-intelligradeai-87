@@ -112,6 +112,32 @@ export class SmartGoalService {
   }
 
   /**
+   * Create a goal from an AI recommendation
+   */
+  static async createGoalFromRecommendation(studentId: string, recommendation: AIGoalRecommendation): Promise<StudentGoal> {
+    const goalData: Partial<StudentGoal> = {
+      goal_title: recommendation.goal_title,
+      goal_description: recommendation.goal_description,
+      goal_type: recommendation.goal_type,
+      target_value: recommendation.target_value,
+      target_skill_name: recommendation.target_skill_name,
+      target_misconception_id: recommendation.target_misconception_id,
+      is_ai_suggested: true,
+      ai_confidence_score: recommendation.ai_confidence_score,
+      difficulty_level: recommendation.difficulty_level,
+      target_date: recommendation.target_date,
+      milestones: recommendation.milestones,
+      context_data: recommendation.context_data
+    };
+
+    const newGoal = await this.createGoal(studentId, goalData);
+    if (!newGoal) {
+      throw new Error('Failed to create goal from recommendation');
+    }
+    return newGoal;
+  }
+
+  /**
    * Create a new goal for a student
    */
   static async createGoal(studentId: string, goalData: Partial<StudentGoal>): Promise<StudentGoal | null> {
@@ -179,6 +205,13 @@ export class SmartGoalService {
       console.error('Failed to fetch student goals:', error);
       return [];
     }
+  }
+
+  /**
+   * Get goal achievements for a student (alias for consistency)
+   */
+  static async getStudentAchievements(studentId: string): Promise<GoalAchievement[]> {
+    return this.getGoalAchievements(studentId);
   }
 
   /**

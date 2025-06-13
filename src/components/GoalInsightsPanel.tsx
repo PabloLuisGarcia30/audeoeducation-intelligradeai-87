@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,17 +18,35 @@ import { SmartGoalService, type GoalAnalytics, type StudentGoal, type GoalAchiev
 interface GoalInsightsPanelProps {
   /** Learner whose progress the panel should visualise */
   studentId: string;
+  /** Optional: Pre-loaded analytics */
+  analytics?: GoalAnalytics | null;
+  /** Optional: Pre-loaded goals */
+  goals?: StudentGoal[];
+  /** Optional: Pre-loaded achievements */
+  achievements?: GoalAchievement[];
 }
 
-export function GoalInsightsPanel({ studentId }: GoalInsightsPanelProps) {
-  const [analytics, setAnalytics] = useState<GoalAnalytics | null>(null);
-  const [goals, setGoals] = useState<StudentGoal[]>([]);
-  const [achievements, setAchievements] = useState<GoalAchievement[]>([]);
-  const [loading, setLoading] = useState(true);
+export function GoalInsightsPanel({ 
+  studentId, 
+  analytics: propAnalytics,
+  goals: propGoals,
+  achievements: propAchievements
+}: GoalInsightsPanelProps) {
+  const [analytics, setAnalytics] = useState<GoalAnalytics | null>(propAnalytics || null);
+  const [goals, setGoals] = useState<StudentGoal[]>(propGoals || []);
+  const [achievements, setAchievements] = useState<GoalAchievement[]>(propAchievements || []);
+  const [loading, setLoading] = useState(!propAnalytics && !propGoals && !propAchievements);
 
   useEffect(() => {
-    loadInsightsData();
-  }, [studentId]);
+    if (propAnalytics !== undefined) setAnalytics(propAnalytics);
+    if (propGoals !== undefined) setGoals(propGoals);
+    if (propAchievements !== undefined) setAchievements(propAchievements);
+    
+    // Only load data if no props provided
+    if (!propAnalytics && !propGoals && !propAchievements) {
+      loadInsightsData();
+    }
+  }, [studentId, propAnalytics, propGoals, propAchievements]);
 
   const loadInsightsData = async () => {
     try {

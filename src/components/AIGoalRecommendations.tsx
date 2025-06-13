@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,22 +19,51 @@ interface AIGoalRecommendationsProps {
   /** ID of the learner for whom we are recommending goals */
   studentId: string;
   onGoalCreated: (newGoal: StudentGoal) => void;
+  /** Optional: Pre-loaded recommendations */
+  recommendations?: AIGoalRecommendation[];
+  /** Optional: Accept goal handler */
+  onAcceptGoal?: (recommendation: AIGoalRecommendation) => Promise<void>;
+  /** Optional: Refresh handler */
+  onRefresh?: () => Promise<void>;
+  /** Optional: Loading state */
+  loading?: boolean;
 }
 
-export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecommendationsProps) {
-  const [recommendations, setRecommendations] = useState<AIGoalRecommendation[]>([]);
-  const [loading, setLoading] = useState(false);
+export function AIGoalRecommendations({ 
+  studentId, 
+  onGoalCreated, 
+  recommendations: propRecommendations,
+  onAcceptGoal: propOnAcceptGoal,
+  onRefresh: propOnRefresh,
+  loading: propLoading
+}: AIGoalRecommendationsProps) {
+  const [recommendations, setRecommendations] = useState<AIGoalRecommendation[]>(propRecommendations || []);
+  const [loading, setLoading] = useState(propLoading || false);
 
   useEffect(() => {
-    loadRecommendations();
-  }, [studentId]);
+    if (propRecommendations) {
+      setRecommendations(propRecommendations);
+    } else {
+      loadRecommendations();
+    }
+  }, [studentId, propRecommendations]);
+
+  useEffect(() => {
+    if (propLoading !== undefined) {
+      setLoading(propLoading);
+    }
+  }, [propLoading]);
 
   const loadRecommendations = async () => {
+    if (propOnRefresh) {
+      await propOnRefresh();
+      return;
+    }
+
     try {
       setLoading(true);
-      // This would normally call SmartGoalService.getAIRecommendations(studentId)
-      // For now, return empty array since the service method may not exist yet
-      setRecommendations([]);
+      const recs = await SmartGoalService.generateGoalRecommendations(studentId);
+      setRecommendations(recs);
     } catch (error) {
       console.error('Failed to load AI recommendations:', error);
       setRecommendations([]);
@@ -45,6 +73,11 @@ export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecomm
   };
 
   const handleAcceptGoal = async (recommendation: AIGoalRecommendation) => {
+    if (propOnAcceptGoal) {
+      await propOnAcceptGoal(recommendation);
+      return;
+    }
+
     try {
       const newGoal = await SmartGoalService.createGoalFromRecommendation(studentId, recommendation);
       toast.success('Goal created successfully! 🎯');
