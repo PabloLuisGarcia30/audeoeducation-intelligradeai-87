@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,9 +6,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Bot, User, Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PracticeRecommendations } from "./PracticeRecommendations";
-import { AdaptiveAICoachService, AdaptiveCoachContext } from "@/services/adaptiveAICoachService";
-import { useAdaptiveLearning } from "@/hooks/useAdaptiveLearning";
-import { AdaptiveMetricsService } from "@/services/adaptiveMetricsService";
 
 interface Message {
   id: string;
@@ -53,20 +51,7 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [conversationId] = useState(() => `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
-  const [sessionStartTime] = useState(() => new Date());
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  // Get student ID from context (assuming it's available)
-  const studentId = studentContext.studentName; // You may need to adjust this based on your actual student ID source
-  
-  // Use adaptive learning hook
-  const { 
-    profile, 
-    logLearningEvent, 
-    updateLearningVelocity,
-    getAdaptiveRecommendations 
-  } = useAdaptiveLearning(studentId);
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -145,15 +130,14 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
     };
 
     setMessages(prev => [...prev, userMessage]);
-    const currentInput = inputValue;
     setInputValue('');
     setIsLoading(true);
 
     try {
-      // Call the AI chat edge function for base response
+      // Call the AI chat edge function
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: {
-          message: currentInput,
+          message: inputValue,
           studentContext: {
             ...studentContext,
             classId: studentContext.classId
@@ -165,33 +149,7 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
         throw error;
       }
 
-      const baseResponse = data.response || "I'm sorry, I couldn't generate a response. Please try again.";
-
-      // Prepare adaptive learning context
-      const sessionDurationMinutes = Math.floor((new Date().getTime() - sessionStartTime.getTime()) / (1000 * 60));
-      const adaptiveContext: AdaptiveCoachContext = {
-        studentId: studentId,
-        studentName: studentContext.studentName,
-        skill_name: studentContext.classSubject, // Using subject as skill for now
-        skill_type: 'subject',
-        current_performance: calculateAverageScore(studentContext.contentSkillScores, studentContext.subjectSkillScores),
-        current_confidence: 0.7, // Default confidence, could be enhanced
-        session_duration_minutes: sessionDurationMinutes,
-        conversation_id: conversationId,
-        message_history: messages.concat(userMessage).map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.content,
-          timestamp: msg.timestamp.toISOString()
-        }))
-      };
-
-      // Generate adaptive response
-      const adaptiveResponse = await AdaptiveAICoachService.generateAdaptiveResponse(
-        baseResponse,
-        adaptiveContext
-      );
-
-      const { cleanContent, recommendations } = parsePracticeRecommendations(adaptiveResponse.response);
+      const { cleanContent, recommendations } = parsePracticeRecommendations(data.response || "I'm sorry, I couldn't generate a response. Please try again.");
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -202,52 +160,6 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
       };
 
       setMessages(prev => [...prev, aiMessage]);
-
-      // Track metrics
-      const helpRequests = messages.filter(msg => 
-        msg.sender === 'user' && msg.content.toLowerCase().includes('help')
-      ).length;
-
-      await AdaptiveMetricsService.trackEngagement(
-        studentId,
-        sessionDurationMinutes,
-        messages.length + 1,
-        helpRequests
-      );
-
-      // Track difficulty accuracy if applicable
-      if (adaptiveResponse.difficulty_level && adaptiveContext.current_performance) {
-        await AdaptiveMetricsService.trackDifficultyAccuracy(
-          studentId,
-          adaptiveResponse.difficulty_level,
-          adaptiveContext.current_performance,
-          adaptiveContext.skill_name
-        );
-      }
-
-      // Track recommendation effectiveness
-      if (adaptiveResponse.recommendations && adaptiveResponse.recommendations.length > 0) {
-        for (const rec of adaptiveResponse.recommendations) {
-          await AdaptiveMetricsService.trackRecommendationEffectiveness(
-            studentId,
-            rec.type,
-            true, // Assume followed if generated
-            0.8 // Default effectiveness score
-          );
-        }
-      }
-
-      // Log learning events if significant
-      if (adaptiveResponse.learning_event) {
-        await logLearningEvent(adaptiveResponse.learning_event);
-      }
-
-      // Update learning velocity if performance data available
-      if (adaptiveContext.current_performance) {
-        const performanceChange = adaptiveContext.current_performance - 0.7;
-        await updateLearningVelocity(performanceChange);
-      }
-
     } catch (error) {
       console.error('Error getting AI response:', error);
       const errorMessage: Message = {
@@ -260,13 +172,6 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const calculateAverageScore = (contentScores: any[], subjectScores: any[]): number => {
-    const allScores = [...contentScores, ...subjectScores];
-    if (allScores.length === 0) return 0.7; // Default
-    const sum = allScores.reduce((acc, score) => acc + (score.score || 0), 0);
-    return sum / allScores.length / 100; // Convert to 0-1 scale
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

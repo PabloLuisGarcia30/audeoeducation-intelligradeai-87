@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,11 +23,11 @@ import { StudentPerformanceOverview } from "@/components/StudentPerformanceOverv
 import { MultiSkillActionBar } from "@/components/MultiSkillActionBar";
 import { generateMultiplePracticeTests } from "@/services/practiceTestService";
 
-interface TeacherDashboardViewProps {
+interface StudentDashboardProps {
   onSelectStudent: (studentId: string, classId?: string, className?: string) => void;
 }
 
-export function TeacherDashboardView({ onSelectStudent }: TeacherDashboardViewProps) {
+export function StudentDashboard({ onSelectStudent }: StudentDashboardProps) {
   const [students, setStudents] = useState<ActiveStudent[]>([]);
   const [classes, setClasses] = useState<ActiveClass[]>([]);
   const [searchTerm, setSearchTerm] = useState('');

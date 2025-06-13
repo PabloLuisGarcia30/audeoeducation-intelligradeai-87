@@ -93,42 +93,6 @@ export type Database = {
         }
         Relationships: []
       }
-      adaptive_learning_metrics: {
-        Row: {
-          created_at: string
-          id: string
-          metadata: Json | null
-          metric_type: string
-          metric_value: number
-          session_context: string | null
-          skill_context: string | null
-          student_id: string
-          timestamp: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          metadata?: Json | null
-          metric_type: string
-          metric_value: number
-          session_context?: string | null
-          skill_context?: string | null
-          student_id: string
-          timestamp?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          metadata?: Json | null
-          metric_type?: string
-          metric_value?: number
-          session_context?: string | null
-          skill_context?: string | null
-          student_id?: string
-          timestamp?: string
-        }
-        Relationships: []
-      }
       adaptive_learning_profiles: {
         Row: {
           cognitive_load_tolerance: string | null
