@@ -55,7 +55,7 @@ export class OpenAIGradingProcessor {
       }
 
       const processingTime = Date.now() - startTime;
-      this.updateStats('single', processingTime, openaiResult.openAIUsage?.estimatedCost || 0);
+      this.updateStats('single', processingTime, (openaiResult as any).openAIUsage?.estimatedCost || 0);
 
       return {
         questionId: question.questionId,
@@ -66,16 +66,16 @@ export class OpenAIGradingProcessor {
         confidence: openaiResult.confidence,
         gradingMethod: 'openai_single',
         reasoning: openaiResult.reasoning,
-        feedback: openaiResult.feedback || 'No feedback available',
+        feedback: (openaiResult as any).feedback || 'No feedback available',
         processingTimeMs: processingTime,
         skillMappings: question.skillContext || [],
-        misconceptionAnalysis: openaiResult.misconceptionAnalysis ? {
-          categoryName: openaiResult.misconceptionAnalysis.categoryName,
-          subtypeName: openaiResult.misconceptionAnalysis.subtypeName,
-          confidence: openaiResult.misconceptionAnalysis.confidence,
-          reasoning: openaiResult.misconceptionAnalysis.reasoning
+        misconceptionAnalysis: (openaiResult as any).misconceptionAnalysis ? {
+          categoryName: (openaiResult as any).misconceptionAnalysis.categoryName,
+          subtypeName: (openaiResult as any).misconceptionAnalysis.subtypeName,
+          confidence: (openaiResult as any).misconceptionAnalysis.confidence,
+          reasoning: (openaiResult as any).misconceptionAnalysis.reasoning
         } : undefined,
-        openAIUsage: openaiResult.openAIUsage
+        openAIUsage: (openaiResult as any).openAIUsage
       };
 
     } catch (error) {
@@ -121,7 +121,7 @@ export class OpenAIGradingProcessor {
       const batchResults = await this.waitForBatchCompletion(jobId);
 
       const processingTime = Date.now() - startTime;
-      const totalCost = batchResults.reduce((sum, r) => sum + (r.openAIUsage?.estimatedCost || 0), 0);
+      const totalCost = batchResults.reduce((sum, r) => sum + ((r as any).openAIUsage?.estimatedCost || 0), 0);
       this.updateStats('batch', processingTime, totalCost);
 
       return questions.map((question, index) => {
@@ -139,16 +139,16 @@ export class OpenAIGradingProcessor {
           confidence: result.confidence,
           gradingMethod: 'openai_batch',
           reasoning: result.reasoning,
-          feedback: result.feedback || 'No feedback available',
+          feedback: (result as any).feedback || 'No feedback available',
           processingTimeMs: processingTime / questions.length,
           skillMappings: question.skillContext || [],
-          misconceptionAnalysis: result.misconceptionAnalysis ? {
-            categoryName: result.misconceptionAnalysis.categoryName,
-            subtypeName: result.misconceptionAnalysis.subtypeName,
-            confidence: result.misconceptionAnalysis.confidence,
-            reasoning: result.misconceptionAnalysis.reasoning
+          misconceptionAnalysis: (result as any).misconceptionAnalysis ? {
+            categoryName: (result as any).misconceptionAnalysis.categoryName,
+            subtypeName: (result as any).misconceptionAnalysis.subtypeName,
+            confidence: (result as any).misconceptionAnalysis.confidence,
+            reasoning: (result as any).misconceptionAnalysis.reasoning
           } : undefined,
-          openAIUsage: result.openAIUsage
+          openAIUsage: (result as any).openAIUsage
         };
       });
 
