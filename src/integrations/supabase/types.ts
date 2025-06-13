@@ -1778,6 +1778,42 @@ export type Database = {
           },
         ]
       }
+      student_action_logs: {
+        Row: {
+          action_type: string
+          context_summary: Json | null
+          created_at: string
+          id: string
+          reference_id: string | null
+          reference_table: string | null
+          session_type: string | null
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          action_type: string
+          context_summary?: Json | null
+          created_at?: string
+          id?: string
+          reference_id?: string | null
+          reference_table?: string | null
+          session_type?: string | null
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string
+          context_summary?: Json | null
+          created_at?: string
+          id?: string
+          reference_id?: string | null
+          reference_table?: string | null
+          session_type?: string | null
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       student_class_enrollments: {
         Row: {
           class_id: string
