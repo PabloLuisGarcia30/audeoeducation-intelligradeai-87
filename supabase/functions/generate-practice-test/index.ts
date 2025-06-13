@@ -2,16 +2,24 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9';
-
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+import { 
+  callOpenAI, 
+  parseAndValidateJSON, 
+  buildEducationalSystemPrompt,
+  handleOpenAIError 
+} from "../shared/openaiClient.ts";
+import {
+  validateExerciseData,
+  createErrorResponse
+} from "../shared/exerciseHelpers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
 interface PracticeTestRequest {
@@ -59,47 +67,9 @@ interface PracticeTestData {
   };
 }
 
-function buildPrompt(request: PracticeTestRequest): string {
+function buildSingleSkillPrompt(request: PracticeTestRequest): string {
   const { studentName, skillName, className, subject, grade, difficulty = 'mixed', questionCount = 5 } = request;
   
-  // Handle multi-skill distribution if provided
-  if (request.skillDistribution && request.skillDistribution.length > 1) {
-    const skillDescriptions = request.skillDistribution.map(skill => 
-      `${skill.skill_name} (${skill.questions} questions)`
-    ).join(', ');
-    
-    return `Create a practice test for ${studentName} in ${className} (${subject}, ${grade}) covering these skills: ${skillDescriptions}.
-    
-Total questions: ${questionCount}
-Difficulty: ${difficulty}
-${request.includeExplanations ? 'Include explanations for each answer.' : ''}
-
-Generate exactly ${questionCount} questions distributed across the specified skills. Each question should target the specific skill mentioned.
-
-Format as JSON:
-{
-  "title": "Practice Test Title",
-  "description": "Brief description",
-  "questions": [
-    {
-      "id": "q1",
-      "type": "multiple-choice" | "short-answer" | "essay",
-      "question": "Question text",
-      "options": ["A", "B", "C", "D"] (for multiple choice),
-      "correctAnswer": "Correct answer",
-      "acceptableAnswers": ["Alternative answers"],
-      "keywords": ["key", "words"],
-      "points": 1,
-      "explanation": "Why this is correct",
-      "targetSkill": "Skill this question targets"
-    }
-  ],
-  "totalPoints": ${questionCount},
-  "estimatedTime": ${questionCount * 2}
-}`;
-  }
-
-  // Single skill prompt
   return `Create a practice test for ${studentName} in ${className} (${subject}, ${grade}) focusing on: ${skillName}.
 
 Questions: ${questionCount}
@@ -131,60 +101,80 @@ Format as JSON:
 }`;
 }
 
+function buildMultiSkillPrompt(request: PracticeTestRequest): string {
+  const { studentName, className, subject, grade, difficulty = 'mixed', questionCount = 5 } = request;
+  
+  if (!request.skillDistribution || request.skillDistribution.length === 0) {
+    throw new Error('Skill distribution required for multi-skill test');
+  }
+  
+  const skillDescriptions = request.skillDistribution.map(skill => 
+    `${skill.skill_name} (${skill.questions} questions)`
+  ).join(', ');
+  
+  return `Create a practice test for ${studentName} in ${className} (${subject}, ${grade}) covering these skills: ${skillDescriptions}.
+
+Total questions: ${questionCount}
+Difficulty: ${difficulty}
+${request.includeExplanations ? 'Include explanations for each answer.' : ''}
+
+Generate exactly ${questionCount} questions distributed across the specified skills. Each question should target the specific skill mentioned.
+
+Format as JSON:
+{
+  "title": "Practice Test Title",
+  "description": "Brief description",
+  "questions": [
+    {
+      "id": "q1",
+      "type": "multiple-choice" | "short-answer" | "essay",
+      "question": "Question text",
+      "options": ["A", "B", "C", "D"] (for multiple choice),
+      "correctAnswer": "Correct answer",
+      "acceptableAnswers": ["Alternative answers"],
+      "keywords": ["key", "words"],
+      "points": 1,
+      "explanation": "Why this is correct",
+      "targetSkill": "Skill this question targets"
+    }
+  ],
+  "totalPoints": ${questionCount},
+  "estimatedTime": ${questionCount * 2}
+}`;
+}
+
+function buildPrompt(request: PracticeTestRequest): string {
+  // Handle multi-skill distribution if provided
+  if (request.skillDistribution && request.skillDistribution.length > 1) {
+    return buildMultiSkillPrompt(request);
+  }
+  
+  // Single skill prompt
+  return buildSingleSkillPrompt(request);
+}
+
 async function generatePracticeTest(request: PracticeTestRequest): Promise<PracticeTestData> {
   console.log('🎯 Generating practice test:', request);
   
-  if (!openAIApiKey) {
-    throw new Error('OpenAI API key not configured');
-  }
-
   const prompt = buildPrompt(request);
   
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are an expert teacher creating practice exercises. Generate high-quality, educational questions that help students practice specific skills. Always respond with valid JSON only.`
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
+    const openAIResponse = await callOpenAI(prompt, {
+      model: 'gpt-4o-mini',
+      systemPrompt: buildEducationalSystemPrompt('test'),
+      temperature: 0.7,
+      maxTokens: 2000
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ OpenAI API error:', response.status, errorText);
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content received from OpenAI');
-    }
-
-    // Parse the JSON response
-    let practiceTest: PracticeTestData;
-    try {
-      practiceTest = JSON.parse(content);
-    } catch (parseError) {
-      console.error('❌ Failed to parse OpenAI response:', content);
-      throw new Error('Invalid JSON response from OpenAI');
-    }
+    // Parse and validate the JSON response
+    const practiceTest = parseAndValidateJSON<PracticeTestData>(openAIResponse.content, (data) => {
+      const validation = validateExerciseData(data);
+      if (!validation.isValid) {
+        console.error('Practice test validation failed:', validation.errors);
+        return false;
+      }
+      return true;
+    });
 
     // Add metadata
     practiceTest.metadata = {
@@ -200,7 +190,7 @@ async function generatePracticeTest(request: PracticeTestRequest): Promise<Pract
 
   } catch (error) {
     console.error('❌ Error generating practice test:', error);
-    throw error;
+    throw handleOpenAIError(error);
   }
 }
 
@@ -213,17 +203,6 @@ serve(async (req) => {
   try {
     console.log('📥 Practice test generation request received');
     
-    if (!openAIApiKey) {
-      console.error('❌ OpenAI API key not configured');
-      return new Response(
-        JSON.stringify({ error: 'OpenAI API key not configured' }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
     const requestData: PracticeTestRequest = await req.json();
     console.log('📋 Request data:', requestData);
 
@@ -250,18 +229,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Error in generate-practice-test function:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'Failed to generate practice test',
-        details: errorMessage
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    const handledError = handleOpenAIError(error);
+    return createErrorResponse(handledError.message);
   }
 });
