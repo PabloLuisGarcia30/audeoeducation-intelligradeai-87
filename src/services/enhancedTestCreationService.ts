@@ -10,6 +10,12 @@ export interface EnhancedTestCreationOptions {
   skillName?: string;
 }
 
+// Extended Question interface with explanation
+interface ExtendedQuestion extends Question {
+  explanation?: string;
+  choiceMisconceptions?: Record<string, any>;
+}
+
 export class EnhancedTestCreationService {
   /**
    * Generate AI-powered questions with misconception annotations
@@ -18,7 +24,7 @@ export class EnhancedTestCreationService {
     examId: string,
     questionCount: number,
     options: EnhancedTestCreationOptions
-  ): Promise<Question[]> {
+  ): Promise<ExtendedQuestion[]> {
     try {
       console.log('🎯 Generating enhanced questions with misconception support');
 
@@ -45,7 +51,7 @@ export class EnhancedTestCreationService {
       }
 
       // Convert the generated questions to the Test Creator format
-      const enhancedQuestions: Question[] = exerciseData.questions.map((q: any, index: number) => ({
+      const enhancedQuestions: ExtendedQuestion[] = exerciseData.questions.map((q: any, index: number) => ({
         id: q.id || `question-${index + 1}`,
         type: q.type as Question['type'],
         question: q.question,
@@ -70,7 +76,7 @@ export class EnhancedTestCreationService {
    */
   static async saveEnhancedTest(
     examId: string,
-    questions: Question[],
+    questions: ExtendedQuestion[],
     metadata: {
       title: string;
       description?: string;
@@ -107,11 +113,11 @@ export class EnhancedTestCreationService {
           question_number: index + 1,
           question_text: question.question,
           question_type: question.type,
-          correct_answer: question.correctAnswer,
-          explanation: question.explanation,
+          correct_answer: String(question.correctAnswer), // Convert to string for database
+          explanation: question.explanation || '',
           points: question.points,
           options: question.options || [],
-          choice_misconceptions: (question as any).choiceMisconceptions || {}
+          choice_misconceptions: question.choiceMisconceptions || {}
         };
 
         const { error } = await supabase

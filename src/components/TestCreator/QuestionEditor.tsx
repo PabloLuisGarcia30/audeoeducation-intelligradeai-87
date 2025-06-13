@@ -115,7 +115,7 @@ export const QuestionEditor = ({
                           <Checkbox
                             checked={question.correctAnswer === option}
                             onCheckedChange={(checked) => {
-                              if (checked) {
+                              if (checked === true) {
                                 onUpdateQuestion(question.id, 'correctAnswer', option);
                               }
                             }}
@@ -130,7 +130,7 @@ export const QuestionEditor = ({
                     <div className="mt-6">
                       <MisconceptionAnnotationUI
                         questionOptions={question.options}
-                        correctAnswer={question.correctAnswer}
+                        correctAnswer={question.correctAnswer as string}
                         choiceMisconceptions={(question as any).choiceMisconceptions || {}}
                         onMisconceptionChange={(misconceptions) => 
                           handleMisconceptionChange(question.id, misconceptions)
