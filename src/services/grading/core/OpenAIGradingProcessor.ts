@@ -38,14 +38,24 @@ export class OpenAIGradingProcessor {
         acceptable_answers: question.acceptableAnswers
       };
 
-      const openaiResult = await OpenAIComplexGradingService.gradeComplexQuestion(
-        mockQuestion,
-        mockAnswerKey,
-        question.skillContext || []
+      const skillMappings = this.convertToLegacySkillMappings(question.skillContext || []);
+
+      // Use the existing batch method with a single question
+      const openaiResults = await OpenAIComplexGradingService.gradeComplexQuestions(
+        [mockQuestion],
+        [mockAnswerKey],
+        context.examId || 'unified',
+        context.studentName || 'student',
+        { [question.questionNumber]: skillMappings }
       );
 
+      const openaiResult = openaiResults[0];
+      if (!openaiResult) {
+        throw new Error('No result from OpenAI service');
+      }
+
       const processingTime = Date.now() - startTime;
-      this.updateStats('single', processingTime, openaiResult.estimatedCost || 0);
+      this.updateStats('single', processingTime, openaiResult.openAIUsage?.estimatedCost || 0);
 
       return {
         questionId: question.questionId,
@@ -65,12 +75,7 @@ export class OpenAIGradingProcessor {
           confidence: openaiResult.misconceptionAnalysis.confidence,
           reasoning: openaiResult.misconceptionAnalysis.reasoning
         } : undefined,
-        openAIUsage: {
-          promptTokens: openaiResult.promptTokens || 0,
-          completionTokens: openaiResult.completionTokens || 0,
-          totalTokens: (openaiResult.promptTokens || 0) + (openaiResult.completionTokens || 0),
-          estimatedCost: openaiResult.estimatedCost || 0
-        }
+        openAIUsage: openaiResult.openAIUsage
       };
 
     } catch (error) {
@@ -103,15 +108,20 @@ export class OpenAIGradingProcessor {
         acceptable_answers: q.acceptableAnswers
       }));
 
-      const batchResults = await EnhancedBatchGradingService.gradeComplexQuestions(
+      // Create the batch job using the correct method
+      const jobId = await EnhancedBatchGradingService.createEnhancedBatchJob(
         mockQuestions,
-        mockAnswerKeys,
         context.examId || 'unified',
-        context.studentId || 'student'
+        context.studentName || 'student',
+        'normal',
+        mockAnswerKeys
       );
 
+      // Poll for job completion
+      const batchResults = await this.waitForBatchCompletion(jobId);
+
       const processingTime = Date.now() - startTime;
-      const totalCost = batchResults.reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
+      const totalCost = batchResults.reduce((sum, r) => sum + (r.openAIUsage?.estimatedCost || 0), 0);
       this.updateStats('batch', processingTime, totalCost);
 
       return questions.map((question, index) => {
@@ -130,7 +140,7 @@ export class OpenAIGradingProcessor {
           gradingMethod: 'openai_batch',
           reasoning: result.reasoning,
           feedback: result.feedback,
-          processingTimeMs: processingTime / questions.length, // Distribute batch time
+          processingTimeMs: processingTime / questions.length,
           skillMappings: question.skillContext || [],
           misconceptionAnalysis: result.misconceptionAnalysis ? {
             categoryName: result.misconceptionAnalysis.categoryName,
@@ -138,12 +148,7 @@ export class OpenAIGradingProcessor {
             confidence: result.misconceptionAnalysis.confidence,
             reasoning: result.misconceptionAnalysis.reasoning
           } : undefined,
-          openAIUsage: {
-            promptTokens: result.promptTokens || 0,
-            completionTokens: result.completionTokens || 0,
-            totalTokens: (result.promptTokens || 0) + (result.completionTokens || 0),
-            estimatedCost: result.estimatedCost || 0
-          }
+          openAIUsage: result.openAIUsage
         };
       });
 
@@ -151,6 +156,46 @@ export class OpenAIGradingProcessor {
       console.error('OpenAI batch processing error:', error);
       return questions.map(q => this.createErrorResult(q, error, Date.now() - startTime));
     }
+  }
+
+  private async waitForBatchCompletion(jobId: string): Promise<any[]> {
+    const { EnhancedBatchGradingService } = await import('../../enhancedBatchGradingService');
+    const maxAttempts = 30; // 1 minute timeout (2s intervals)
+    let attempts = 0;
+
+    return new Promise((resolve, reject) => {
+      const checkInterval = setInterval(() => {
+        attempts++;
+        const job = EnhancedBatchGradingService.getJob(jobId);
+        
+        if (!job) {
+          clearInterval(checkInterval);
+          reject(new Error('Batch job not found'));
+          return;
+        }
+
+        if (job.status === 'completed') {
+          clearInterval(checkInterval);
+          resolve(job.results || []);
+        } else if (job.status === 'failed') {
+          clearInterval(checkInterval);
+          reject(new Error(`Batch job failed: ${job.errors?.join(', ')}`));
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkInterval);
+          reject(new Error('Batch job timeout'));
+        }
+      }, 2000);
+    });
+  }
+
+  private convertToLegacySkillMappings(unifiedMappings: any[]): any[] {
+    return unifiedMappings.map(mapping => ({
+      skill_id: mapping.skillId,
+      skill_name: mapping.skillName,
+      skill_type: mapping.skillType,
+      confidence: mapping.confidence,
+      skill_weight: mapping.weight
+    }));
   }
 
   private createErrorResult(

@@ -1,3 +1,4 @@
+
 import type { 
   UnifiedQuestionContext, 
   GradingContext, 
@@ -12,6 +13,7 @@ import { LocalGradingProcessor } from './LocalGradingProcessor';
 import { OpenAIGradingProcessor } from './OpenAIGradingProcessor';
 import { ResultProcessor } from './ResultProcessor';
 import { CacheManager } from './CacheManager';
+import { PersistenceManager } from './PersistenceManager';
 
 export class UnifiedGradingService {
   private static batchManager = new BatchManager();
@@ -19,6 +21,7 @@ export class UnifiedGradingService {
   private static openaiProcessor = new OpenAIGradingProcessor();
   private static resultProcessor = new ResultProcessor();
   private static cacheManager = new CacheManager();
+  private static persistenceManager = new PersistenceManager();
 
   /**
    * Grade a single question through the unified pipeline
@@ -84,6 +87,16 @@ export class UnifiedGradingService {
         await this.cacheManager.setCachedResult(question, context, finalResult);
       }
 
+      // Save to database if student ID is provided
+      if (context.studentId) {
+        try {
+          await this.persistenceManager.saveResults([finalResult], context);
+        } catch (error) {
+          console.warn('Failed to persist grading result:', error);
+          // Don't fail the grading process if persistence fails
+        }
+      }
+
       const processingTime = Date.now() - startTime;
       console.log(`✅ Q${question.questionNumber} graded: ${finalResult.isCorrect ? 'Correct' : 'Incorrect'} (${processingTime}ms, ${routingDecision.method})`);
 
@@ -125,6 +138,26 @@ export class UnifiedGradingService {
         }
       );
 
+      // Save all results to database if student ID is provided
+      if (request.context.studentId && batchResult.results.length > 0) {
+        try {
+          await this.persistenceManager.saveResults(batchResult.results, request.context);
+          
+          // Validate that results were saved correctly
+          const validation = await this.persistenceManager.validateSavedResults(
+            batchResult.results, 
+            request.context
+          );
+          
+          if (!validation.success) {
+            console.warn('Batch result validation issues:', validation.errors);
+          }
+        } catch (error) {
+          console.warn('Failed to persist batch results:', error);
+          // Don't fail the grading process if persistence fails
+        }
+      }
+
       const processingTime = Date.now() - startTime;
       console.log(`✅ Batch completed: ${batchResult.results.length} questions in ${processingTime}ms`);
 
@@ -164,9 +197,6 @@ export class UnifiedGradingService {
     };
   }
 
-  /**
-   * Get grading statistics and health metrics
-   */
   static async getGradingStats(): Promise<any> {
     return {
       cache: await this.cacheManager.getStats(),
