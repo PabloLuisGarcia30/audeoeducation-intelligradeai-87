@@ -8,13 +8,15 @@ import {
   getFileJobQueueStats 
 } from '@/lib/fileProcessor';
 
+export interface FileJobData {
+  files: FileData[];
+  options?: any;
+}
+
 export interface FileJob {
   id: string;
   user_id?: string;
-  file_group_data: {
-    files: FileData[];
-    options?: any;
-  };
+  file_group_data: FileJobData;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   priority: 'low' | 'normal' | 'high' | 'urgent';
   retry_count: number;
@@ -56,14 +58,30 @@ export class FileJobService {
    * Get job status by ID
    */
   static async getJobStatus(jobId: string): Promise<FileJob | null> {
-    return getFileJobStatus(jobId);
+    const result = await getFileJobStatus(jobId);
+    if (!result) return null;
+    
+    // Cast the database result to our FileJob type
+    return {
+      ...result,
+      file_group_data: result.file_group_data as FileJobData
+    } as FileJob;
   }
 
   /**
    * Subscribe to job updates
    */
   static subscribeToJob(jobId: string, callback: (job: FileJob) => void): () => void {
-    const unsubscribe = subscribeToFileJobUpdates(jobId, callback);
+    const wrappedCallback = (job: any) => {
+      // Cast the database result to our FileJob type
+      const typedJob: FileJob = {
+        ...job,
+        file_group_data: job.file_group_data as FileJobData
+      };
+      callback(typedJob);
+    };
+    
+    const unsubscribe = subscribeToFileJobUpdates(jobId, wrappedCallback);
     this.jobListeners.set(jobId, unsubscribe);
     return unsubscribe;
   }
@@ -118,7 +136,11 @@ export class FileJobService {
         throw error;
       }
 
-      return data as FileJob[];
+      // Cast the database results to our FileJob type
+      return (data || []).map(item => ({
+        ...item,
+        file_group_data: item.file_group_data as FileJobData
+      })) as FileJob[];
       
     } catch (error) {
       console.error('Error getting user file jobs:', error);

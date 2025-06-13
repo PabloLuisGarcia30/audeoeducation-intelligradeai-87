@@ -138,14 +138,17 @@ export async function submitFileProcessingJob(
   try {
     console.log(`📝 Submitting file processing job: ${filesData.length} files`);
     
+    // Create the file group data as a proper JSON object
+    const fileGroupData = {
+      files: filesData,
+      options: options
+    };
+    
     const { data, error } = await supabase
       .from('file_jobs')
       .insert({
         user_id: options.userId,
-        file_group_data: {
-          files: filesData,
-          options: options
-        },
+        file_group_data: fileGroupData as any, // Cast to any to satisfy Json type
         priority: options.priority || 'normal'
       })
       .select()

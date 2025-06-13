@@ -1,11 +1,12 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { GradingQueueService } from './gradingQueueService';
-import { FileJobService, type FileJob } from './fileJobService';
+import { FileJobService, type FileJob, type FileJobData } from './fileJobService';
+import { FileData } from '@/lib/fileProcessor';
 
 export interface EnhancedBatchJob {
   id: string;
-  files: File[];
+  files: FileData[]; // Changed from File[] to FileData[]
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'paused';
   priority: 'low' | 'normal' | 'high' | 'urgent';
   createdAt: number;
@@ -176,7 +177,7 @@ export class EnhancedBatchProcessingService {
     
     return {
       id: fileJob.id,
-      files: filesData, // Note: These are FileData objects, not actual File objects
+      files: filesData, // Now correctly typed as FileData[]
       status: fileJob.status as any,
       priority: fileJob.priority,
       createdAt: new Date(fileJob.created_at).getTime(),
