@@ -72,7 +72,7 @@ export class PracticeExerciseGradingServiceUnified {
     console.log(`✅ Unified grading complete: ${totalCorrect}/${answers.length} correct, ${percentageScore.toFixed(1)}% score, ${cacheHits} cache hits`);
 
     return {
-      correctAnswers: totalCorrect,
+      totalCorrect,
       percentageScore,
       totalPointsEarned,
       totalPointsPossible,
