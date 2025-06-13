@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,6 +8,7 @@ import Auth from "./pages/Auth";
 import StudentDashboard from "./pages/StudentDashboard";
 import StudentLanding from "./pages/StudentLanding";
 import StudentTrailblazer from "./pages/StudentTrailblazer";
+import StudentResultsHistory from "./pages/StudentResultsHistory";
 import HomeLearner from "./pages/HomeLearner";
 import StudentClassScores from "./pages/StudentClassScores";
 import StudentPracticeExercise from "./pages/StudentPracticeExercise";

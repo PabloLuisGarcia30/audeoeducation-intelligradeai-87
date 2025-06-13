@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -207,11 +206,12 @@ export default function StudentDashboard() {
 
         {/* Rest of the dashboard content */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="exercises">Practice</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
             <TabsTrigger value="goals">Goals</TabsTrigger>
+            <TabsTrigger value="results-history">Results History</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -406,6 +406,39 @@ export default function StudentDashboard() {
                   <Target className="h-4 w-4 mr-2" />
                   Set New Goal
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="results-history">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Your Learning History
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-center py-12">
+                <div className="space-y-4">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                    <BarChart3 className="h-8 w-8 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                      Explore Your Learning Journey
+                    </h3>
+                    <p className="text-slate-600 mb-6 max-w-md mx-auto">
+                      View detailed progress tracking, skill improvements, and misconception resolution over time.
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={() => navigate('/student-dashboard/results-history')}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    View Detailed Results History
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
