@@ -13,17 +13,21 @@ import {
   RefreshCw,
   Plus,
   CheckCircle2,
-  Clock
+  Clock,
+  ExternalLink
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { SmartGoalService, StudentGoal, AIGoalRecommendation, GoalAchievement, GoalAnalytics } from "@/services/smartGoalService";
 import { AIGoalRecommendations } from "@/components/AIGoalRecommendations";
 import { GoalProgressTracker } from "@/components/GoalProgressTracker";
 import { GoalAchievementCelebration } from "@/components/GoalAchievementCelebration";
 import { GoalInsightsPanel } from "@/components/GoalInsightsPanel";
+import { GoalCalendar } from "@/components/GoalCalendar";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function SmartGoalsManager() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [goals, setGoals] = useState<StudentGoal[]>([]);
   const [achievements, setAchievements] = useState<GoalAchievement[]>([]);
   const [recommendations, setRecommendations] = useState<AIGoalRecommendation[]>([]);
@@ -139,6 +143,14 @@ export function SmartGoalsManager() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
+            onClick={() => navigate('/goal-planner')}
+            className="flex items-center gap-2"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Full Goal Planner
+          </Button>
+          <Button 
+            variant="outline" 
             onClick={loadRecommendations}
             disabled={loadingRecommendations}
           >
@@ -219,8 +231,9 @@ export function SmartGoalsManager() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="current">Current Goals</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="recommendations">AI Suggestions</TabsTrigger>
           <TabsTrigger value="progress">Progress Tracker</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
@@ -332,6 +345,10 @@ export function SmartGoalsManager() {
               ))
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="calendar">
+          <GoalCalendar goals={goals} />
         </TabsContent>
 
         <TabsContent value="recommendations">
