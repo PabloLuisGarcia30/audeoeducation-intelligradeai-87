@@ -34,6 +34,41 @@ export class FileJobService {
   private static jobListeners: Map<string, () => void> = new Map();
 
   /**
+   * Type guard to validate FileJobData structure
+   */
+  private static isValidFileJobData(data: any): data is FileJobData {
+    return (
+      data &&
+      typeof data === 'object' &&
+      Array.isArray(data.files) &&
+      data.files.every((file: any) => 
+        file &&
+        typeof file === 'object' &&
+        typeof file.name === 'string' &&
+        typeof file.size === 'number' &&
+        typeof file.type === 'string' &&
+        typeof file.lastModified === 'number'
+      )
+    );
+  }
+
+  /**
+   * Safely cast database result to FileJobData
+   */
+  private static castToFileJobData(data: any): FileJobData {
+    if (this.isValidFileJobData(data)) {
+      return data;
+    }
+    
+    // Fallback with empty structure if data is invalid
+    console.warn('Invalid file job data structure, using fallback:', data);
+    return {
+      files: [],
+      options: data || {}
+    };
+  }
+
+  /**
    * Create a new file processing job
    */
   static async createFileJob(
@@ -61,10 +96,10 @@ export class FileJobService {
     const result = await getFileJobStatus(jobId);
     if (!result) return null;
     
-    // Cast the database result to our FileJob type
+    // Safely cast the database result to our FileJob type
     return {
       ...result,
-      file_group_data: result.file_group_data as FileJobData
+      file_group_data: this.castToFileJobData(result.file_group_data)
     } as FileJob;
   }
 
@@ -73,10 +108,10 @@ export class FileJobService {
    */
   static subscribeToJob(jobId: string, callback: (job: FileJob) => void): () => void {
     const wrappedCallback = (job: any) => {
-      // Cast the database result to our FileJob type
+      // Safely cast the database result to our FileJob type
       const typedJob: FileJob = {
         ...job,
-        file_group_data: job.file_group_data as FileJobData
+        file_group_data: this.castToFileJobData(job.file_group_data)
       };
       callback(typedJob);
     };
@@ -136,10 +171,10 @@ export class FileJobService {
         throw error;
       }
 
-      // Cast the database results to our FileJob type
+      // Safely cast the database results to our FileJob type
       return (data || []).map(item => ({
         ...item,
-        file_group_data: item.file_group_data as FileJobData
+        file_group_data: this.castToFileJobData(item.file_group_data)
       })) as FileJob[];
       
     } catch (error) {
