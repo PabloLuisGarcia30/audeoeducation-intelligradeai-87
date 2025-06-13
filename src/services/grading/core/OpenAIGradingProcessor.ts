@@ -66,7 +66,7 @@ export class OpenAIGradingProcessor {
         confidence: openaiResult.confidence,
         gradingMethod: 'openai_single',
         reasoning: openaiResult.reasoning,
-        feedback: openaiResult.feedback,
+        feedback: openaiResult.feedback || 'No feedback available',
         processingTimeMs: processingTime,
         skillMappings: question.skillContext || [],
         misconceptionAnalysis: openaiResult.misconceptionAnalysis ? {
@@ -139,7 +139,7 @@ export class OpenAIGradingProcessor {
           confidence: result.confidence,
           gradingMethod: 'openai_batch',
           reasoning: result.reasoning,
-          feedback: result.feedback,
+          feedback: result.feedback || 'No feedback available',
           processingTimeMs: processingTime / questions.length,
           skillMappings: question.skillContext || [],
           misconceptionAnalysis: result.misconceptionAnalysis ? {

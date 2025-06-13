@@ -12,7 +12,6 @@ export class PersistenceManager {
   ): Promise<void> {
     try {
       await Promise.all([
-        this.saveTestResults(results, context),
         this.saveSkillScores(results, context),
         this.saveMisconceptionData(results, context)
       ]);
@@ -24,41 +23,12 @@ export class PersistenceManager {
     }
   }
 
-  private async saveTestResults(
-    results: UnifiedGradingResult[],
-    context: GradingContext
-  ): Promise<void> {
-    const testResults = results.map(result => ({
-      exam_id: context.examId,
-      student_id: context.studentId,
-      authenticated_student_id: context.studentId,
-      question_number: result.questionNumber,
-      question_id: result.questionId,
-      student_answer: this.getOriginalStudentAnswer(result, context),
-      is_correct: result.isCorrect,
-      points_earned: result.pointsEarned,
-      points_possible: result.pointsPossible,
-      grading_method: result.gradingMethod,
-      confidence: result.confidence,
-      reasoning: result.reasoning,
-      processing_time_ms: result.processingTimeMs,
-      openai_usage: result.openAIUsage || null
-    }));
-
-    const { error } = await supabase
-      .from('test_results')
-      .insert(testResults);
-
-    if (error) {
-      throw new Error(`Failed to save test results: ${error.message}`);
-    }
-  }
-
   private async saveSkillScores(
     results: UnifiedGradingResult[],
     context: GradingContext
   ): Promise<void> {
-    const skillScores: any[] = [];
+    const contentSkillScores: any[] = [];
+    const subjectSkillScores: any[] = [];
 
     for (const result of results) {
       for (const skill of result.skillMappings) {
@@ -69,32 +39,22 @@ export class PersistenceManager {
           score: result.isCorrect ? 1 : 0,
           points_earned: result.isCorrect ? result.pointsPossible : 0,
           points_possible: result.pointsPossible,
-          test_result_id: null // Will be set after test_results are inserted
+          test_result_id: null // Will be set if test results are created
         };
 
         if (skill.skillType === 'content') {
-          skillScores.push({
-            table: 'content_skill_scores',
-            data: scoreData
-          });
+          contentSkillScores.push(scoreData);
         } else if (skill.skillType === 'subject') {
-          skillScores.push({
-            table: 'subject_skill_scores',
-            data: scoreData
-          });
+          subjectSkillScores.push(scoreData);
         }
       }
     }
 
     // Save content skill scores
-    const contentScores = skillScores
-      .filter(s => s.table === 'content_skill_scores')
-      .map(s => s.data);
-    
-    if (contentScores.length > 0) {
+    if (contentSkillScores.length > 0) {
       const { error } = await supabase
         .from('content_skill_scores')
-        .insert(contentScores);
+        .insert(contentSkillScores);
       
       if (error) {
         console.warn('Failed to save content skill scores:', error);
@@ -102,14 +62,10 @@ export class PersistenceManager {
     }
 
     // Save subject skill scores
-    const subjectScores = skillScores
-      .filter(s => s.table === 'subject_skill_scores')
-      .map(s => s.data);
-    
-    if (subjectScores.length > 0) {
+    if (subjectSkillScores.length > 0) {
       const { error } = await supabase
         .from('subject_skill_scores')
-        .insert(subjectScores);
+        .insert(subjectSkillScores);
       
       if (error) {
         console.warn('Failed to save subject skill scores:', error);
@@ -160,33 +116,13 @@ export class PersistenceManager {
     const errors: string[] = [];
 
     try {
-      // Check if test results were saved
-      const { data: testResults, error: testError } = await supabase
-        .from('test_results')
-        .select('question_number')
-        .eq('exam_id', context.examId)
-        .eq('student_id', context.studentId);
-
-      if (testError) {
-        errors.push(`Test results validation failed: ${testError.message}`);
-      } else {
-        const savedQuestionNumbers = new Set(testResults?.map(r => r.question_number) || []);
-        const expectedQuestionNumbers = new Set(results.map(r => r.questionNumber));
-        
-        for (const qNum of expectedQuestionNumbers) {
-          if (!savedQuestionNumbers.has(qNum)) {
-            errors.push(`Missing test result for question ${qNum}`);
-          }
-        }
-      }
-
       // Check if skill scores were saved
       const skillQuestions = results.filter(r => r.skillMappings.length > 0);
       if (skillQuestions.length > 0) {
         const { data: skillScores, error: skillError } = await supabase
           .from('content_skill_scores')
           .select('skill_name')
-          .eq('student_id', context.studentId);
+          .eq('authenticated_student_id', context.studentId);
 
         if (skillError) {
           errors.push(`Skill scores validation failed: ${skillError.message}`);
