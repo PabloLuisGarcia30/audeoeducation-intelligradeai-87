@@ -38,7 +38,7 @@ export class PracticeExerciseGradingServiceUnified {
     // Convert PracticeExerciseAnswer to QuestionInput format
     const questions: QuestionInput[] = answers.map((answer, index) => ({
       id: answer.questionId || `q${index + 1}`,
-      prompt: answer.question || answer.questionText || `Question ${index + 1}`,
+      prompt: answer.studentAnswer || `Question ${index + 1}`, // Use studentAnswer as prompt for now
       studentAnswer: answer.studentAnswer || '',
       skillTags: enhancedMetadata?.skillsTargeted || [skillName || 'general'],
       correctAnswer: answer.correctAnswer || '',
@@ -56,7 +56,6 @@ export class PracticeExerciseGradingServiceUnified {
     const gradingResult = await gradeBatchUnified(questions);
     
     // Calculate exercise metrics
-    const totalQuestions = answers.length;
     const correctAnswers = gradingResult.results.filter(r => r.isCorrect).length;
     const totalPointsEarned = gradingResult.results.reduce((sum, r) => sum + (r.pointsEarned || 0), 0);
     const totalPointsPossible = gradingResult.results.reduce((sum, r) => sum + (r.pointsPossible || 1), 0);
@@ -70,10 +69,9 @@ export class PracticeExerciseGradingServiceUnified {
 
     const processingTime = Date.now() - startTime;
 
-    console.log(`✅ Unified grading complete: ${correctAnswers}/${totalQuestions} correct, ${percentageScore.toFixed(1)}% score, ${cacheHits} cache hits`);
+    console.log(`✅ Unified grading complete: ${correctAnswers}/${answers.length} correct, ${percentageScore.toFixed(1)}% score, ${cacheHits} cache hits`);
 
     return {
-      totalQuestions,
       correctAnswers,
       percentageScore,
       totalPointsEarned,
