@@ -56,7 +56,7 @@ export class PracticeExerciseGradingServiceUnified {
     const gradingResult = await gradeBatchUnified(questions);
     
     // Calculate exercise metrics
-    const correctAnswers = gradingResult.results.filter(r => r.isCorrect).length;
+    const totalCorrect = gradingResult.results.filter(r => r.isCorrect).length;
     const totalPointsEarned = gradingResult.results.reduce((sum, r) => sum + (r.pointsEarned || 0), 0);
     const totalPointsPossible = gradingResult.results.reduce((sum, r) => sum + (r.pointsPossible || 1), 0);
     const percentageScore = totalPointsPossible > 0 ? (totalPointsEarned / totalPointsPossible) * 100 : 0;
@@ -69,10 +69,10 @@ export class PracticeExerciseGradingServiceUnified {
 
     const processingTime = Date.now() - startTime;
 
-    console.log(`✅ Unified grading complete: ${correctAnswers}/${answers.length} correct, ${percentageScore.toFixed(1)}% score, ${cacheHits} cache hits`);
+    console.log(`✅ Unified grading complete: ${totalCorrect}/${answers.length} correct, ${percentageScore.toFixed(1)}% score, ${cacheHits} cache hits`);
 
     return {
-      correctAnswers,
+      correctAnswers: totalCorrect,
       percentageScore,
       totalPointsEarned,
       totalPointsPossible,
