@@ -16,6 +16,25 @@ export interface IndexAnalysis {
   scanCount: number;
 }
 
+// Helper function to execute raw SQL via edge function
+async function executeRawSQL(sql: string, params: any[] = []): Promise<any[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke('execute-sql', {
+      body: { sql, params }
+    });
+
+    if (error) {
+      console.error('SQL execution error:', error);
+      return [];
+    }
+
+    return data?.data || [];
+  } catch (error) {
+    console.error('Error executing SQL:', error);
+    return [];
+  }
+}
+
 export class DatabaseOptimizationService {
   /**
    * Step 2: Verify Foreign Keys Are Indexed
@@ -26,28 +45,30 @@ export class DatabaseOptimizationService {
     hasIndex: boolean;
   }[]> {
     try {
-      const { data, error } = await supabase.rpc('execute_raw_sql', {
-        sql_query: `
-          SELECT
-            t.tablename as table_name,
-            c.column_name,
-            CASE WHEN i.indexname IS NOT NULL THEN true ELSE false END as has_index
-          FROM
-            information_schema.table_constraints tc
-            JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
-            JOIN information_schema.columns c ON c.table_name = tc.table_name AND c.column_name = ccu.column_name
-            JOIN pg_tables t ON t.tablename = tc.table_name
-            LEFT JOIN pg_indexes i ON i.tablename = tc.table_name AND i.indexdef ILIKE '%' || c.column_name || '%'
-          WHERE
-            tc.constraint_type = 'FOREIGN KEY'
-            AND t.schemaname = 'public'
-            AND tc.table_name IN ('class_sessions', 'student_exercises', 'test_results', 'class_enrollments')
-          ORDER BY t.tablename, c.column_name;
-        `
-      });
+      const sql = `
+        SELECT
+          t.tablename as table_name,
+          c.column_name,
+          CASE WHEN i.indexname IS NOT NULL THEN true ELSE false END as has_index
+        FROM
+          information_schema.table_constraints tc
+          JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+          JOIN information_schema.columns c ON c.table_name = tc.table_name AND c.column_name = ccu.column_name
+          JOIN pg_tables t ON t.tablename = tc.table_name
+          LEFT JOIN pg_indexes i ON i.tablename = tc.table_name AND i.indexdef ILIKE '%' || c.column_name || '%'
+        WHERE
+          tc.constraint_type = 'FOREIGN KEY'
+          AND t.schemaname = 'public'
+          AND tc.table_name IN ('class_sessions', 'student_exercises', 'test_results', 'class_enrollments')
+        ORDER BY t.tablename, c.column_name;
+      `;
 
-      if (error) throw error;
-      return data || [];
+      const data = await executeRawSQL(sql);
+      return data.map((row: any) => ({
+        table: row.table_name,
+        column: row.column_name,
+        hasIndex: row.has_index
+      }));
     } catch (error) {
       console.error('Error verifying foreign key indexes:', error);
       return [];
@@ -63,11 +84,10 @@ export class DatabaseOptimizationService {
 
     try {
       for (const table of tables) {
-        const { data, error } = await supabase.rpc('execute_raw_sql', {
-          sql_query: `SELECT COUNT(*) as row_count FROM ${table};`
-        });
+        const sql = `SELECT COUNT(*) as row_count FROM ${table};`;
+        const data = await executeRawSQL(sql);
 
-        if (error) continue;
+        if (data.length === 0) continue;
 
         const rowCount = parseInt(data[0]?.row_count || '0');
         const recommendPartitioning = rowCount > 10000000; // 10M rows
@@ -107,29 +127,22 @@ export class DatabaseOptimizationService {
    */
   static async getSlowQueries(limit: number = 10): Promise<any[]> {
     try {
-      const { data, error } = await supabase.rpc('execute_raw_sql', {
-        sql_query: `
-          SELECT 
-            query,
-            calls,
-            total_time,
-            mean_time,
-            rows,
-            100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0) AS hit_percent
-          FROM pg_stat_statements
-          WHERE query NOT ILIKE '%pg_stat_statements%'
-          ORDER BY total_time DESC
-          LIMIT $1;
-        `,
-        sql_params: [limit]
-      });
+      const sql = `
+        SELECT 
+          query,
+          calls,
+          total_time,
+          mean_time,
+          rows,
+          100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0) AS hit_percent
+        FROM pg_stat_statements
+        WHERE query NOT ILIKE '%pg_stat_statements%'
+        ORDER BY total_time DESC
+        LIMIT $1;
+      `;
 
-      if (error) {
-        console.log('pg_stat_statements not available');
-        return [];
-      }
-
-      return data || [];
+      const data = await executeRawSQL(sql, [limit]);
+      return data;
     } catch (error) {
       console.error('Error fetching slow queries:', error);
       return [];
@@ -142,9 +155,8 @@ export class DatabaseOptimizationService {
   static async scheduleCleanup(): Promise<boolean> {
     try {
       // Check if pg_cron is available
-      const { data: extensions } = await supabase.rpc('execute_raw_sql', {
-        sql_query: "SELECT * FROM pg_extension WHERE extname = 'pg_cron';"
-      });
+      const sql = "SELECT * FROM pg_extension WHERE extname = 'pg_cron';";
+      const extensions = await executeRawSQL(sql);
 
       if (!extensions || extensions.length === 0) {
         console.log('pg_cron extension not available');
@@ -152,21 +164,15 @@ export class DatabaseOptimizationService {
       }
 
       // Schedule the cleanup job
-      const { error } = await supabase.rpc('execute_raw_sql', {
-        sql_query: `
-          SELECT cron.schedule(
-            'daily-cache-cleanup',
-            '0 2 * * *',
-            'SELECT cleanup_old_cache();'
-          );
-        `
-      });
+      const scheduleSql = `
+        SELECT cron.schedule(
+          'daily-cache-cleanup',
+          '0 2 * * *',
+          'SELECT cleanup_old_cache();'
+        );
+      `;
 
-      if (error) {
-        console.error('Error scheduling cleanup:', error);
-        return false;
-      }
-
+      await executeRawSQL(scheduleSql);
       return true;
     } catch (error) {
       console.error('Error checking for pg_cron:', error);

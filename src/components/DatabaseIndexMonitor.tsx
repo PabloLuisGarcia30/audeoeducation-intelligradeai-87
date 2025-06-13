@@ -20,6 +20,25 @@ interface QueryPerformance {
   mean_time: number;
 }
 
+// Helper function to execute raw SQL via edge function
+async function executeRawSQL(sql: string, params: any[] = []): Promise<any[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke('execute-sql', {
+      body: { sql, params }
+    });
+
+    if (error) {
+      console.error('SQL execution error:', error);
+      return [];
+    }
+
+    return data?.data || [];
+  } catch (error) {
+    console.error('Error executing SQL:', error);
+    return [];
+  }
+}
+
 export const DatabaseIndexMonitor = () => {
   const [indexes, setIndexes] = useState<IndexInfo[]>([]);
   const [performance, setPerformance] = useState<QueryPerformance[]>([]);
@@ -39,18 +58,19 @@ export const DatabaseIndexMonitor = () => {
 
   const fetchIndexes = async () => {
     try {
-      const { data, error } = await supabase.rpc('execute_raw_sql', {
-        sql_query: `
-          SELECT tablename, indexname, indexdef
-          FROM pg_indexes
-          WHERE tablename = ANY($1)
-          ORDER BY tablename, indexname;
-        `,
-        sql_params: [targetTables]
-      });
+      const sql = `
+        SELECT tablename, indexname, indexdef
+        FROM pg_indexes
+        WHERE tablename = ANY($1)
+        ORDER BY tablename, indexname;
+      `;
 
-      if (error) throw error;
-      setIndexes(data || []);
+      const data = await executeRawSQL(sql, [targetTables]);
+      setIndexes(data.map((row: any) => ({
+        tablename: row.tablename,
+        indexname: row.indexname,
+        indexdef: row.indexdef
+      })));
     } catch (error) {
       console.error('Error fetching indexes:', error);
     }
@@ -59,23 +79,25 @@ export const DatabaseIndexMonitor = () => {
   const fetchPerformance = async () => {
     try {
       // Note: pg_stat_statements might not be available in all Supabase instances
-      const { data, error } = await supabase.rpc('execute_raw_sql', {
-        sql_query: `
-          SELECT 
-            query,
-            calls,
-            total_time,
-            mean_time
-          FROM pg_stat_statements
-          WHERE query ILIKE ANY(ARRAY['%class_sessions%', '%student_exercises%', '%test_results%'])
-          ORDER BY total_time DESC
-          LIMIT 10;
-        `
-      });
+      const sql = `
+        SELECT 
+          query,
+          calls,
+          total_time,
+          mean_time
+        FROM pg_stat_statements
+        WHERE query ILIKE ANY(ARRAY['%class_sessions%', '%student_exercises%', '%test_results%'])
+        ORDER BY total_time DESC
+        LIMIT 10;
+      `;
 
-      if (!error && data) {
-        setPerformance(data);
-      }
+      const data = await executeRawSQL(sql);
+      setPerformance(data.map((row: any) => ({
+        query: row.query,
+        calls: row.calls,
+        total_time: row.total_time,
+        mean_time: row.mean_time
+      })));
     } catch (error) {
       console.log('Performance stats not available (pg_stat_statements extension)');
     } finally {
@@ -89,7 +111,7 @@ export const DatabaseIndexMonitor = () => {
       if (error) throw error;
       setCleanupResult('Cleanup completed successfully');
     } catch (error) {
-      setCleanupResult(`Cleanup failed: ${error.message}`);
+      setCleanupResult(`Cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
