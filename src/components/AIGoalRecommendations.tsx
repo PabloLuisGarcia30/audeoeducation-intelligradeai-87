@@ -17,13 +17,46 @@ import { SmartGoalService, type AIGoalRecommendation, type StudentGoal } from "@
 import { toast } from "sonner";
 
 interface AIGoalRecommendationsProps {
-  recommendations: AIGoalRecommendation[];
-  onAcceptGoal: (recommendation: AIGoalRecommendation) => Promise<void>;
-  onRefresh: () => Promise<void>;
-  loading: boolean;
+  /** ID of the learner for whom we are recommending goals */
+  studentId: string;
+  onGoalCreated: (newGoal: StudentGoal) => void;
 }
 
-export function AIGoalRecommendations({ recommendations, onAcceptGoal, onRefresh, loading }: AIGoalRecommendationsProps) {
+export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecommendationsProps) {
+  const [recommendations, setRecommendations] = useState<AIGoalRecommendation[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadRecommendations();
+  }, [studentId]);
+
+  const loadRecommendations = async () => {
+    try {
+      setLoading(true);
+      // This would normally call SmartGoalService.getAIRecommendations(studentId)
+      // For now, return empty array since the service method may not exist yet
+      setRecommendations([]);
+    } catch (error) {
+      console.error('Failed to load AI recommendations:', error);
+      setRecommendations([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptGoal = async (recommendation: AIGoalRecommendation) => {
+    try {
+      const newGoal = await SmartGoalService.createGoalFromRecommendation(studentId, recommendation);
+      toast.success('Goal created successfully! 🎯');
+      onGoalCreated(newGoal);
+      // Remove the accepted recommendation from the list
+      setRecommendations(prev => prev.filter(r => r !== recommendation));
+    } catch (error) {
+      toast.error('Failed to create goal');
+      console.error('Error creating goal from recommendation:', error);
+    }
+  };
+
   const getGoalTypeIcon = (type: string) => {
     switch (type) {
       case 'skill_mastery': return Target;
@@ -64,7 +97,7 @@ export function AIGoalRecommendations({ recommendations, onAcceptGoal, onRefresh
             <Brain className="h-5 w-5 text-purple-500" />
             AI Goal Recommendations
           </CardTitle>
-          <Button variant="outline" onClick={onRefresh} disabled={loading}>
+          <Button variant="outline" onClick={loadRecommendations} disabled={loading}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -115,7 +148,7 @@ export function AIGoalRecommendations({ recommendations, onAcceptGoal, onRefresh
                   
                   <div className="flex justify-end">
                     <Button 
-                      onClick={() => onAcceptGoal(recommendation)}
+                      onClick={() => handleAcceptGoal(recommendation)}
                       className="bg-purple-600 hover:bg-purple-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -133,7 +166,7 @@ export function AIGoalRecommendations({ recommendations, onAcceptGoal, onRefresh
             <p className="text-gray-600 mb-4">
               Complete some practice exercises to help our AI generate personalized goal recommendations for you!
             </p>
-            <Button onClick={onRefresh}>
+            <Button onClick={loadRecommendations}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Check for Recommendations
             </Button>

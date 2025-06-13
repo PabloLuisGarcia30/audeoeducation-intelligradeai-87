@@ -14,15 +14,46 @@ import {
   Clock,
   BarChart3
 } from "lucide-react";
-import { type GoalAnalytics, type StudentGoal, type GoalAchievement } from "@/services/smartGoalService";
+import { SmartGoalService, type GoalAnalytics, type StudentGoal, type GoalAchievement } from "@/services/smartGoalService";
 
 interface GoalInsightsPanelProps {
-  analytics: GoalAnalytics | null;
-  goals: StudentGoal[];
-  achievements: GoalAchievement[];
+  /** Learner whose progress the panel should visualise */
+  studentId: string;
 }
 
-export function GoalInsightsPanel({ analytics, goals, achievements }: GoalInsightsPanelProps) {
+export function GoalInsightsPanel({ studentId }: GoalInsightsPanelProps) {
+  const [analytics, setAnalytics] = useState<GoalAnalytics | null>(null);
+  const [goals, setGoals] = useState<StudentGoal[]>([]);
+  const [achievements, setAchievements] = useState<GoalAchievement[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadInsightsData();
+  }, [studentId]);
+
+  const loadInsightsData = async () => {
+    try {
+      setLoading(true);
+      const [analyticsData, goalsData, achievementsData] = await Promise.all([
+        SmartGoalService.getGoalAnalytics(studentId),
+        SmartGoalService.getStudentGoals(studentId),
+        SmartGoalService.getStudentAchievements(studentId)
+      ]);
+      
+      setAnalytics(analyticsData);
+      setGoals(goalsData);
+      setAchievements(achievementsData);
+    } catch (error) {
+      console.error('Failed to load insights data:', error);
+      // Set default values on error
+      setAnalytics(null);
+      setGoals([]);
+      setAchievements([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getInsights = () => {
     if (!analytics || goals.length === 0) return [];
 
@@ -135,6 +166,19 @@ export function GoalInsightsPanel({ analytics, goals, achievements }: GoalInsigh
 
     return recommendations;
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-lg text-slate-600">Loading insights...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const insights = getInsights();
   const recommendations = getRecommendations();
