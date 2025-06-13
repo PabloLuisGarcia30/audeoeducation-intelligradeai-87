@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { QuestionCacheService, QuestionCacheResult } from "./questionCacheService";
 import { QuestionBatchOptimizer, QuestionBatch } from "./questionBatchOptimizer";
@@ -85,12 +84,6 @@ export class OpenAIComplexGradingService {
               skillMappings: questionSkillMappings,
               complexityScore: result.complexityScore,
               reasoningDepth: result.reasoningDepth,
-              openAIUsage: {
-                promptTokens: Math.floor(200 / questions.length),
-                completionTokens: Math.floor(300 / questions.length),
-                totalTokens: Math.floor(500 / questions.length),
-                estimatedCost: job.processingMetrics.costEstimate / questions.length
-              },
               qualityFlags: {
                 hasMultipleMarks: question.detectedAnswer?.multipleMarksDetected || false,
                 reviewRequired: question.detectedAnswer?.reviewFlag || false,
@@ -129,7 +122,7 @@ export class OpenAIComplexGradingService {
     skillMappings: any[],
     examId: string,
     studentName: string
-  ): Promise<OpenAIGradingResult[]> {
+  ): Promise<EnhancedGradingResult[]> {
     // Create batch prompt for multiple questions
     const batchPrompt = this.createBatchGradingPrompt(questions, answerKeys, skillMappings, studentName);
     
@@ -156,7 +149,7 @@ export class OpenAIComplexGradingService {
       }
 
       const batchResults = data.results || [];
-      const results: OpenAIGradingResult[] = [];
+      const results: EnhancedGradingResult[] = [];
 
       // Process batch results
       for (let i = 0; i < questions.length; i++) {
@@ -166,7 +159,7 @@ export class OpenAIComplexGradingService {
         const questionSkillMappings = skillMappings.filter(sm => sm.question_number === question.questionNumber);
 
         if (result) {
-          const gradingResult: OpenAIGradingResult = {
+          const gradingResult: EnhancedGradingResult = {
             questionNumber: question.questionNumber,
             questionId: question.questionNumber.toString(),
             isCorrect: result.isCorrect,
@@ -178,12 +171,6 @@ export class OpenAIComplexGradingService {
             gradingMethod: 'openai_batch_reasoning',
             rationale: result.reasoning || 'Batch processing result',
             skillMappings: questionSkillMappings,
-            openAIUsage: {
-              promptTokens: Math.floor((data.usage?.promptTokens || 0) / questions.length),
-              completionTokens: Math.floor((data.usage?.completionTokens || 0) / questions.length),
-              totalTokens: Math.floor((data.usage?.totalTokens || 0) / questions.length),
-              estimatedCost: ((data.usage?.totalTokens || 0) / questions.length) * this.COST_PER_1K_TOKENS / 1000
-            },
             complexityScore: result.complexityScore || 0.7,
             reasoningDepth: result.reasoningDepth || 'medium',
             qualityFlags: {
@@ -198,7 +185,7 @@ export class OpenAIComplexGradingService {
 
           results.push(gradingResult);
 
-          // Cache the result
+          // Cache the result - convert to cached format
           if (this.CACHE_ENABLED) {
             try {
               await QuestionCacheService.setCachedQuestionResult(

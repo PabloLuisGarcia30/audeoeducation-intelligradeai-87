@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { EnhancedQuestionClassifier, QuestionClassification, SimpleAnswerValidation } from "./enhancedQuestionClassifier";
 import { DistilBertLocalGradingService, DistilBertGradingResult } from "./distilBertLocalGrading";
@@ -25,6 +26,9 @@ export interface EnhancedLocalGradingResult extends EnhancedGradingResult {
   answerValidation?: SimpleAnswerValidation;
   distilBertResult?: DistilBertGradingResult;
 }
+
+// Export SkillMapping for external use
+export type { SkillMapping };
 
 // Score Validation Service
 class ScoreValidationService {
@@ -290,12 +294,16 @@ export class EnhancedLocalGradingService {
     if (!classification.shouldUseLocalGrading || !classification.isSimple) {
       return {
         questionNumber: question.questionNumber,
+        questionId: question.questionNumber.toString(),
         isCorrect: false,
+        score: 0,
         pointsEarned: 0,
         pointsPossible: answerKey.points || 1,
         confidence: classification.confidence,
+        model: 'local_ai',
         gradingMethod: 'requires_ai',
         rationale: classification.fallbackReason || 'Complex question requiring AI analysis',
+        reasoning: classification.fallbackReason || 'Complex question requiring AI analysis',
         skillMappings,
         questionClassification: classification,
         qualityFlags: {
@@ -334,13 +342,21 @@ export class EnhancedLocalGradingService {
 
     return {
       questionNumber: question.questionNumber,
+      questionId: question.questionNumber.toString(),
       isCorrect,
       score: (pointsEarned / pointsPossible) * 100,
       pointsEarned,
       pointsPossible,
       confidence: classification.confidence,
+      model: 'local_ai',
       gradingMethod,
       rationale: this.generateEnhancedReasoning(
+        studentAnswer, 
+        correctAnswer, 
+        classification, 
+        answerValidation
+      ),
+      reasoning: this.generateEnhancedReasoning(
         studentAnswer, 
         correctAnswer, 
         classification, 
@@ -406,7 +422,7 @@ export class EnhancedLocalGradingService {
         }
 
         // Validate skill weight before applying
-        const validatedWeight = ScoreValidationService.validateSkillWeight(skillMapping.skill_weight);
+        const validatedWeight = ScoreValidationService.validateSkillWeight(skillMapping.skill_weight || 1);
         
         const weightedPoints = result.pointsPossible * validatedWeight;
         const weightedEarned = result.pointsEarned * validatedWeight;
@@ -561,9 +577,15 @@ export class EnhancedLocalGradingService {
       aiIdentifiedSkills
     );
 
+    // Convert openAI results to EnhancedLocalGradingResult format
+    const convertedOpenAIResults: EnhancedLocalGradingResult[] = openAIResults.map(result => ({
+      ...result,
+      reasoning: result.rationale || 'OpenAI grading result'
+    }));
+
     // STEP 6: Merge results using the hybrid results merger
     const { HybridGradingResultsMerger } = await import('./hybridGradingResultsMerger');
-    const hybridResults = HybridGradingResultsMerger.mergeResults(localResults, openAIResults);
+    const hybridResults = HybridGradingResultsMerger.mergeResults(localResults, convertedOpenAIResults);
 
     // STEP 7: Generate enhanced statistics with class-specific skill pre-classification metrics
     const cacheStats = await QuestionCacheService.getQuestionCacheStats();
