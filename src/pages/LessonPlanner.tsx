@@ -1,11 +1,14 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, BookOpen, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronUp, ChevronDown, TrendingUp, AlertTriangle } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { WeeklyCalendar } from "@/components/WeeklyCalendar";
 import { ClassStudentList } from "@/components/ClassStudentList";
+import { MisconceptionAnalyticsDashboard } from "@/components/MisconceptionAnalyticsDashboard";
 import { useQuery } from "@tanstack/react-query";
 import { getActiveClassByIdWithDuration, getAllActiveStudents } from "@/services/examService";
+import { getClassMisconceptionTrends } from "@/services/enhancedLessonPlanService";
 import { useState } from "react";
 
 export default function LessonPlanner() {
@@ -16,6 +19,7 @@ export default function LessonPlanner() {
   
   // Automatically show student list when classId is present
   const [showStudentList, setShowStudentList] = useState(!!classId);
+  const [showMisconceptionAnalytics, setShowMisconceptionAnalytics] = useState(false);
 
   // Fetch class data if classId is available - using WithDuration version for calendar
   const { data: classData, isLoading: isLoadingClass } = useQuery({
@@ -31,8 +35,19 @@ export default function LessonPlanner() {
     enabled: !!classId
   });
 
+  // Fetch misconception trends for the class
+  const { data: misconceptionTrends, isLoading: isLoadingTrends } = useQuery({
+    queryKey: ['classMisconceptionTrends', classId],
+    queryFn: () => getClassMisconceptionTrends(classId!, 30),
+    enabled: !!classId,
+  });
+
   const handleToggleStudentList = () => {
     setShowStudentList(!showStudentList);
+  };
+
+  const handleToggleMisconceptionAnalytics = () => {
+    setShowMisconceptionAnalytics(!showMisconceptionAnalytics);
   };
 
   const handleSelectStudent = (studentId: string, studentName: string) => {
@@ -62,18 +77,18 @@ export default function LessonPlanner() {
           <p className="text-lg text-slate-600 mt-2">Plan lessons for {className}</p>
         </div>
 
-        {/* Plan Next Class Button and Calendar */}
+        {/* Enhanced Action Buttons and Calendar */}
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
-            {/* Plan Next Class Button */}
-            <div className="flex-shrink-0">
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3 flex-shrink-0">
               <Button 
                 onClick={handleToggleStudentList}
                 className="flex flex-col items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 h-auto min-h-[3rem] relative"
                 size="lg"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-base">Individualized Lesson plan</span>
+                  <span className="text-base">Individualized Lesson Plan</span>
                   {showStudentList ? (
                     <ChevronUp className="h-4 w-4 ml-1" />
                   ) : (
@@ -81,6 +96,21 @@ export default function LessonPlanner() {
                   )}
                 </div>
                 <span className="text-sm">for your next class</span>
+              </Button>
+
+              <Button 
+                onClick={handleToggleMisconceptionAnalytics}
+                variant="outline"
+                className="flex items-center gap-2 px-6 py-3"
+                size="lg"
+              >
+                <TrendingUp className="h-4 w-4" />
+                <span>Misconception Analytics</span>
+                {showMisconceptionAnalytics ? (
+                  <ChevronUp className="h-4 w-4 ml-1" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                )}
               </Button>
             </div>
             
@@ -95,6 +125,60 @@ export default function LessonPlanner() {
           </div>
         </div>
 
+        {/* Misconception Trends Summary */}
+        {classId && misconceptionTrends && (
+          <div className="mb-8">
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-500" />
+                  Class Misconception Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{misconceptionTrends.totalLessonPlans}</div>
+                    <div className="text-sm text-gray-600">Total Lesson Plans</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">{misconceptionTrends.misconceptionAnnotatedPlans}</div>
+                    <div className="text-sm text-gray-600">With Misconception Tracking</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {misconceptionTrends.totalLessonPlans > 0 
+                        ? Math.round((misconceptionTrends.misconceptionAnnotatedPlans / misconceptionTrends.totalLessonPlans) * 100)
+                        : 0}%
+                    </div>
+                    <div className="text-sm text-gray-600">Coverage Rate</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Misconception Analytics Dashboard */}
+        {showMisconceptionAnalytics && classId && (
+          <div className="mb-8">
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Detailed Misconception Analytics for {className}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MisconceptionAnalyticsDashboard 
+                  classId={classId}
+                  timeframe={30}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Student List - Shows by default when classId is present */}
         {showStudentList && classId && (
           <div className="mb-8">
@@ -102,7 +186,10 @@ export default function LessonPlanner() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BookOpen className="h-5 w-5" />
-                  Plan Lessons for {className}
+                  Plan Enhanced Lessons for {className}
+                  <span className="text-sm font-normal text-gray-500 ml-2">
+                    (with misconception tracking)
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -122,7 +209,7 @@ export default function LessonPlanner() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5" />
-                Lesson Planning Tools
+                Enhanced Lesson Planning Tools
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -132,7 +219,7 @@ export default function LessonPlanner() {
                   Select a Class to Plan Lessons
                 </h3>
                 <p className="text-slate-500 max-w-md mx-auto mb-6">
-                  Navigate to ClassRunner and select a class to begin lesson planning with personalized exercises for each student.
+                  Navigate to ClassRunner and select a class to begin enhanced lesson planning with misconception tracking and personalized exercises for each student.
                 </p>
                 <Button 
                   onClick={() => navigate('/class-runner')}

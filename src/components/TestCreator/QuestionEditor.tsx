@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { MisconceptionAnnotationUI } from "@/components/MisconceptionAnnotationUI";
 import type { Question } from "../../utils/pdfGenerator";
 
 interface QuestionEditorProps {
@@ -30,6 +31,10 @@ export const QuestionEditor = ({
   onBack,
   onContinue
 }: QuestionEditorProps) => {
+  const handleMisconceptionChange = (questionId: string, misconceptions: Record<string, any>) => {
+    onUpdateQuestion(questionId, 'choiceMisconceptions' as keyof Question, misconceptions);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -96,28 +101,44 @@ export const QuestionEditor = ({
               </div>
               
               {question.type === 'multiple-choice' && question.options && (
-                <div>
-                  <Label>Answer Options</Label>
-                  <div className="space-y-2">
-                    {question.options.map((option, optionIndex) => (
-                      <div key={optionIndex} className="flex items-center gap-2">
-                        <Input
-                          value={option}
-                          onChange={(e) => onUpdateQuestionOption(question.id, optionIndex, e.target.value)}
-                          placeholder={`Option ${optionIndex + 1}`}
-                        />
-                        <Checkbox
-                          checked={question.correctAnswer === option}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              onUpdateQuestion(question.id, 'correctAnswer', option);
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
+                <>
+                  <div>
+                    <Label>Answer Options</Label>
+                    <div className="space-y-2">
+                      {question.options.map((option, optionIndex) => (
+                        <div key={optionIndex} className="flex items-center gap-2">
+                          <Input
+                            value={option}
+                            onChange={(e) => onUpdateQuestionOption(question.id, optionIndex, e.target.value)}
+                            placeholder={`Option ${optionIndex + 1}`}
+                          />
+                          <Checkbox
+                            checked={question.correctAnswer === option}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                onUpdateQuestion(question.id, 'correctAnswer', option);
+                              }
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+
+                  {/* Misconception Annotation for MCQ */}
+                  {question.options && question.correctAnswer && (
+                    <div className="mt-6">
+                      <MisconceptionAnnotationUI
+                        questionOptions={question.options}
+                        correctAnswer={question.correctAnswer}
+                        choiceMisconceptions={(question as any).choiceMisconceptions || {}}
+                        onMisconceptionChange={(misconceptions) => 
+                          handleMisconceptionChange(question.id, misconceptions)
+                        }
+                      />
+                    </div>
+                  )}
+                </>
               )}
               
               {question.type === 'true-false' && (
