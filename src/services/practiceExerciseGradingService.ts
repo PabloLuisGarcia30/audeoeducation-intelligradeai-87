@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { SmartAnswerGradingService, type GradingResult } from './smartAnswerGradingService';
 import { MistakePatternService } from './mistakePatternService';
@@ -37,6 +36,7 @@ export interface ExerciseSubmissionResult {
   totalScore: number;
   totalPossible: number;
   percentageScore: number;
+  totalCorrect?: number; // ✅ Added this property to fix the build error
   questionResults: QuestionResult[];
   overallFeedback: string;
   completedAt: Date;
@@ -194,6 +194,7 @@ export class PracticeExerciseGradingService {
       }
 
       const percentageScore = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
+      const totalCorrect = questionResults.filter(q => q.isCorrect).length;
 
       // Update exercise status if we have a student exercise ID
       if (studentExerciseId) {
@@ -217,6 +218,7 @@ export class PracticeExerciseGradingService {
         totalScore,
         totalPossible,
         percentageScore,
+        totalCorrect, // ✅ Now properly included in interface
         questionResults,
         overallFeedback,
         completedAt: new Date(),
