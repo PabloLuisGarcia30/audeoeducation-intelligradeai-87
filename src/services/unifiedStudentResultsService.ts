@@ -141,7 +141,21 @@ export class UnifiedStudentResultsService {
         return [];
       }
 
-      return data || [];
+      // Transform the data to ensure proper typing
+      return (data || []).map((item: any): UnifiedMisconceptionAnalysis => ({
+        skill_name: item.skill_name,
+        misconception_type: item.misconception_type,
+        misconception_category: item.misconception_category,
+        total_occurrences: item.total_occurrences,
+        avg_persistence: item.avg_persistence,
+        severity_distribution: typeof item.severity_distribution === 'string' 
+          ? JSON.parse(item.severity_distribution) 
+          : item.severity_distribution,
+        session_types: item.session_types,
+        resolved_count: item.resolved_count,
+        active_count: item.active_count,
+        latest_detection: item.latest_detection
+      }));
     } catch (error) {
       console.error('Failed to fetch unified misconception analysis:', error);
       return [];

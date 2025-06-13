@@ -1,3 +1,4 @@
+
 import { UnifiedClassSessionIntegration } from "./unifiedClassSessionIntegration";
 import { UnifiedTrailblazerIntegration } from "./unifiedTrailblazerIntegration";
 import { UnifiedHomeLearnerIntegration } from "./unifiedHomeLearnerIntegration";
@@ -65,7 +66,7 @@ export class EnhancedActionLogger {
       while (EnhancedActionLogger.actionQueue.length > 0) {
         const batch = EnhancedActionLogger.actionQueue.splice(0, 10); // Take up to 10 logs at a time
         const { data, error } = await supabase
-          .from('action_logs')
+          .from('student_action_logs')
           .insert(batch);
 
         if (error) {
@@ -99,10 +100,10 @@ export class EnhancedActionLogger {
   static async getStudentActions(studentId: string, limit: number = 50): Promise<ActionLogEntry[]> {
     try {
       const { data, error } = await supabase
-        .from('action_logs')
+        .from('student_action_logs')
         .select('*')
         .eq('student_id', studentId)
-        .order('timestamp', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) {
@@ -110,7 +111,16 @@ export class EnhancedActionLogger {
         return [];
       }
 
-      return data || [];
+      return (data || []).map(item => ({
+        id: item.id,
+        student_id: item.student_id,
+        action_type: item.action_type,
+        timestamp: item.created_at,
+        reference_table: item.reference_table,
+        reference_id: item.reference_id,
+        context_summary: item.context_summary,
+        session_type: item.session_type
+      }));
     } catch (error) {
       console.error('Error in getStudentActions:', error);
       return [];
@@ -125,10 +135,10 @@ export class EnhancedActionLogger {
   static async getRecentSystemEvents(limit: number = 50): Promise<ActionLogEntry[]> {
     try {
       const { data, error } = await supabase
-        .from('action_logs')
+        .from('student_action_logs')
         .select('*')
         .is('student_id', null)
-        .order('timestamp', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) {
@@ -136,7 +146,16 @@ export class EnhancedActionLogger {
         return [];
       }
 
-      return data || [];
+      return (data || []).map(item => ({
+        id: item.id,
+        student_id: item.student_id,
+        action_type: item.action_type,
+        timestamp: item.created_at,
+        reference_table: item.reference_table,
+        reference_id: item.reference_id,
+        context_summary: item.context_summary,
+        session_type: item.session_type
+      }));
     } catch (error) {
       console.error('Error in getRecentSystemEvents:', error);
       return [];
