@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { QuestionCacheService, QuestionCacheResult } from "./questionCacheService";
 import { QuestionBatchOptimizer, QuestionBatch } from "./questionBatchOptimizer";
@@ -7,6 +8,7 @@ import {
   GradedAnswer, 
   BatchGradingResult, 
   EnhancedGradingResult,
+  OpenAIGradingResult,
   SkillMapping, 
   QuestionSkillMappings,
   CommonAnswerPattern,
@@ -166,12 +168,15 @@ export class OpenAIComplexGradingService {
         if (result) {
           const gradingResult: OpenAIGradingResult = {
             questionNumber: question.questionNumber,
+            questionId: question.questionNumber.toString(),
             isCorrect: result.isCorrect,
+            score: (result.pointsEarned / (answerKey?.points || 1)) * 100,
             pointsEarned: Math.min(Math.max(result.pointsEarned || 0, 0), answerKey?.points || 1),
             pointsPossible: answerKey?.points || 1,
             confidence: result.confidence || 0.8,
+            model: 'openai',
             gradingMethod: 'openai_batch_reasoning',
-            reasoning: result.reasoning || 'Batch processing result',
+            rationale: result.reasoning || 'Batch processing result',
             skillMappings: questionSkillMappings,
             openAIUsage: {
               promptTokens: Math.floor((data.usage?.promptTokens || 0) / questions.length),

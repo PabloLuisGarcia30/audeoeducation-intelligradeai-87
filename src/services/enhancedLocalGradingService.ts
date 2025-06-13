@@ -3,18 +3,11 @@ import { EnhancedQuestionClassifier, QuestionClassification, SimpleAnswerValidat
 import { DistilBertLocalGradingService, DistilBertGradingResult } from "./distilBertLocalGrading";
 import { QuestionCacheService, QuestionCacheResult } from "./questionCacheService";
 import { ExamSkillPreClassificationService, SkillMappingCache } from "./examSkillPreClassificationService";
-
-export interface SkillMapping {
-  skill_id: string;
-  skill_name: string;
-  skill_type: 'content' | 'subject';
-  skill_weight: number;
-  confidence: number;
-}
-
-export interface QuestionSkillMappings {
-  [questionNumber: number]: SkillMapping[];
-}
+import { 
+  SkillMapping, 
+  QuestionSkillMappings, 
+  EnhancedGradingResult 
+} from "./grading/types";
 
 export interface LocalSkillScore {
   skill_name: string;
@@ -26,16 +19,8 @@ export interface LocalSkillScore {
   questions_correct: number;
 }
 
-export interface EnhancedLocalGradingResult {
-  questionNumber: number;
-  isCorrect: boolean;
-  pointsEarned: number;
-  pointsPossible: number;
-  confidence: number;
-  gradingMethod: string;
-  reasoning: string;
-  skillMappings?: SkillMapping[];
-  qualityFlags?: any;
+export interface EnhancedLocalGradingResult extends EnhancedGradingResult {
+  reasoning: string; // Add reasoning property for local compatibility
   questionClassification?: QuestionClassification;
   answerValidation?: SimpleAnswerValidation;
   distilBertResult?: DistilBertGradingResult;
@@ -138,18 +123,18 @@ export class EnhancedLocalGradingService {
     skillMappingCache.questionMappings.forEach((skills, questionNumber) => {
       skillMappings[questionNumber] = [
         ...skills.contentSkills.map(skill => ({
-          skill_id: skill.id,
+          question_number: questionNumber,
           skill_name: skill.name,
           skill_type: 'content' as const,
-          skill_weight: skill.weight,
-          confidence: 1.0 // Default confidence from pre-classification
+          confidence: 1.0,
+          skill_weight: skill.weight
         })),
         ...skills.subjectSkills.map(skill => ({
-          skill_id: skill.id,
+          question_number: questionNumber,
           skill_name: skill.name,
           skill_type: 'subject' as const,
-          skill_weight: skill.weight,
-          confidence: 1.0 // Default confidence from pre-classification
+          confidence: 1.0,
+          skill_weight: skill.weight
         }))
       ];
     });
@@ -175,6 +160,7 @@ export class EnhancedLocalGradingService {
         console.log(`⚡ Cache hit for Q${question.questionNumber}: ${cachedResult.originalGradingMethod}`);
         return {
           ...cachedResult,
+          reasoning: cachedResult.rationale, // Map rationale to reasoning for local compatibility
           skillMappings,
           qualityFlags: {
             ...cachedResult.qualityFlags,
@@ -194,11 +180,15 @@ export class EnhancedLocalGradingService {
       console.log(`Question ${question.questionNumber}: Complex question detected, routing to OpenAI`);
       return {
         questionNumber: question.questionNumber,
+        questionId: question.questionNumber.toString(),
         isCorrect: false,
+        score: 0,
         pointsEarned: 0,
         pointsPossible: answerKey.points || 1,
         confidence: classification.confidence,
+        model: 'local_ai',
         gradingMethod: 'requires_openai_complex',
+        rationale: `Complex question requiring OpenAI analysis: ${classification.fallbackReason || 'Advanced reasoning needed'}`,
         reasoning: `Complex question requiring OpenAI analysis: ${classification.fallbackReason || 'Advanced reasoning needed'}`,
         skillMappings,
         questionClassification: classification,
@@ -207,7 +197,7 @@ export class EnhancedLocalGradingService {
           reviewRequired: question.detectedAnswer?.reviewFlag || false,
           bubbleQuality: question.detectedAnswer?.bubbleQuality || 'unknown',
           confidenceAdjusted: false,
-          requiresOpenAI: true
+          requiresManualReview: true
         }
       };
     }
@@ -244,11 +234,15 @@ export class EnhancedLocalGradingService {
 
       const result: EnhancedLocalGradingResult = {
         questionNumber: question.questionNumber,
+        questionId: question.questionNumber.toString(),
         isCorrect,
+        score: (pointsEarned / pointsPossible) * 100,
         pointsEarned,
         pointsPossible,
         confidence: distilBertResult.confidence,
+        model: 'distilbert',
         gradingMethod,
+        rationale: `Enhanced DistilBERT${distilBertResult.wasmResult ? ' (WASM)' : ''}: ${distilBertResult.reasoning}`,
         reasoning: `Enhanced DistilBERT${distilBertResult.wasmResult ? ' (WASM)' : ''}: ${distilBertResult.reasoning}`,
         skillMappings,
         questionClassification: classification,
@@ -301,7 +295,7 @@ export class EnhancedLocalGradingService {
         pointsPossible: answerKey.points || 1,
         confidence: classification.confidence,
         gradingMethod: 'requires_ai',
-        reasoning: classification.fallbackReason || 'Complex question requiring AI analysis',
+        rationale: classification.fallbackReason || 'Complex question requiring AI analysis',
         skillMappings,
         questionClassification: classification,
         qualityFlags: {
@@ -341,11 +335,12 @@ export class EnhancedLocalGradingService {
     return {
       questionNumber: question.questionNumber,
       isCorrect,
+      score: (pointsEarned / pointsPossible) * 100,
       pointsEarned,
       pointsPossible,
       confidence: classification.confidence,
       gradingMethod,
-      reasoning: this.generateEnhancedReasoning(
+      rationale: this.generateEnhancedReasoning(
         studentAnswer, 
         correctAnswer, 
         classification, 
@@ -501,18 +496,18 @@ export class EnhancedLocalGradingService {
       const questionSkills = preClassifiedSkills.questionMappings.get(question.questionNumber);
       const skillMappings: SkillMapping[] = questionSkills ? [
         ...questionSkills.contentSkills.map(skill => ({
-          skill_id: skill.id,
+          question_number: question.questionNumber,
           skill_name: skill.name,
           skill_type: 'content' as const,
-          skill_weight: skill.weight,
-          confidence: 1.0
+          confidence: 1.0,
+          skill_weight: skill.weight
         })),
         ...questionSkills.subjectSkills.map(skill => ({
-          skill_id: skill.id,
+          question_number: question.questionNumber,
           skill_name: skill.name,
           skill_type: 'subject' as const,
-          skill_weight: skill.weight,
-          confidence: 1.0
+          confidence: 1.0,
+          skill_weight: skill.weight
         }))
       ] : [];
 
@@ -542,18 +537,18 @@ export class EnhancedLocalGradingService {
     preClassifiedSkills.questionMappings.forEach((skills, questionNumber) => {
       aiIdentifiedSkills[questionNumber] = [
         ...skills.contentSkills.map(skill => ({
-          skill_id: skill.id,
+          question_number: questionNumber,
           skill_name: skill.name,
           skill_type: 'content' as const,
-          skill_weight: skill.weight,
-          confidence: 1.0
+          confidence: 1.0,
+          skill_weight: skill.weight
         })),
         ...skills.subjectSkills.map(skill => ({
-          skill_id: skill.id,
+          question_number: questionNumber,
           skill_name: skill.name,
           skill_type: 'subject' as const,
-          skill_weight: skill.weight,
-          confidence: 1.0
+          confidence: 1.0,
+          skill_weight: skill.weight
         }))
       ];
     });

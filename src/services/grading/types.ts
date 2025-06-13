@@ -42,6 +42,17 @@ export interface GradedAnswer {
     openAIProcessed?: boolean;
     batchProcessed?: boolean;
     requiresManualReview?: boolean;
+    complexQuestion?: boolean;
+    conservativeProcessing?: boolean;
+    qualityFirst?: boolean;
+    preValidatedAnswerKeys?: boolean;
+    enhancedProcessing?: boolean;
+    cacheHit?: boolean;
+    wasmProcessed?: boolean;
+    processingTime?: number;
+    aiProcessingUsed?: boolean;
+    semanticMatchingUsed?: boolean;
+    localAIProcessed?: boolean;
   };
 }
 
