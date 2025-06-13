@@ -116,11 +116,29 @@ export class SmartGoalService {
    */
   static async createGoal(studentId: string, goalData: Partial<StudentGoal>): Promise<StudentGoal | null> {
     try {
+      // Ensure required fields are present
+      if (!goalData.goal_title || !goalData.goal_description) {
+        console.error('Goal title and description are required');
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('student_goals')
         .insert({
           student_id: studentId,
-          ...goalData,
+          goal_title: goalData.goal_title,
+          goal_description: goalData.goal_description,
+          goal_type: goalData.goal_type || 'skill_mastery',
+          target_value: goalData.target_value || 100,
+          current_value: goalData.current_value || 0,
+          target_skill_name: goalData.target_skill_name,
+          target_misconception_id: goalData.target_misconception_id,
+          is_ai_suggested: goalData.is_ai_suggested || false,
+          ai_confidence_score: goalData.ai_confidence_score || 0,
+          difficulty_level: goalData.difficulty_level || 'medium',
+          target_date: goalData.target_date,
+          status: goalData.status || 'active',
+          progress_percentage: goalData.progress_percentage || 0,
           milestones: JSON.stringify(goalData.milestones || []),
           context_data: JSON.stringify(goalData.context_data || {})
         })
@@ -206,7 +224,13 @@ export class SmartGoalService {
         return [];
       }
 
-      return data || [];
+      return (data || []).map(achievement => ({
+        ...achievement,
+        achievement_type: achievement.achievement_type as 'milestone' | 'goal_completion' | 'streak',
+        progress_snapshot: typeof achievement.progress_snapshot === 'string' 
+          ? JSON.parse(achievement.progress_snapshot) 
+          : achievement.progress_snapshot || {}
+      }));
     } catch (error) {
       console.error('Failed to fetch goal achievements:', error);
       return [];
@@ -227,7 +251,15 @@ export class SmartGoalService {
         return null;
       }
 
-      return data[0] || null;
+      const result = data[0];
+      if (!result) return null;
+
+      return {
+        ...result,
+        current_streaks: typeof result.current_streaks === 'string' 
+          ? JSON.parse(result.current_streaks) 
+          : result.current_streaks || {}
+      };
     } catch (error) {
       console.error('Failed to fetch goal analytics:', error);
       return null;

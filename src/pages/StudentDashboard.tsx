@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { TailoredExercises } from "@/components/TailoredExercises";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -90,6 +90,7 @@ export default function StudentDashboard() {
   const { user, profile } = useAuth();
   const { currentRole, isDevMode } = useDevRole();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
 
   // Navigate to teacher dashboard when role changes to teacher
   useEffect(() => {
@@ -97,6 +98,11 @@ export default function StudentDashboard() {
       navigate('/');
     }
   }, [currentRole, isDevMode, navigate]);
+
+  // Initialize loading state
+  useEffect(() => {
+    setLoading(false);
+  }, []);
 
   // Use Pablo's profile data for testing
   const studentProfile = testStudentProfile;
