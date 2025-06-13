@@ -30,7 +30,7 @@ export class QueueGradingService {
         },
         {
           studentId: context.studentId,
-          priority: context.configuration?.priority || 'normal'
+          priority: context.configuration?.queue?.priority || context.configuration?.priority || 'normal'
         }
       );
 

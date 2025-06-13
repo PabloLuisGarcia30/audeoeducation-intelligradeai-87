@@ -1,4 +1,3 @@
-
 export type GradingMethod = 
   | 'exact_match' 
   | 'flexible_match' 
@@ -116,6 +115,12 @@ export interface GradingConfiguration {
     enabled: boolean;
     sessionId?: string;
   };
+  queue?: {
+    enabled: boolean;
+    priority: PriorityLevel;
+    useForOpenAI: boolean;
+  };
+  priority?: PriorityLevel;
 }
 
 export interface GradingContext {

@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { SmartAnswerGradingService, type GradingResult } from './smartAnswerGradingService';
 import { MistakePatternService } from './mistakePatternService';
@@ -108,7 +109,58 @@ export class PracticeExerciseGradingService {
 
       const batchResult = await UnifiedGradingService.gradeBatch(batchRequest);
       
-      // Convert back to legacy format for backward compatibility
+      // Check if result is queued job or actual results
+      if ('jobId' in batchResult) {
+        // If using queue, we need to wait for completion or return job info
+        // For now, we'll wait for completion to maintain backward compatibility
+        try {
+          const queueResults = await UnifiedGradingService.waitForQueuedJob(batchResult.jobId);
+          const legacyResult = PracticeExerciseAdapter.convertToLegacyResults(
+            queueResults,
+            exerciseTitle
+          );
+          
+          // Continue with legacy misconception tracking
+          await this.recordLegacyMistakePatterns(
+            queueResults,
+            answers,
+            exerciseTitle,
+            studentExerciseId,
+            skillName,
+            enhancedMetadata
+          );
+
+          // Handle trailblazer misconceptions
+          if (trailblazerSessionId) {
+            await this.recordTrailblazerMisconceptions(
+              queueResults,
+              trailblazerSessionId
+            );
+          }
+
+          // Update exercise status if we have a student exercise ID
+          if (studentExerciseId) {
+            await updateExerciseStatus(studentExerciseId, 'completed', legacyResult.percentageScore);
+          }
+
+          console.log(`✅ Unified grading completed via queue: ${legacyResult.totalScore}/${legacyResult.totalPossible} points (${legacyResult.percentageScore.toFixed(1)}%)`);
+          
+          return legacyResult;
+        } catch (queueError) {
+          console.error('❌ Queue job failed, falling back to legacy grading:', queueError);
+          // Fall back to legacy grading if queue fails
+          return this.legacyGradeExerciseSubmission(
+            answers,
+            exerciseTitle,
+            studentExerciseId,
+            skillName,
+            enhancedMetadata,
+            trailblazerSessionId
+          );
+        }
+      }
+      
+      // Direct processing result
       const legacyResult = PracticeExerciseAdapter.convertToLegacyResults(
         batchResult.results,
         exerciseTitle
