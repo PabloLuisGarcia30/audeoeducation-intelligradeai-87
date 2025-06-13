@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,7 +11,8 @@ import { StartClassSessionFromPlan } from "@/components/StartClassSessionFromPla
 import { LiveSessionMonitoring } from "@/components/LiveSessionMonitoring";
 import { getActiveClassSessions } from "@/services/classSessionService";
 import { getLessonPlanByClassId } from "@/services/lessonPlanService";
-import { getAllActiveClasses } from "@/services/examService";
+import { getAllActiveClassesWithDuration } from "@/services/examService";
+import { getNextClassDate } from "@/utils/nextClassCalculator";
 import { useState, useEffect } from "react";
 
 export default function ClassRunner() {
@@ -29,12 +29,12 @@ export default function ClassRunner() {
     localStorage.setItem('classrunner-design-preference', JSON.stringify(useModernDesign));
   }, [useModernDesign]);
 
-  // Fetch active classes for the teacher using the service function
+  // Fetch active classes with duration/schedule data for the teacher
   const { data: activeClasses = [], isLoading } = useQuery({
-    queryKey: ['activeClasses', profile?.id],
+    queryKey: ['activeClassesWithDuration', profile?.id],
     queryFn: async () => {
       console.log('Fetching classes for authenticated teacher');
-      return await getAllActiveClasses();
+      return await getAllActiveClassesWithDuration();
     },
     enabled: !!profile?.id,
   });
@@ -292,6 +292,7 @@ export default function ClassRunner() {
                     {activeClasses.map((classItem) => {
                       const planStatus = getLessonPlanStatus(classItem.id);
                       const hasPlan = planStatus.status === 'ready';
+                      const nextClassInfo = getNextClassDate(classItem);
                       
                       return (
                         <div key={classItem.id} className={useModernDesign ? "group p-6 rounded-xl border border-slate-200 bg-gradient-to-r from-white to-slate-50/50 hover:shadow-lg hover:border-slate-300 transition-all duration-300" : "p-4 border border-gray-200 rounded-lg bg-white"}>
@@ -341,7 +342,9 @@ export default function ClassRunner() {
                             </div>
                             <div className="flex items-center gap-2">
                               <Clock className={useModernDesign ? "h-4 w-4 text-green-500" : "h-4 w-4 text-gray-500"} />
-                              <span className="text-sm">Next: {getNextClassTime()}</span>
+                              <span className="text-sm">
+                                Next: {nextClassInfo ? nextClassInfo.formattedTime : "No schedule"}
+                              </span>
                             </div>
                             {classItem.avg_gpa && (
                               <div className="flex items-center gap-2">
