@@ -108,7 +108,7 @@ export class EnhancedPracticeExerciseGradingServiceWithSupercoach extends Enhanc
       // Analyze performance and recommendations
       const lowScoreThreshold = 60;
       // Fix: Use the correct property name from ExerciseSubmissionResult
-      const hasLowScore = exerciseResults.overallScore < lowScoreThreshold;
+      const hasLowScore = exerciseResults.percentageScore < lowScoreThreshold;
       const hasHighRiskAlerts = supercoachRecommendations.some(rec => rec.riskLevel === 'high');
       
       const shouldGenerateMiniLesson = hasLowScore || hasHighRiskAlerts;
