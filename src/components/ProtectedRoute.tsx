@@ -44,3 +44,6 @@ export function ProtectedRoute({
 
   return <>{children}</>;
 }
+
+// Add default export
+export default ProtectedRoute;
