@@ -105,15 +105,7 @@ export class AdaptiveLearningService {
         .single();
 
       if (!selectError && existingProfile) {
-        return {
-          ...existingProfile,
-          zone_of_proximal_development: typeof existingProfile.zone_of_proximal_development === 'string' 
-            ? JSON.parse(existingProfile.zone_of_proximal_development)
-            : existingProfile.zone_of_proximal_development,
-          scaffolding_preferences: typeof existingProfile.scaffolding_preferences === 'string'
-            ? JSON.parse(existingProfile.scaffolding_preferences)
-            : existingProfile.scaffolding_preferences
-        };
+        return this.transformDatabaseProfile(existingProfile);
       }
 
       // Create new profile if doesn't exist
@@ -130,19 +122,56 @@ export class AdaptiveLearningService {
         return null;
       }
 
-      return {
-        ...newProfile,
-        zone_of_proximal_development: typeof newProfile.zone_of_proximal_development === 'string' 
-          ? JSON.parse(newProfile.zone_of_proximal_development)
-          : newProfile.zone_of_proximal_development,
-        scaffolding_preferences: typeof newProfile.scaffolding_preferences === 'string'
-          ? JSON.parse(newProfile.scaffolding_preferences)
-          : newProfile.scaffolding_preferences
-      };
+      return this.transformDatabaseProfile(newProfile);
     } catch (error) {
       console.error('Error in getOrCreateProfile:', error);
       return null;
     }
+  }
+
+  /**
+   * Transform database profile to typed interface
+   */
+  private static transformDatabaseProfile(dbProfile: any): AdaptiveLearningProfile {
+    return {
+      ...dbProfile,
+      confidence_trend: dbProfile.confidence_trend as 'improving' | 'declining' | 'stable',
+      preferred_explanation_style: dbProfile.preferred_explanation_style as 'visual' | 'textual' | 'step-by-step' | 'conceptual' | 'mixed',
+      learning_modality: dbProfile.learning_modality as 'visual' | 'auditory' | 'kinesthetic' | 'reading_writing' | 'mixed',
+      optimal_difficulty_progression: dbProfile.optimal_difficulty_progression as 'rapid' | 'gradual' | 'plateau',
+      cognitive_load_tolerance: dbProfile.cognitive_load_tolerance as 'low' | 'medium' | 'high',
+      help_seeking_frequency: dbProfile.help_seeking_frequency as 'rare' | 'moderate' | 'frequent',
+      mistake_recovery_style: dbProfile.mistake_recovery_style as 'quick' | 'reflective' | 'methodical',
+      zone_of_proximal_development: typeof dbProfile.zone_of_proximal_development === 'string' 
+        ? JSON.parse(dbProfile.zone_of_proximal_development)
+        : dbProfile.zone_of_proximal_development,
+      scaffolding_preferences: typeof dbProfile.scaffolding_preferences === 'string'
+        ? JSON.parse(dbProfile.scaffolding_preferences)
+        : dbProfile.scaffolding_preferences
+    };
+  }
+
+  /**
+   * Transform database event to typed interface
+   */
+  private static transformDatabaseEvent(dbEvent: any): LearningTrajectoryEvent {
+    return {
+      ...dbEvent,
+      event_type: dbEvent.event_type as 'breakthrough' | 'struggle' | 'plateau' | 'confusion' | 'mastery',
+      skill_type: dbEvent.skill_type as 'content' | 'subject',
+      difficulty_level: dbEvent.difficulty_level as 'easy' | 'medium' | 'hard' | 'adaptive'
+    };
+  }
+
+  /**
+   * Transform database recommendation to typed interface
+   */
+  private static transformDatabaseRecommendation(dbRec: any): AdaptiveRecommendation {
+    return {
+      ...dbRec,
+      recommendation_type: dbRec.recommendation_type as 'difficulty_adjustment' | 'explanation_style' | 'scaffolding' | 'break_suggestion',
+      student_response: dbRec.student_response as 'positive' | 'negative' | 'neutral' | undefined
+    };
   }
 
   /**
@@ -210,7 +239,7 @@ export class AdaptiveLearningService {
         return [];
       }
 
-      return data || [];
+      return (data || []).map(event => this.transformDatabaseEvent(event));
     } catch (error) {
       console.error('Error in getRecentEvents:', error);
       return [];
@@ -278,7 +307,7 @@ export class AdaptiveLearningService {
         return [];
       }
 
-      return data || [];
+      return (data || []).map(rec => this.transformDatabaseRecommendation(rec));
     } catch (error) {
       console.error('Error in getPendingRecommendations:', error);
       return [];

@@ -369,10 +369,10 @@ export class AdaptiveAICoachService {
   /**
    * Get alternative explanation style
    */
-  private static getAlternativeStyle(currentStyle: string): string {
-    const styles = ['visual', 'textual', 'step-by-step', 'conceptual'];
+  private static getAlternativeStyle(currentStyle: string): 'visual' | 'textual' | 'step-by-step' | 'conceptual' | 'mixed' {
+    const styles: ('visual' | 'textual' | 'step-by-step' | 'conceptual')[] = ['visual', 'textual', 'step-by-step', 'conceptual'];
     const alternatives = styles.filter(style => style !== currentStyle);
-    return alternatives[Math.floor(Math.random() * alternatives.length)];
+    return alternatives[Math.floor(Math.random() * alternatives.length)] || 'mixed';
   }
 
   /**
