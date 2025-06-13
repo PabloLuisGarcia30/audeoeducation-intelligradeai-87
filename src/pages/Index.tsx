@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { StudentDashboard } from "@/components/StudentDashboard";
@@ -12,6 +11,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useDevRole } from "@/contexts/DevRoleContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { DEV_CONFIG } from "@/config/devConfig";
+import { EnhancedTeacherAnalytics } from "@/components/EnhancedTeacherAnalytics";
 
 const Index = () => {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
@@ -91,8 +91,16 @@ const Index = () => {
         return (
           <div className="p-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Dashboard</h1>
-            <p className="text-gray-600 mb-4">View performance insights and trends</p>
-            <p className="text-gray-600 mt-2">Coming soon...</p>
+            <p className="text-gray-600 mb-4">Comprehensive class performance insights and trends</p>
+            
+            {/* Enhanced Analytics for each class */}
+            <div className="space-y-8">
+              {/* This would typically loop through user's classes */}
+              <EnhancedTeacherAnalytics 
+                classId="sample-class-id" 
+                className="Grade 11 Mathematics"
+              />
+            </div>
           </div>
         );
       case 'portals':

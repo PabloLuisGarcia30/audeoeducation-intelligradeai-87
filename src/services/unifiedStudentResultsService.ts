@@ -1,5 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import { ProgressAnalyticsService } from "@/services/progressAnalyticsService";
 
 export interface UnifiedStudentResult {
   id?: string;
@@ -63,7 +63,7 @@ export interface UnifiedMisconceptionAnalysis {
 
 export class UnifiedStudentResultsService {
   /**
-   * Record a skill score result across any session type
+   * Record a skill score result with automatic progress metrics tracking
    */
   static async recordSkillResult(result: UnifiedStudentResult): Promise<void> {
     try {
@@ -76,7 +76,21 @@ export class UnifiedStudentResultsService {
         throw error;
       }
 
-      console.log(`✅ Recorded ${result.session_type} skill result: ${result.skill_name} (${result.score})`);
+      // Automatically record progress metric
+      await ProgressAnalyticsService.recordProgressMetric({
+        student_id: result.student_id,
+        skill_name: result.skill_name,
+        skill_type: result.skill_type as 'content' | 'subject',
+        session_type: result.session_type as 'class_session' | 'trailblazer' | 'home_learner' | 'practice',
+        session_id: result.session_id,
+        accuracy: result.score,
+        confidence_score: result.score, // Using score as confidence for now
+        time_spent_seconds: 0, // Would need to be tracked separately
+        attempts_count: 1,
+        misconception_detected: false
+      });
+
+      console.log(`✅ Recorded ${result.session_type} skill result with progress tracking: ${result.skill_name} (${result.score})`);
     } catch (error) {
       console.error('Failed to record unified skill result:', error);
       throw error;
@@ -84,7 +98,7 @@ export class UnifiedStudentResultsService {
   }
 
   /**
-   * Record a misconception across any session type
+   * Record a misconception with automatic progress metrics tracking
    */
   static async recordMisconception(misconception: UnifiedStudentMisconception): Promise<void> {
     try {
@@ -97,7 +111,22 @@ export class UnifiedStudentResultsService {
         throw error;
       }
 
-      console.log(`🧠 Recorded ${misconception.session_type} misconception: ${misconception.misconception_type}`);
+      // Record progress metric for misconception
+      await ProgressAnalyticsService.recordProgressMetric({
+        student_id: misconception.student_id,
+        skill_name: misconception.skill_name,
+        skill_type: 'content', // Default to content for misconceptions
+        session_type: misconception.session_type as 'class_session' | 'trailblazer' | 'home_learner' | 'practice',
+        session_id: misconception.session_id,
+        accuracy: 0, // Misconceptions indicate 0% accuracy for this attempt
+        confidence_score: misconception.confidence_score || 0,
+        time_spent_seconds: 0,
+        attempts_count: 1,
+        misconception_detected: true,
+        misconception_subtype_id: misconception.id
+      });
+
+      console.log(`🧠 Recorded ${misconception.session_type} misconception with progress tracking: ${misconception.misconception_type}`);
     } catch (error) {
       console.error('Failed to record unified misconception:', error);
       throw error;

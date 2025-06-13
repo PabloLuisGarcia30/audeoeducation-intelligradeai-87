@@ -2260,6 +2260,65 @@ export type Database = {
         }
         Relationships: []
       }
+      progress_metrics: {
+        Row: {
+          accuracy: number | null
+          attempts_count: number | null
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          misconception_detected: boolean | null
+          misconception_subtype_id: string | null
+          session_id: string | null
+          session_type: string
+          skill_name: string
+          skill_type: string
+          student_id: string
+          time_spent_seconds: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          accuracy?: number | null
+          attempts_count?: number | null
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          misconception_detected?: boolean | null
+          misconception_subtype_id?: string | null
+          session_id?: string | null
+          session_type?: string
+          skill_name: string
+          skill_type?: string
+          student_id: string
+          time_spent_seconds?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          accuracy?: number | null
+          attempts_count?: number | null
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          misconception_detected?: boolean | null
+          misconception_subtype_id?: string | null
+          session_id?: string | null
+          session_type?: string
+          skill_name?: string
+          skill_type?: string
+          student_id?: string
+          time_spent_seconds?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_metrics_misconception_subtype_id_fkey"
+            columns: ["misconception_subtype_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_subtypes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       question_time_tracking: {
         Row: {
           answer_changes_count: number
@@ -3681,6 +3740,20 @@ export type Database = {
           skill_names: string[]
         }[]
       }
+      get_class_progress_analytics: {
+        Args: { p_class_id: string; p_days?: number }
+        Returns: {
+          student_id: string
+          student_name: string
+          skill_name: string
+          skill_type: string
+          accuracy: number
+          confidence_score: number
+          attempts_count: number
+          misconceptions_count: number
+          last_practiced_at: string
+        }[]
+      }
       get_enhanced_mistake_analysis: {
         Args: { student_uuid: string; skill_filter?: string }
         Returns: {
@@ -3773,6 +3846,20 @@ export type Database = {
           mistake_count: number
           total_questions: number
           mistake_rate: number
+        }[]
+      }
+      get_student_progress_analytics: {
+        Args: { p_student_id: string; p_days?: number }
+        Returns: {
+          skill_name: string
+          skill_type: string
+          avg_accuracy: number
+          avg_confidence: number
+          total_attempts: number
+          total_time_spent: number
+          latest_accuracy: number
+          improvement_trend: number
+          session_types: string[]
         }[]
       }
       get_teacher_students_trailblazer_progress: {

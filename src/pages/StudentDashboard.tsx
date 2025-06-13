@@ -37,6 +37,7 @@ import { AIChatbox } from "@/components/AIChatbox";
 import { AdaptiveGoalSetting } from "@/components/AdaptiveGoalSetting";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { AdaptiveInsightsWidget } from "@/components/AdaptiveInsightsWidget";
+import { EnhancedStudentProgressTab } from "@/components/EnhancedStudentProgressTab";
 
 interface StudentProfile {
   id: string;
@@ -246,10 +247,11 @@ export default function StudentDashboard() {
 
         {/* Rest of the dashboard content */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-10">
+          <TabsList className="grid w-full grid-cols-11">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="exercises">Practice</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
+            <TabsTrigger value="rich-progress">Rich Progress</TabsTrigger>
             <TabsTrigger value="goals">Goals</TabsTrigger>
             <TabsTrigger value="smart-goals">Smart Goals</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
@@ -425,6 +427,13 @@ export default function StudentDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="rich-progress">
+            <EnhancedStudentProgressTab 
+              studentId={studentProfile.id} 
+              studentName={studentProfile.name}
+            />
           </TabsContent>
 
           <TabsContent value="goals">
