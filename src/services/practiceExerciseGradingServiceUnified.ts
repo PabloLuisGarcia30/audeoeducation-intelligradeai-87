@@ -1,4 +1,3 @@
-
 import { gradeBatchUnified } from './grading/UnifiedBatchGradingService';
 import { QuestionInput, GradedAnswer } from './grading/types';
 import type { PracticeExerciseAnswer, ExerciseSubmissionResult } from './practiceExerciseGradingService';
@@ -76,7 +75,6 @@ export class PracticeExerciseGradingServiceUnified {
       totalPossible: totalPointsPossible,
       percentageScore,
       totalCorrect,
-      gradingResults: gradingResult.results,
       questionResults: gradingResult.results.map(r => ({
         questionId: r.questionId,
         isCorrect: r.isCorrect,
