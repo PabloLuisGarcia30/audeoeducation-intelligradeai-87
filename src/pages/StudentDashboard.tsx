@@ -38,6 +38,9 @@ import { AdaptiveGoalSetting } from "@/components/AdaptiveGoalSetting";
 import { MetricsDashboard } from "@/components/MetricsDashboard";
 import { AdaptiveInsightsWidget } from "@/components/AdaptiveInsightsWidget";
 import { EnhancedStudentProgressTab } from "@/components/EnhancedStudentProgressTab";
+import { SmartGoalsManager } from "@/components/SmartGoalsManager";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { DEV_CONFIG } from "@/config";
 
 interface StudentProfile {
   id: string;
@@ -84,7 +87,7 @@ const mockLearningGoals = [
 ];
 
 export default function StudentDashboard() {
-  const { user, loading } = useAuth();
+  const { user, profile } = useAuth();
   const { currentRole, isDevMode } = useDevRole();
   const navigate = useNavigate();
 
@@ -162,421 +165,388 @@ export default function StudentDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <DashboardHeader 
-            title="Student Dashboard" 
-            subtitle={`Welcome back, ${studentProfile.name}!`}
-          />
-          <RoleToggle />
-        </div>
-
-        {/* Welcome Section with Key Stats */}
-        <div className="mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-            {/* Student Profile Card */}
-            <Card className="md:col-span-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16 ring-4 ring-white/20">
-                    <AvatarFallback className="bg-white/20 text-white text-lg font-bold">
-                      PG
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h2 className="text-2xl font-bold">{studentProfile.name}</h2>
-                    <p className="text-blue-100">{studentProfile.email}</p>
-                    <div className="flex gap-2 mt-2">
-                      <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                        {studentProfile.year}
-                      </Badge>
-                      <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                        {studentProfile.major}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Trailblazer Learner Card */}
-            <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 hover:from-green-600 hover:to-emerald-700 transition-all duration-200 cursor-pointer">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                    <Compass className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold">Trailblazer</h3>
-                    <p className="text-green-100 text-sm">Learner</p>
-                  </div>
-                </div>
-                <p className="text-sm text-green-100 mb-3">
-                  Explore advanced learning paths and unlock new challenges
-                </p>
-                <Button 
-                  size="sm" 
-                  variant="secondary" 
-                  className="bg-white/20 text-white border-0 hover:bg-white/30"
-                >
-                  <PlayCircle className="h-4 w-4 mr-2" />
-                  Start Journey
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Quick Stats */}
-            <Card>
-              <CardContent className="p-6 text-center">
-                <Trophy className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-slate-800">{overallGPA.toFixed(1)}%</div>
-                <div className="text-sm text-slate-600">Overall Progress</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6 text-center">
-                <Target className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-slate-800">{mockRecentActivities.length}</div>
-                <div className="text-sm text-slate-600">Completed Tasks</div>
-              </CardContent>
-            </Card>
+    <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Student Dashboard</h1>
+            <p className="text-gray-600">
+              Welcome back! Track your progress and continue learning.
+            </p>
           </div>
-        </div>
 
-        {/* Rest of the dashboard content */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-11">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="exercises">Practice</TabsTrigger>
-            <TabsTrigger value="progress">Progress</TabsTrigger>
-            <TabsTrigger value="rich-progress">Rich Progress</TabsTrigger>
-            <TabsTrigger value="goals">Goals</TabsTrigger>
-            <TabsTrigger value="smart-goals">Smart Goals</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="insights">Insights</TabsTrigger>
-            <TabsTrigger value="results-history">Results History</TabsTrigger>
-            <TabsTrigger value="ai-coach">
-              <MessageCircle className="h-4 w-4 mr-2" />
-              AI Coach
-            </TabsTrigger>
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-          </TabsList>
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-7">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="practice">Practice</TabsTrigger>
+              <TabsTrigger value="trailblazer">Trailblazer</TabsTrigger>
+              <TabsTrigger value="home-learner">Home Learner</TabsTrigger>
+              <TabsTrigger value="class-scores">Class Scores</TabsTrigger>
+              <TabsTrigger value="progress">Progress Analytics</TabsTrigger>
+              <TabsTrigger value="smart-goals">Smart Goals</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Subject Progress */}
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
-                    Subject Progress
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {mockProgressData.map((subject, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                          <span className="font-medium">{subject.subject}</span>
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Subject Progress */}
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5" />
+                      Subject Progress
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {mockProgressData.map((subject, index) => (
+                      <div key={index} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                            <span className="font-medium">{subject.subject}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{subject.grade}</Badge>
+                            <span className="text-sm text-slate-600">{subject.progress}%</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">{subject.grade}</Badge>
-                          <span className="text-sm text-slate-600">{subject.progress}%</span>
-                        </div>
+                        <Progress value={subject.progress} className="h-2" />
                       </div>
-                      <Progress value={subject.progress} className="h-2" />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+                    ))}
+                  </CardContent>
+                </Card>
 
-              {/* Upcoming Tasks */}
+                {/* Upcoming Tasks */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      Upcoming Tasks
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {mockUpcomingTasks.map((task, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <div>
+                          <h4 className="font-medium text-sm">{task.title}</h4>
+                          <p className="text-xs text-slate-600">{task.dueDate}</p>
+                        </div>
+                        <Badge 
+                          variant={task.priority === 'high' ? 'destructive' : 
+                                 task.priority === 'medium' ? 'default' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {task.priority}
+                        </Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recent Activities */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Clock className="h-5 w-5" />
-                    Upcoming Tasks
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {mockUpcomingTasks.map((task, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <div>
-                        <h4 className="font-medium text-sm">{task.title}</h4>
-                        <p className="text-xs text-slate-600">{task.dueDate}</p>
-                      </div>
-                      <Badge 
-                        variant={task.priority === 'high' ? 'destructive' : 
-                               task.priority === 'medium' ? 'default' : 'secondary'}
-                        className="text-xs"
-                      >
-                        {task.priority}
-                      </Badge>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Recent Activities */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Recent Activities
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {mockRecentActivities.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                          <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">{activity.title}</h4>
-                          <p className="text-sm text-slate-600 capitalize">{activity.type} • {activity.date}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-green-600">{activity.score}%</div>
-                        <Badge variant="outline" className="text-xs">
-                          {activity.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="exercises">
-            <TailoredExercises />
-          </TabsContent>
-
-          <TabsContent value="progress">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
-                    Academic Performance
+                    Recent Activities
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-6">
-                    {mockProgressData.map((subject, index) => (
-                      <div key={index} className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-medium">{subject.subject}</h4>
-                          <span className="text-2xl font-bold text-slate-800">{subject.grade}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-600">Overall Progress</span>
-                            <div className="font-medium">{subject.progress}%</div>
+                  <div className="space-y-3">
+                    {mockRecentActivities.map((activity, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
                           </div>
                           <div>
-                            <span className="text-slate-600">Recent Score</span>
-                            <div className="font-medium">{subject.recentScore}%</div>
+                            <h4 className="font-medium">{activity.title}</h4>
+                            <p className="text-sm text-slate-600 capitalize">{activity.type} • {activity.date}</p>
                           </div>
                         </div>
-                        <Progress value={subject.progress} className="h-3" />
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-green-600">{activity.score}%</div>
+                          <Badge variant="outline" className="text-xs">
+                            {activity.status}
+                          </Badge>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
 
+            <TabsContent value="practice">
+              <TailoredExercises />
+            </TabsContent>
+
+            <TabsContent value="trailblazer">
+              <Card className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0 hover:from-green-600 hover:to-emerald-700 transition-all duration-200 cursor-pointer">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                      <Compass className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold">Trailblazer</h3>
+                      <p className="text-green-100 text-sm">Learner</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-green-100 mb-3">
+                    Explore advanced learning paths and unlock new challenges
+                  </p>
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    className="bg-white/20 text-white border-0 hover:bg-white/30"
+                  >
+                    <PlayCircle className="h-4 w-4 mr-2" />
+                    Start Journey
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="home-learner">
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <Trophy className="h-8 w-8 text-yellow-500 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-slate-800">{overallGPA.toFixed(1)}%</div>
+                  <div className="text-sm text-slate-600">Overall Progress</div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="class-scores">
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <Target className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-slate-800">{mockRecentActivities.length}</div>
+                  <div className="text-sm text-slate-600">Completed Tasks</div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="progress">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      Academic Performance
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {mockProgressData.map((subject, index) => (
+                        <div key={index} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">{subject.subject}</h4>
+                            <span className="text-2xl font-bold text-slate-800">{subject.grade}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-slate-600">Overall Progress</span>
+                              <div className="font-medium">{subject.progress}%</div>
+                            </div>
+                            <div>
+                              <span className="text-slate-600">Recent Score</span>
+                              <div className="font-medium">{subject.recentScore}%</div>
+                            </div>
+                          </div>
+                          <Progress value={subject.progress} className="h-3" />
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Award className="h-5 w-5" />
+                      Achievements
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
+                        <Trophy className="h-8 w-8 text-yellow-500" />
+                        <div>
+                          <h4 className="font-medium">Honor Roll</h4>
+                          <p className="text-sm text-slate-600">Maintained 85%+ average</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                        <Star className="h-8 w-8 text-blue-500" />
+                        <div>
+                          <h4 className="font-medium">Geography Excellence</h4>
+                          <p className="text-sm text-slate-600">Top performer in Geography</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                        <Brain className="h-8 w-8 text-green-500" />
+                        <div>
+                          <h4 className="font-medium">Problem Solver</h4>
+                          <p className="text-sm text-slate-600">Excels in mathematical reasoning</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="rich-progress">
+              <EnhancedStudentProgressTab 
+                studentId={studentProfile.id} 
+                studentName={studentProfile.name}
+              />
+            </TabsContent>
+
+            <TabsContent value="goals">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Award className="h-5 w-5" />
-                    Achievements
+                    <Target className="h-5 w-5" />
+                    Learning Goals
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {mockLearningGoals.map((goal, index) => (
+                    <div key={index} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">{goal.goal}</h4>
+                        <span className="text-sm text-slate-600">Target: {goal.target}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Progress value={goal.progress} className="flex-1 h-3" />
+                        <span className="text-sm font-medium w-12">{goal.progress}%</span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <Button className="w-full mt-4" variant="outline">
+                    <Target className="h-4 w-4 mr-2" />
+                    Set New Goal
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="smart-goals">
+              <SmartGoalsManager />
+            </TabsContent>
+
+            <TabsContent value="analytics">
+              <MetricsDashboard studentId={studentProfile.id} />
+            </TabsContent>
+
+            <TabsContent value="insights">
+              <AdaptiveInsightsWidget studentId={studentProfile.id} />
+            </TabsContent>
+
+            <TabsContent value="results-history">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Your Learning History
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-center py-12">
+                  <div className="space-y-4">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                      <BarChart3 className="h-8 w-8 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                        Explore Your Learning Journey
+                      </h3>
+                      <p className="text-slate-600 mb-6 max-w-md mx-auto">
+                        View detailed progress tracking, skill improvements, and misconception resolution over time.
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => navigate('/student-dashboard/results-history')}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      View Detailed Results History
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="ai-coach" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    Your Personal AI Learning Coach
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
-                      <Trophy className="h-8 w-8 text-yellow-500" />
+                  <AIChatbox studentContext={studentContext} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="profile">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    Student Profile
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <h4 className="font-medium">Honor Roll</h4>
-                        <p className="text-sm text-slate-600">Maintained 85%+ average</p>
+                        <label className="text-sm font-medium text-slate-700">Full Name</label>
+                        <p className="text-lg font-medium">{studentProfile.name}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-slate-700">Email</label>
+                        <p className="text-lg font-medium">{studentProfile.email}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-slate-700">Academic Year</label>
+                        <p className="text-lg font-medium">{studentProfile.year}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-slate-700">Major</label>
+                        <p className="text-lg font-medium">{studentProfile.major}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                      <Star className="h-8 w-8 text-blue-500" />
-                      <div>
-                        <h4 className="font-medium">Geography Excellence</h4>
-                        <p className="text-sm text-slate-600">Top performer in Geography</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                      <Brain className="h-8 w-8 text-green-500" />
-                      <div>
-                        <h4 className="font-medium">Problem Solver</h4>
-                        <p className="text-sm text-slate-600">Excels in mathematical reasoning</p>
+                    
+                    <div className="pt-4 border-t">
+                      <h3 className="text-lg font-semibold mb-4">Academic Summary</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="text-center p-4 bg-blue-50 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600">{overallGPA.toFixed(1)}%</div>
+                          <div className="text-sm text-slate-600">Overall Average</div>
+                        </div>
+                        <div className="text-center p-4 bg-green-50 rounded-lg">
+                          <div className="text-2xl font-bold text-green-600">{mockRecentActivities.length}</div>
+                          <div className="text-sm text-slate-600">Completed Assessments</div>
+                        </div>
+                        <div className="text-center p-4 bg-purple-50 rounded-lg">
+                          <div className="text-2xl font-bold text-purple-600">{mockProgressData.length}</div>
+                          <div className="text-sm text-slate-600">Active Subjects</div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="rich-progress">
-            <EnhancedStudentProgressTab 
-              studentId={studentProfile.id} 
-              studentName={studentProfile.name}
-            />
-          </TabsContent>
-
-          <TabsContent value="goals">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Learning Goals
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {mockLearningGoals.map((goal, index) => (
-                  <div key={index} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">{goal.goal}</h4>
-                      <span className="text-sm text-slate-600">Target: {goal.target}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Progress value={goal.progress} className="flex-1 h-3" />
-                      <span className="text-sm font-medium w-12">{goal.progress}%</span>
-                    </div>
-                  </div>
-                ))}
-                
-                <Button className="w-full mt-4" variant="outline">
-                  <Target className="h-4 w-4 mr-2" />
-                  Set New Goal
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="smart-goals">
-            <AdaptiveGoalSetting studentId={studentProfile.id} />
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <MetricsDashboard studentId={studentProfile.id} />
-          </TabsContent>
-
-          <TabsContent value="insights">
-            <AdaptiveInsightsWidget studentId={studentProfile.id} />
-          </TabsContent>
-
-          <TabsContent value="results-history">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Your Learning History
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-center py-12">
-                <div className="space-y-4">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
-                    <BarChart3 className="h-8 w-8 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-slate-800 mb-2">
-                      Explore Your Learning Journey
-                    </h3>
-                    <p className="text-slate-600 mb-6 max-w-md mx-auto">
-                      View detailed progress tracking, skill improvements, and misconception resolution over time.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={() => navigate('/student-dashboard/results-history')}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    View Detailed Results History
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="ai-coach" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5" />
-                  Your Personal AI Learning Coach
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AIChatbox studentContext={studentContext} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="profile">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Student Profile
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="text-sm font-medium text-slate-700">Full Name</label>
-                      <p className="text-lg font-medium">{studentProfile.name}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-slate-700">Email</label>
-                      <p className="text-lg font-medium">{studentProfile.email}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-slate-700">Academic Year</label>
-                      <p className="text-lg font-medium">{studentProfile.year}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-slate-700">Major</label>
-                      <p className="text-lg font-medium">{studentProfile.major}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="pt-4 border-t">
-                    <h3 className="text-lg font-semibold mb-4">Academic Summary</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="text-center p-4 bg-blue-50 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-600">{overallGPA.toFixed(1)}%</div>
-                        <div className="text-sm text-slate-600">Overall Average</div>
-                      </div>
-                      <div className="text-center p-4 bg-green-50 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600">{mockRecentActivities.length}</div>
-                        <div className="text-sm text-slate-600">Completed Assessments</div>
-                      </div>
-                      <div className="text-center p-4 bg-purple-50 rounded-lg">
-                        <div className="text-2xl font-bold text-purple-600">{mockProgressData.length}</div>
-                        <div className="text-sm text-slate-600">Active Subjects</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }

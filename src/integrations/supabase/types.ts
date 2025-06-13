@@ -1268,6 +1268,56 @@ export type Database = {
           },
         ]
       }
+      goal_achievements: {
+        Row: {
+          achieved_at: string | null
+          achievement_description: string | null
+          achievement_title: string
+          achievement_type: string
+          celebration_shown: boolean | null
+          created_at: string | null
+          goal_id: string
+          id: string
+          progress_snapshot: Json | null
+          student_id: string
+          value_achieved: number | null
+        }
+        Insert: {
+          achieved_at?: string | null
+          achievement_description?: string | null
+          achievement_title: string
+          achievement_type: string
+          celebration_shown?: boolean | null
+          created_at?: string | null
+          goal_id: string
+          id?: string
+          progress_snapshot?: Json | null
+          student_id: string
+          value_achieved?: number | null
+        }
+        Update: {
+          achieved_at?: string | null
+          achievement_description?: string | null
+          achievement_title?: string
+          achievement_type?: string
+          celebration_shown?: boolean | null
+          created_at?: string | null
+          goal_id?: string
+          id?: string
+          progress_snapshot?: Json | null
+          student_id?: string
+          value_achieved?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_achievements_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "student_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_history: {
         Row: {
           achieved: boolean | null
@@ -1314,6 +1364,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      goal_recommendations_log: {
+        Row: {
+          created_at: string | null
+          effectiveness_score: number | null
+          goals_accepted: number | null
+          goals_completed: number | null
+          id: string
+          misconception_data: Json | null
+          recommendation_reasoning: string | null
+          recommended_goals: Json
+          student_id: string
+          student_performance_data: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          goals_accepted?: number | null
+          goals_completed?: number | null
+          id?: string
+          misconception_data?: Json | null
+          recommendation_reasoning?: string | null
+          recommended_goals: Json
+          student_id: string
+          student_performance_data: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          goals_accepted?: number | null
+          goals_completed?: number | null
+          id?: string
+          misconception_data?: Json | null
+          recommendation_reasoning?: string | null
+          recommended_goals?: Json
+          student_id?: string
+          student_performance_data?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       jobs: {
         Row: {
@@ -2627,6 +2719,83 @@ export type Database = {
           },
         ]
       }
+      student_goals: {
+        Row: {
+          ai_confidence_score: number | null
+          completed_at: string | null
+          context_data: Json | null
+          created_at: string | null
+          current_value: number | null
+          difficulty_level: string | null
+          goal_description: string
+          goal_title: string
+          goal_type: string
+          id: string
+          is_ai_suggested: boolean | null
+          milestones: Json | null
+          progress_percentage: number | null
+          status: string | null
+          student_id: string
+          target_date: string | null
+          target_misconception_id: string | null
+          target_skill_name: string | null
+          target_value: number
+          updated_at: string | null
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          completed_at?: string | null
+          context_data?: Json | null
+          created_at?: string | null
+          current_value?: number | null
+          difficulty_level?: string | null
+          goal_description: string
+          goal_title: string
+          goal_type: string
+          id?: string
+          is_ai_suggested?: boolean | null
+          milestones?: Json | null
+          progress_percentage?: number | null
+          status?: string | null
+          student_id: string
+          target_date?: string | null
+          target_misconception_id?: string | null
+          target_skill_name?: string | null
+          target_value: number
+          updated_at?: string | null
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          completed_at?: string | null
+          context_data?: Json | null
+          created_at?: string | null
+          current_value?: number | null
+          difficulty_level?: string | null
+          goal_description?: string
+          goal_title?: string
+          goal_type?: string
+          id?: string
+          is_ai_suggested?: boolean | null
+          milestones?: Json | null
+          progress_percentage?: number | null
+          status?: string | null
+          student_id?: string
+          target_date?: string | null
+          target_misconception_id?: string | null
+          target_skill_name?: string | null
+          target_value?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_goals_target_misconception_id_fkey"
+            columns: ["target_misconception_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_subtypes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_links: {
         Row: {
           class_id: string | null
@@ -3674,6 +3843,10 @@ export type Database = {
       }
     }
     Functions: {
+      calculate_goal_progress: {
+        Args: { p_goal_id: string }
+        Returns: number
+      }
       calculate_updated_skill_score: {
         Args: {
           current_score: number
@@ -3682,6 +3855,10 @@ export type Database = {
           recency_weight?: number
         }
         Returns: number
+      }
+      detect_goal_achievements: {
+        Args: { p_student_id: string; p_goal_id: string }
+        Returns: undefined
       }
       generate_display_teacher_id: {
         Args: Record<PropertyKey, never>
@@ -3836,6 +4013,17 @@ export type Database = {
           subject: string
           grade: string
           teacher_name: string
+        }[]
+      }
+      get_student_goal_analytics: {
+        Args: { p_student_id: string }
+        Returns: {
+          total_goals: number
+          active_goals: number
+          completed_goals: number
+          avg_completion_time_days: number
+          most_successful_goal_type: string
+          current_streaks: Json
         }[]
       }
       get_student_mistake_patterns: {
