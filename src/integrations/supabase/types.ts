@@ -4039,6 +4039,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      cleanup_old_cache: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       detect_goal_achievements: {
         Args: { p_student_id: string; p_goal_id: string }
         Returns: undefined
