@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { EscalationLogger } from "./escalationLogger";
 
 export interface SkillAmbiguityResult {
   questionNumber: number;
@@ -75,6 +76,9 @@ export class SkillAmbiguityResolver {
     preClassifiedSkills: { contentSkills: any[]; subjectSkills: any[] },
     originalDetection: string[]
   ): Promise<SkillAmbiguityResult> {
+    const startTime = Date.now();
+    let escalationId: string | null = null;
+
     try {
       // Use pre-classified skills as the authority for skill matching
       const availableSkills = [
@@ -90,6 +94,22 @@ export class SkillAmbiguityResolver {
         originalDetection
       );
 
+      // Log the escalation
+      escalationId = await EscalationLogger.logSkillAmbiguity({
+        questionId: `q${questionNumber}`,
+        originalService: 'SkillAmbiguityResolver',
+        ambiguityDescription: `Skill ambiguity for question ${questionNumber}: detected ${originalDetection.length} skills`,
+        selectedSolution: 'GPT escalation with pre-classified authority',
+        originalConfidence: 0.5, // Default low confidence triggering escalation
+        context: {
+          question_text: questionText,
+          student_answer: studentAnswer,
+          original_detection: originalDetection,
+          pre_classified_skills: preClassifiedSkills,
+          available_skills: availableSkills
+        }
+      });
+
       const { data, error } = await supabase.functions.invoke('grade-complex-question', {
         body: {
           escalationMode: true,
@@ -102,17 +122,41 @@ export class SkillAmbiguityResolver {
         }
       });
 
+      const processingTime = Date.now() - startTime;
+
       if (error) {
         console.error('Skill escalation failed:', error);
+        
+        // Update escalation with failure result
+        if (escalationId) {
+          await EscalationLogger.updateEscalationResult(escalationId, false, 0.3);
+        }
+        
         return this.createFallbackResultWithPreClassification(questionNumber, originalDetection, preClassifiedSkills);
       }
 
       const result = data.skillEscalation || {};
+      const finalConfidence = result.confidence || 0.8;
       
+      // Update escalation with success result
+      if (escalationId) {
+        await EscalationLogger.updateEscalationResult(
+          escalationId, 
+          true, 
+          finalConfidence,
+          undefined,
+          {
+            processing_time_ms: processingTime,
+            final_confidence: finalConfidence,
+            matched_skills: result.matchedSkills
+          }
+        );
+      }
+
       return {
         questionNumber,
         matchedSkills: result.matchedSkills || availableSkills,
-        confidence: result.confidence || 0.8,
+        confidence: finalConfidence,
         isAmbiguous: false,
         escalated: true,
         reasoning: result.reasoning || 'Escalated with pre-classified skills authority',
@@ -121,6 +165,15 @@ export class SkillAmbiguityResolver {
 
     } catch (error) {
       console.error('Skill escalation error:', error);
+      
+      // Update escalation with error result
+      if (escalationId) {
+        await EscalationLogger.updateEscalationResult(escalationId, false, 0.2, undefined, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          processing_time_ms: Date.now() - startTime
+        });
+      }
+      
       return this.createFallbackResultWithPreClassification(questionNumber, originalDetection, preClassifiedSkills);
     }
   }

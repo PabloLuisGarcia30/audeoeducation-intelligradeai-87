@@ -1,9 +1,8 @@
-
-
 import { UnifiedClassSessionIntegration } from "./unifiedClassSessionIntegration";
 import { UnifiedTrailblazerIntegration } from "./unifiedTrailblazerIntegration";
 import { UnifiedHomeLearnerIntegration } from "./unifiedHomeLearnerIntegration";
 import { supabase } from "@/integrations/supabase/client";
+import { EscalationLogger } from "./escalationLogger";
 
 export interface ActionLogEntry {
   id?: string;
@@ -221,6 +220,8 @@ export class EnhancedActionLoggerUnified {
         await this.handleExerciseCompletion(student_id, session_type, reference_id, context_summary);
       } else if (action_type === 'misconception_detected' && context_summary) {
         await this.handleMisconceptionDetection(student_id, session_type, reference_id, context_summary);
+      } else if (action_type === 'escalation_triggered' && context_summary) {
+        await this.handleEscalationEvent(student_id, session_type, reference_id, context_summary);
       }
 
       console.log(`📊 Unified action logging completed: ${action_type}`);
@@ -337,6 +338,94 @@ export class EnhancedActionLoggerUnified {
           contextData
         );
         break;
+    }
+  }
+
+  private static async handleEscalationEvent(
+    studentId: string,
+    sessionType?: string,
+    sessionId?: string,
+    contextData?: Record<string, any>
+  ): Promise<void> {
+    if (!contextData) return;
+
+    const { 
+      escalation_type, 
+      original_service, 
+      ambiguity_description,
+      selected_solution,
+      fallback_path,
+      models_used,
+      processing_time_ms,
+      cost_impact,
+      original_confidence,
+      final_confidence
+    } = contextData;
+
+    if (!escalation_type || !original_service || !ambiguity_description || !selected_solution) return;
+
+    try {
+      switch (escalation_type) {
+        case 'skill_ambiguity':
+          await EscalationLogger.logSkillAmbiguity({
+            studentId,
+            examId: contextData.exam_id,
+            questionId: contextData.question_id,
+            originalService: original_service,
+            ambiguityDescription: ambiguity_description,
+            selectedSolution: selected_solution,
+            originalConfidence: original_confidence,
+            finalConfidence: final_confidence,
+            context: contextData
+          });
+          break;
+
+        case 'fallback_triggered':
+          await EscalationLogger.logFallbackTriggered({
+            studentId,
+            examId: contextData.exam_id,
+            sessionId,
+            originalService: original_service,
+            ambiguityDescription: ambiguity_description,
+            fallbackPath: fallback_path || 'unknown',
+            originalConfidence: original_confidence,
+            processingTimeMs: processing_time_ms,
+            context: contextData
+          });
+          break;
+
+        case 'model_escalation':
+          await EscalationLogger.logModelEscalation({
+            studentId,
+            examId: contextData.exam_id,
+            questionId: contextData.question_id,
+            originalService: original_service,
+            ambiguityDescription: ambiguity_description,
+            modelsUsed: models_used || [],
+            selectedSolution: selected_solution,
+            processingTimeMs: processing_time_ms,
+            costImpact: cost_impact,
+            context: contextData
+          });
+          break;
+
+        case 'validation_failure':
+          await EscalationLogger.logValidationFailure({
+            studentId,
+            examId: contextData.exam_id,
+            questionId: contextData.question_id,
+            originalService: original_service,
+            ambiguityDescription: ambiguity_description,
+            selectedSolution: selected_solution,
+            fallbackPath: fallback_path,
+            context: contextData
+          });
+          break;
+      }
+
+      console.log(`🎯 Escalation logged: ${escalation_type} from ${original_service}`);
+    } catch (error) {
+      console.error('Failed to log escalation event:', error);
     }
   }
 }

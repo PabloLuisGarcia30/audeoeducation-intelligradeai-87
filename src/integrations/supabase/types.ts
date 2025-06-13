@@ -780,6 +780,78 @@ export type Database = {
         }
         Relationships: []
       }
+      escalation_outcomes: {
+        Row: {
+          ambiguity_description: string
+          context: Json | null
+          cost_impact: number | null
+          created_at: string
+          escalation_type: string
+          exam_id: string | null
+          fallback_path: string | null
+          final_confidence: number | null
+          id: string
+          metadata: Json | null
+          models_used: string[] | null
+          original_confidence: number | null
+          original_service: string
+          processing_time_ms: number | null
+          quality_score: number | null
+          question_id: string | null
+          selected_solution: string
+          session_id: string | null
+          student_id: string | null
+          success: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          ambiguity_description: string
+          context?: Json | null
+          cost_impact?: number | null
+          created_at?: string
+          escalation_type: string
+          exam_id?: string | null
+          fallback_path?: string | null
+          final_confidence?: number | null
+          id?: string
+          metadata?: Json | null
+          models_used?: string[] | null
+          original_confidence?: number | null
+          original_service: string
+          processing_time_ms?: number | null
+          quality_score?: number | null
+          question_id?: string | null
+          selected_solution: string
+          session_id?: string | null
+          student_id?: string | null
+          success?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          ambiguity_description?: string
+          context?: Json | null
+          cost_impact?: number | null
+          created_at?: string
+          escalation_type?: string
+          exam_id?: string | null
+          fallback_path?: string | null
+          final_confidence?: number | null
+          id?: string
+          metadata?: Json | null
+          models_used?: string[] | null
+          original_confidence?: number | null
+          original_service?: string
+          processing_time_ms?: number | null
+          quality_score?: number | null
+          question_id?: string | null
+          selected_solution?: string
+          session_id?: string | null
+          student_id?: string | null
+          success?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       exam_skill_analysis: {
         Row: {
           ai_analysis_data: Json | null
