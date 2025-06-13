@@ -1,5 +1,6 @@
+
 import { SubjectSpecificMisconceptionService } from './subjectSpecificMisconceptionService';
-import { MisconceptionTaxonomyService, MisconceptionAnalysisResult } from './misconceptionTaxonomyService';
+import { MisconceptionTaxonomyService, MisconceptionAnalysisResult, MisconceptionSubtypeWithCategory } from './misconceptionTaxonomyService';
 
 export class EnhancedMisconceptionIntegrationService {
   // Integrate legacy misconception detection with new taxonomy - ENHANCED with auto-creation
@@ -216,10 +217,10 @@ export class EnhancedMisconceptionIntegrationService {
       // Combine recommendations from both systems
       const combinedRecommendations = [
         ...taxonomyMisconceptions.slice(0, 3).map(m => 
-          `Address ${m.subtype.subtype_name} through targeted practice`
+          `Address ${m.misconception_subtypes.subtype_name} through targeted practice`
         ),
         ...persistenceLogs.filter(log => !log.resolved).slice(0, 2).map(log => 
-          `Focus on resolving persistent ${log.subtype.subtype_name} pattern`
+          `Focus on resolving persistent ${log.misconception_subtypes.subtype_name} pattern`
         )
       ];
 

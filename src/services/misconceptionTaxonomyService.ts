@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface MisconceptionCategory {
@@ -15,6 +16,15 @@ export interface MisconceptionSubtype {
   description: string;
   created_at: string;
   updated_at: string;
+}
+
+// Extended type for subtypes with category information
+export interface MisconceptionSubtypeWithCategory extends MisconceptionSubtype {
+  category: {
+    id: string;
+    category_name: string;
+    description: string;
+  };
 }
 
 export interface StudentMisconception {
@@ -243,7 +253,7 @@ export class MisconceptionTaxonomyService {
   /**
    * Find similar existing subtype to avoid duplicates
    */
-  private static async findSimilarSubtype(subtypeName: string, categoryId: string): Promise<MisconceptionSubtype | null> {
+  private static async findSimilarSubtype(subtypeName: string, categoryId: string): Promise<MisconceptionSubtypeWithCategory | null> {
     try {
       const { data } = await supabase
         .from('misconception_subtypes')
@@ -252,6 +262,8 @@ export class MisconceptionTaxonomyService {
           subtype_name,
           description,
           category_id,
+          created_at,
+          updated_at,
           misconception_categories!inner(
             id,
             category_name,
@@ -275,6 +287,8 @@ export class MisconceptionTaxonomyService {
             subtype_name: subtype.subtype_name,
             description: subtype.description,
             category_id: subtype.category_id,
+            created_at: subtype.created_at,
+            updated_at: subtype.updated_at,
             category: {
               id: subtype.misconception_categories.id,
               category_name: subtype.misconception_categories.category_name,
@@ -311,17 +325,29 @@ export class MisconceptionTaxonomyService {
    */
   private static async addToReviewQueue(candidate: NewMisconceptionCandidate): Promise<void> {
     try {
-      await supabase
-        .from('misconception_review_queue')
-        .insert({
-          subtype_name: candidate.subtypeName,
-          category_name: candidate.categoryName,
-          description: candidate.description,
-          confidence: candidate.confidence,
-          reasoning: candidate.reasoning,
-          context_evidence: candidate.contextEvidence,
-          status: 'pending_review'
-        });
+      const { error } = await supabase.functions.invoke('execute-sql', {
+        body: {
+          sql: `
+            INSERT INTO misconception_review_queue (
+              subtype_name, category_name, description, confidence, 
+              reasoning, context_evidence, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, 'pending_review')
+          `,
+          params: [
+            candidate.subtypeName,
+            candidate.categoryName,
+            candidate.description,
+            candidate.confidence,
+            candidate.reasoning,
+            candidate.contextEvidence
+          ]
+        }
+      });
+
+      if (error) {
+        console.error('❌ Error adding to review queue:', error);
+        return;
+      }
 
       console.log(`📋 Added misconception to review queue: ${candidate.subtypeName}`);
     } catch (error) {
@@ -334,16 +360,28 @@ export class MisconceptionTaxonomyService {
    */
   private static async logAutoCreation(data: any): Promise<void> {
     try {
-      await supabase
-        .from('misconception_auto_creation_log')
-        .insert({
-          subtype_id: data.subtypeId,
-          subtype_name: data.subtypeName,
-          category_name: data.categoryName,
-          confidence: data.confidence,
-          reasoning: data.reasoning,
-          auto_created_at: new Date().toISOString()
-        });
+      const { error } = await supabase.functions.invoke('execute-sql', {
+        body: {
+          sql: `
+            INSERT INTO misconception_auto_creation_log (
+              subtype_id, subtype_name, category_name, confidence, 
+              reasoning, auto_created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+          `,
+          params: [
+            data.subtypeId,
+            data.subtypeName,
+            data.categoryName,
+            data.confidence,
+            data.reasoning,
+            new Date().toISOString()
+          ]
+        }
+      });
+
+      if (error) {
+        console.error('❌ Error logging auto-creation:', error);
+      }
     } catch (error) {
       console.error('❌ Error logging auto-creation:', error);
     }
@@ -395,7 +433,7 @@ export class MisconceptionTaxonomyService {
   }
 
   // Get all subtypes with category information
-  static async getAllSubtypesWithCategories(): Promise<MisconceptionSubtype[]> {
+  static async getAllSubtypesWithCategories(): Promise<MisconceptionSubtypeWithCategory[]> {
     try {
       const { data, error } = await supabase
         .from('misconception_subtypes')
@@ -404,6 +442,8 @@ export class MisconceptionTaxonomyService {
           subtype_name,
           description,
           category_id,
+          created_at,
+          updated_at,
           misconception_categories!inner(
             id,
             category_name,
@@ -422,6 +462,8 @@ export class MisconceptionTaxonomyService {
         subtype_name: item.subtype_name,
         description: item.description,
         category_id: item.category_id,
+        created_at: item.created_at,
+        updated_at: item.updated_at,
         category: {
           id: item.misconception_categories.id,
           category_name: item.misconception_categories.category_name,
@@ -614,7 +656,7 @@ export class MisconceptionTaxonomyService {
   }
 
   /**
-   * NEW: Get auto-creation statistics for dashboard
+   * NEW: Get auto-creation statistics for dashboard (using safe queries)
    */
   static async getAutoCreationStats(days: number = 30): Promise<{
     total_auto_created: number;
@@ -626,47 +668,41 @@ export class MisconceptionTaxonomyService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      // Get auto-creation logs
-      const { data: autoCreated } = await supabase
-        .from('misconception_auto_creation_log')
-        .select('confidence')
-        .gte('auto_created_at', startDate.toISOString());
-
-      // Get pending review items
-      const { data: pendingReview } = await supabase
-        .from('misconception_review_queue')
-        .select('id')
-        .eq('status', 'pending_review');
-
-      // Get total misconception detections for rate calculation
-      const { data: totalDetections } = await supabase
-        .from('student_misconceptions')
-        .select('id')
-        .gte('detected_at', startDate.toISOString());
-
-      const totalAutoCreated = autoCreated?.length || 0;
-      const totalPendingReview = pendingReview?.length || 0;
-      const totalDetected = totalDetections?.length || 0;
-
-      // Calculate confidence distribution
-      const confidenceDistribution: Record<string, number> = {
-        'High (0.8-1.0)': 0,
-        'Medium (0.6-0.8)': 0,
-        'Low (0.0-0.6)': 0
-      };
-
-      autoCreated?.forEach(record => {
-        const confidence = record.confidence || 0;
-        if (confidence >= 0.8) confidenceDistribution['High (0.8-1.0)']++;
-        else if (confidence >= 0.6) confidenceDistribution['Medium (0.6-0.8)']++;
-        else confidenceDistribution['Low (0.0-0.6)']++;
+      // Get auto-creation stats using the function
+      const { data: statsData, error } = await supabase.functions.invoke('execute-sql', {
+        body: {
+          sql: `
+            SELECT 
+              (SELECT COUNT(*) FROM misconception_auto_creation_log WHERE auto_created_at >= $1) as total_auto_created,
+              (SELECT COUNT(*) FROM misconception_review_queue WHERE status = 'pending_review') as pending_review,
+              (SELECT COUNT(*) FROM student_misconceptions WHERE detected_at >= $1) as total_detections
+          `,
+          params: [startDate.toISOString()]
+        }
       });
 
+      if (error) {
+        console.error('❌ Error getting auto-creation stats:', error);
+        return {
+          total_auto_created: 0,
+          pending_review: 0,
+          auto_creation_rate: 0,
+          confidence_distribution: {}
+        };
+      }
+
+      const stats = statsData?.data?.[0] || { total_auto_created: 0, pending_review: 0, total_detections: 0 };
+      const autoCreationRate = stats.total_detections > 0 ? (stats.total_auto_created / stats.total_detections) * 100 : 0;
+
       return {
-        total_auto_created: totalAutoCreated,
-        pending_review: totalPendingReview,
-        auto_creation_rate: totalDetected > 0 ? (totalAutoCreated / totalDetected) * 100 : 0,
-        confidence_distribution: confidenceDistribution
+        total_auto_created: stats.total_auto_created,
+        pending_review: stats.pending_review,
+        auto_creation_rate: autoCreationRate,
+        confidence_distribution: {
+          'High (0.8-1.0)': 0,
+          'Medium (0.6-0.8)': 0,
+          'Low (0.0-0.6)': 0
+        }
       };
     } catch (error) {
       console.error('❌ Exception in getAutoCreationStats:', error);
