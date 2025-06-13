@@ -1,177 +1,479 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from 'sonner';
-import { PracticeExerciseGradingServiceUnified } from "@/services/practiceExerciseGradingServiceUnified";
-import { usePracticeExerciseCompletion } from "@/hooks/usePracticeExerciseCompletion";
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { CheckCircle, XCircle, Clock, BookOpen, Brain } from 'lucide-react';
+import { PracticeExerciseGradingService, type PracticeExerciseAnswer, type ExerciseSubmissionResult } from '@/services/practiceExerciseGradingService';
+import { QuestionTimingService } from '@/services/questionTimingService';
+import { useTrailblazer } from '@/hooks/useTrailblazer';
 
-interface PracticeExerciseRunnerProps {
-  exerciseData: any;
-  onComplete: (results: any) => void;
-  onExit: () => void;
-  showTimer?: boolean;
+interface PracticeQuestion {
+  id: string;
+  type: 'multiple-choice' | 'true-false' | 'short-answer' | 'essay';
+  question: string;
+  options?: string[];
+  correctAnswer: string;
+  acceptableAnswers?: string[];
+  keywords?: string[];
+  points: number;
+  targetSkill: string;
 }
 
-export function PracticeExerciseRunner({ exerciseData, onComplete, onExit, showTimer = false }: PracticeExerciseRunnerProps) {
-  const [answers, setAnswers] = useState<string[]>(Array(exerciseData.questions.length).fill(''));
-  const [isComplete, setIsComplete] = useState(false);
+interface PracticeExerciseData {
+  title: string;
+  description: string;
+  questions: PracticeQuestion[];
+  totalPoints: number;
+  estimatedTime: number;
+  exerciseId?: string;
+}
+
+interface Props {
+  exerciseData: PracticeExerciseData;
+  onComplete: (results: ExerciseSubmissionResult & { answers: Record<string, string> }) => void;
+  onExit?: () => void;
+  showTimer?: boolean;
+  trailblazerSessionId?: string; // NEW: Optional Trailblazer session ID
+}
+
+export function PracticeExerciseRunner({ 
+  exerciseData, 
+  onComplete, 
+  onExit, 
+  showTimer = true,
+  trailblazerSessionId 
+}: Props) {
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionResult, setSubmissionResult] = useState<any>(null);
+  const [startTime] = useState(new Date());
+  const [timeElapsed, setTimeElapsed] = useState(0);
+  
+  // Timing tracking state
+  const [questionTimingIds, setQuestionTimingIds] = useState<Record<string, string>>({});
+  const [answerChangeCounts, setAnswerChangeCounts] = useState<Record<string, number>>({});
+  const currentTimingId = useRef<string | null>(null);
 
-  const { completeExercise, isCompleting, isUpdatingSkills } = usePracticeExerciseCompletion({
-    onSkillUpdated: (skillUpdates) => {
-      console.log('✅ Skills updated after exercise completion:', skillUpdates);
-    }
-  });
+  const currentQuestion = exerciseData.questions[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / exerciseData.questions.length) * 100;
+  const isLastQuestion = currentQuestionIndex === exerciseData.questions.length - 1;
+  const hasAnsweredCurrent = answers[currentQuestion.id]?.trim().length > 0;
 
+  // Timing effect - only run if showTimer is true
   useEffect(() => {
-    // Check if all questions are answered
-    const allAnswered = answers.every(answer => answer !== '');
-    setIsComplete(allAnswered);
-  }, [answers]);
+    if (!showTimer) return;
+    
+    const timer = setInterval(() => {
+      setTimeElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
+    }, 1000);
 
-  const handleAnswerChange = (index: number, value: string) => {
-    const newAnswers = [...answers];
-    newAnswers[index] = value;
-    setAnswers(newAnswers);
+    return () => clearInterval(timer);
+  }, [startTime, showTimer]);
+
+  // Start timing for current question
+  useEffect(() => {
+    const startQuestionTiming = async () => {
+      if (exerciseData.exerciseId) {
+        const timingId = await QuestionTimingService.startQuestionTiming(
+          exerciseData.exerciseId,
+          currentQuestion.id,
+          currentQuestionIndex + 1
+        );
+        
+        if (timingId) {
+          currentTimingId.current = timingId;
+          setQuestionTimingIds(prev => ({ ...prev, [currentQuestion.id]: timingId }));
+        }
+      }
+    };
+
+    startQuestionTiming();
+
+    // Cleanup function to record timing when leaving question
+    return () => {
+      if (currentTimingId.current) {
+        QuestionTimingService.recordQuestionAnswer(currentTimingId.current, false);
+      }
+    };
+  }, [currentQuestionIndex, currentQuestion.id, exerciseData.exerciseId]);
+
+  const { recordSessionMisconception, activeSession } = useTrailblazer();
+
+  // Use provided session ID or active session
+  const sessionId = trailblazerSessionId || activeSession?.id;
+
+  const handleAnswerChange = async (questionId: string, answer: string) => {
+    const previousAnswer = answers[questionId];
+    const isAnswerChange = previousAnswer && previousAnswer !== answer;
+    
+    setAnswers(prev => ({ ...prev, [questionId]: answer }));
+    
+    // Track answer changes
+    if (isAnswerChange) {
+      setAnswerChangeCounts(prev => ({
+        ...prev,
+        [questionId]: (prev[questionId] || 0) + 1
+      }));
+      
+      // Record the answer change in timing
+      if (currentTimingId.current) {
+        await QuestionTimingService.recordQuestionAnswer(currentTimingId.current, true);
+      }
+    } else if (currentTimingId.current && !previousAnswer) {
+      // First time answering this question
+      await QuestionTimingService.recordQuestionAnswer(currentTimingId.current, false);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentQuestionIndex < exerciseData.questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!isComplete) return;
+    setIsSubmitting(true);
 
     try {
-      setIsSubmitting(true);
-      
-      console.log('🎯 Starting unified exercise grading submission');
+      // Record final timing for current question
+      if (currentTimingId.current) {
+        await QuestionTimingService.recordQuestionAnswer(currentTimingId.current, false);
+      }
 
-      const answersData = exerciseData.questions.map((question: any, index: number) => ({
-        questionId: question.id || `q${index + 1}`,
-        question: question.question,
-        studentAnswer: answers[index] || '',
-        correctAnswer: question.correctAnswer || '',
-        points: question.points || 1,
-        questionType: question.type || 'multiple-choice'
+      // Prepare answers for grading
+      const exerciseAnswers: PracticeExerciseAnswer[] = exerciseData.questions.map(question => ({
+        questionId: question.id,
+        studentAnswer: answers[question.id] || '',
+        questionType: question.type,
+        correctAnswer: question.correctAnswer,
+        acceptableAnswers: question.acceptableAnswers,
+        keywords: question.keywords,
+        options: question.options,
+        points: question.points
       }));
 
-      // Use unified grading service
-      const results = await PracticeExerciseGradingServiceUnified.gradeExerciseSubmission(
-        answersData,
-        exerciseData.title || 'Practice Exercise',
-        exerciseData.exerciseId,
-        exerciseData.skillName,
-        {
-          subject: exerciseData.subject || exerciseData.skillMetadata?.subject,
-          grade: exerciseData.grade || exerciseData.skillMetadata?.grade,
-          exerciseType: 'practice',
-          skillsTargeted: exerciseData.skillMetadata?.skillsTargeted || [exerciseData.skillName]
-        },
-        exerciseData.trailblazerSessionId
-      );
+      // Enhanced exercise metadata for misconception analysis
+      const enhancedMetadata = {
+        subject: exerciseData.title.includes('Math') ? 'Mathematics' : 
+                exerciseData.title.includes('Science') ? 'Science' :
+                exerciseData.title.includes('English') ? 'English' : 'General',
+        grade: 'Grade 10', // Default for now
+        exerciseType: 'practice',
+        skillsTargeted: [...new Set(exerciseData.questions.map(q => q.targetSkill))]
+      };
 
-      console.log('✅ Unified grading results:', results);
-
-      setSubmissionResult(results);
-      
-      // Complete the exercise with class context if available
-      const classContext = exerciseData.classContext;
-      await completeExercise({
-        exerciseId: exerciseData.exerciseId || exerciseData.id || 'temp-' + Date.now(),
-        score: results.percentageScore,
-        skillName: exerciseData.skillName,
-        exerciseData: exerciseData,
-        classId: classContext?.classId
+      console.log('🎯 Submitting exercise with enhanced misconception tracking:', {
+        totalQuestions: exerciseAnswers.length,
+        analyzableQuestions: exerciseAnswers.filter(q => q.questionType === 'short-answer' || q.questionType === 'essay').length,
+        metadata: enhancedMetadata,
+        trailblazerSessionId: sessionId
       });
 
-      console.log(`🎯 Exercise completed with unified grading: ${results.percentageScore}% score, ${results.cacheHits} cache hits, ${results.misconceptionsLogged} misconceptions`);
+      // Grade the exercise with enhanced tracking and Trailblazer integration
+      const results = await PracticeExerciseGradingService.gradeExerciseSubmission(
+        exerciseAnswers,
+        exerciseData.title,
+        exerciseData.exerciseId, // Pass exercise ID for tracking
+        exerciseData.questions[0]?.targetSkill, // Pass skill name for tracking
+        enhancedMetadata, // Pass enhanced metadata for misconception analysis
+        sessionId // Pass session ID for Trailblazer integration
+      );
 
+      // Record misconceptions to active Trailblazer session if available
+      if (sessionId && results.questionResults) {
+        console.log('🧠 Recording misconceptions to Trailblazer session:', sessionId);
+        
+        for (let i = 0; i < results.questionResults.length; i++) {
+          const questionResult = results.questionResults[i];
+          
+          // If question was incorrect and has misconception analysis, record it
+          if (!questionResult.isCorrect && questionResult.misconceptionAnalysis?.categoryName) {
+            try {
+              await recordSessionMisconception({
+                sessionId: sessionId,
+                misconceptionId: questionResult.questionId, // This would be enhanced with actual misconception IDs
+                questionSequence: i + 1
+              });
+              
+              console.log(`📝 Recorded misconception for question ${i + 1} in session ${sessionId}`);
+            } catch (error) {
+              console.error('Error recording misconception to session:', error);
+            }
+          }
+        }
+      }
+
+      // Include answers in the results for review functionality
+      const resultsWithAnswers = {
+        ...results,
+        answers: answers,
+        trailblazerSessionId: sessionId // Include session ID in results
+      };
+
+      onComplete(resultsWithAnswers);
     } catch (error) {
-      console.error('❌ Error submitting exercise with unified grading:', error);
-      toast.error('Failed to submit exercise. Please try again.');
+      console.error('Error grading exercise:', error);
+      // Create fallback results
+      const fallbackResults = {
+        totalScore: 0,
+        totalPossible: exerciseData.totalPoints,
+        percentageScore: 0,
+        questionResults: exerciseData.questions.map(q => ({
+          questionId: q.id,
+          isCorrect: false,
+          pointsEarned: 0,
+          pointsPossible: q.points,
+          feedback: 'Unable to grade automatically. Please review with instructor.',
+          gradingMethod: 'exact_match' as const,
+          confidence: 0
+        })),
+        overallFeedback: 'There was an issue grading your exercise. Please contact your instructor.',
+        completedAt: new Date(),
+        answers: answers
+      };
+      onComplete(fallbackResults);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const submitButtonText = isSubmitting 
-    ? "Submitting..." 
-    : isCompleting || isUpdatingSkills 
-    ? "Processing..." 
-    : "Submit Answers";
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const renderQuestion = () => {
+    const answer = answers[currentQuestion.id] || '';
+
+    switch (currentQuestion.type) {
+      case 'multiple-choice':
+        return (
+          <div className="space-y-4">
+            <RadioGroup
+              value={answer}
+              onValueChange={(value) => handleAnswerChange(currentQuestion.id, value)}
+            >
+              {currentQuestion.options?.map((option, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <RadioGroupItem value={option} id={`option-${index}`} />
+                  <Label htmlFor={`option-${index}`} className="cursor-pointer">
+                    {option}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+        );
+
+      case 'true-false':
+        return (
+          <div className="space-y-4">
+            <RadioGroup
+              value={answer}
+              onValueChange={(value) => handleAnswerChange(currentQuestion.id, value)}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="True" id="true" />
+                <Label htmlFor="true" className="cursor-pointer">True</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="False" id="false" />
+                <Label htmlFor="false" className="cursor-pointer">False</Label>
+              </div>
+            </RadioGroup>
+          </div>
+        );
+
+      case 'short-answer':
+        return (
+          <div className="space-y-4">
+            <Input
+              placeholder="Enter your answer..."
+              value={answer}
+              onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+              className="w-full"
+            />
+            <p className="text-sm text-muted-foreground">
+              Provide a clear, concise answer. Key concepts will be evaluated.
+            </p>
+          </div>
+        );
+
+      case 'essay':
+        return (
+          <div className="space-y-4">
+            <Textarea
+              placeholder="Write your detailed response..."
+              value={answer}
+              onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+              className="w-full min-h-32"
+            />
+            <p className="text-sm text-muted-foreground">
+              Provide a thorough explanation with examples and reasoning.
+            </p>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>{exerciseData.title || 'Practice Exercise'}</CardTitle>
-        {showTimer && (
-          <div className="text-sm text-gray-600">
-            Timer functionality would go here
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="p-6">
-        <div className="space-y-4">
-          {exerciseData.questions.map((question: any, index: number) => (
-            <div key={index} className="space-y-2">
-              <Label htmlFor={`question-${index}`}>{question.question}</Label>
-              {question.type === 'multiple-choice' ? (
-                <div className="flex flex-col space-y-2">
-                  {question.options.map((option: string) => (
-                    <div key={option} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`question-${index}-${option}`}
-                        checked={answers[index] === option}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            handleAnswerChange(index, option);
-                          } else {
-                            handleAnswerChange(index, '');
-                          }
-                        }}
-                      />
-                      <Label htmlFor={`question-${index}-${option}`}>{option}</Label>
-                    </div>
-                  ))}
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      {/* Header */}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                {exerciseData.title}
+                {sessionId && (
+                  <span className="flex items-center gap-1 text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                    <Brain className="h-3 w-3" />
+                    Trailblazer Session
+                  </span>
+                )}
+              </CardTitle>
+              <p className="text-muted-foreground mt-1">
+                {exerciseData.description}
+              </p>
+              {/* Enhanced metadata display */}
+              <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                <div>📊 {exerciseData.questions.filter(q => q.type === 'short-answer' || q.type === 'essay').length} questions will be analyzed for misconceptions</div>
+                {sessionId && (
+                  <div className="text-blue-600">🧠 Misconceptions will be tracked in your learning session</div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              {showTimer && (
+                <div className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  {formatTime(timeElapsed)}
                 </div>
-              ) : (
-                <Input
-                  type="text"
-                  id={`question-${index}`}
-                  value={answers[index]}
-                  onChange={(e) => handleAnswerChange(index, e.target.value)}
-                />
+              )}
+              {onExit && (
+                <Button variant="outline" size="sm" onClick={onExit}>
+                  Exit
+                </Button>
               )}
             </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Progress */}
+      <div className="space-y-2">
+        <div className="flex justify-between text-sm">
+          <span>Question {currentQuestionIndex + 1} of {exerciseData.questions.length}</span>
+          <span>{Math.round(progress)}% Complete</span>
+        </div>
+        <Progress value={progress} className="w-full" />
+      </div>
+
+      {/* Current Question */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">
+            Question {currentQuestionIndex + 1}
+            <span className="text-sm font-normal ml-2 text-muted-foreground">
+              ({currentQuestion.points} {currentQuestion.points === 1 ? 'point' : 'points'})
+            </span>
+          </CardTitle>
+          <p className="text-base">{currentQuestion.question}</p>
+          <p className="text-sm text-muted-foreground">
+            Skill: {currentQuestion.targetSkill}
+          </p>
+        </CardHeader>
+        <CardContent>
+          {renderQuestion()}
+        </CardContent>
+      </Card>
+
+      {/* Navigation */}
+      <div className="flex justify-between items-center">
+        <Button
+          variant="outline"
+          onClick={handlePrevious}
+          disabled={currentQuestionIndex === 0}
+        >
+          Previous
+        </Button>
+
+        <div className="flex gap-2">
+          {exerciseData.questions.map((_, index) => (
+            <button
+              key={index}
+              className={`w-8 h-8 rounded-full text-sm ${
+                index === currentQuestionIndex
+                  ? 'bg-primary text-primary-foreground'
+                  : answers[exerciseData.questions[index].id]
+                  ? 'bg-green-100 text-green-800 border border-green-300'
+                  : 'bg-muted text-muted-foreground border'
+              }`}
+              onClick={() => setCurrentQuestionIndex(index)}
+            >
+              {index + 1}
+            </button>
           ))}
         </div>
-        <div className="mt-6 flex justify-between">
-          <Button variant="secondary" onClick={onExit}>
-            Exit
-          </Button>
+
+        {isLastQuestion ? (
           <Button
             onClick={handleSubmit}
-            disabled={!isComplete || isSubmitting || isCompleting || isUpdatingSkills}
+            disabled={isSubmitting || !hasAnsweredCurrent}
+            className="bg-green-600 hover:bg-green-700"
           >
-            {submitButtonText}
+            {isSubmitting ? 'Submitting...' : 'Submit Exercise'}
           </Button>
-        </div>
-        {submissionResult && (
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold">Results</h3>
-            <p>
-              You got {submissionResult.correctAnswers} out of {submissionResult.totalQuestions} questions correct.
-            </p>
-            <p>Percentage Score: {submissionResult.percentageScore.toFixed(2)}%</p>
-            {submissionResult.unifiedGradingUsed && (
-              <div className="mt-2 text-sm text-blue-600">
-                ✨ Graded with AI • {submissionResult.cacheHits} cache hits • {submissionResult.processingTime}ms
-              </div>
-            )}
-          </div>
+        ) : (
+          <Button
+            onClick={handleNext}
+            disabled={!hasAnsweredCurrent}
+          >
+            Next
+          </Button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Answer Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Progress Summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <span>
+                Answered: {Object.keys(answers).filter(id => answers[id]?.trim()).length}/{exerciseData.questions.length}
+              </span>
+            </div>
+            <div>
+              Total Points: {exerciseData.totalPoints}
+            </div>
+            <div>
+              Estimated Time: {exerciseData.estimatedTime} min
+            </div>
+            <div>
+              Skills: {[...new Set(exerciseData.questions.map(q => q.targetSkill))].length}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

@@ -81,17 +81,7 @@ export function TailoredExercises() {
         )
       );
       setSelectedExercise(null);
-      
-      // Show enhanced completion message for unified grading
-      const isUnified = (results as any).unifiedGradingUsed;
-      const cacheHits = (results as any).cacheHits || 0;
-      const processingTime = (results as any).processingTime || 0;
-      
-      if (isUnified) {
-        toast.success(`Exercise completed with AI grading! Score: ${Math.round(results.percentageScore)}% (${cacheHits} cache hits, ${processingTime}ms)`);
-      } else {
-        toast.success('Exercise completed successfully!');
-      }
+      toast.success('Exercise completed successfully!');
     } catch (error) {
       console.error('Error completing exercise:', error);
       toast.error('Failed to complete exercise');
@@ -148,14 +138,8 @@ export function TailoredExercises() {
     const classContext = getExerciseClassContext(selectedExercise);
     const exerciseDataWithId = {
       ...selectedExercise.exercise_data,
-      exerciseId: selectedExercise.id,
-      classContext: classContext,
-      // Add unified grading metadata
-      gradingMethod: 'unified_batch',
-      skillMetadata: {
-        ...selectedExercise.exercise_data?.skillMetadata,
-        skillType: getSkillType(selectedExercise) || 'content'
-      }
+      exerciseId: selectedExercise.id, // Add exercise ID for timing tracking
+      classContext: classContext // Add class context for skill score updates
     };
 
     return (
@@ -171,15 +155,9 @@ export function TailoredExercises() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">Tailored Exercises</h2>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">
-            {exercises.filter(ex => ex.status === 'available').length} Available
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            <Brain className="h-3 w-3 mr-1" />
-            AI Grading
-          </Badge>
-        </div>
+        <Badge variant="secondary">
+          {exercises.filter(ex => ex.status === 'available').length} Available
+        </Badge>
       </div>
 
       <div className="grid gap-4">
@@ -211,12 +189,6 @@ export function TailoredExercises() {
                           {skillType === 'content' ? 'Content Skill' : 'Subject Skill'}
                         </Badge>
                       )}
-
-                      {/* Unified Grading Badge */}
-                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                        <Brain className="h-3 w-3 mr-1" />
-                        Smart AI
-                      </Badge>
                     </div>
                     
                     <p className="text-slate-600 mb-3">
@@ -259,9 +231,6 @@ export function TailoredExercises() {
                         <div className="flex items-center gap-2 mb-1">
                           <CheckCircle className="h-4 w-4 text-green-600" />
                           <span className="text-sm font-medium">Exercise Score: {Math.round(exercise.score)}%</span>
-                          <Badge variant="outline" className="text-xs text-green-700">
-                            AI Graded
-                          </Badge>
                         </div>
                         <Progress value={exercise.score} className="h-2" />
                       </div>

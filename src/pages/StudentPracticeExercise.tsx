@@ -360,6 +360,7 @@ const StudentPracticeExercise = () => {
           exerciseData={exerciseData}
           onComplete={handleExerciseComplete}
           onExit={handleExitExercise}
+          showTimer={false}
         />
       </div>
     );
