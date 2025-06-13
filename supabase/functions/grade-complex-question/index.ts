@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { 
@@ -8,6 +7,12 @@ import {
   validateWithSchema,
   createValidationResponse
 } from './validation.ts';
+import { 
+  handleSingleQuestionResponse,
+  handleBatchGradingResponse,
+  handleSkillEscalationResponse
+} from './responseHandler.ts';
+import { generateCorrelationId, logOpenAISuccess } from '../../../src/lib/openai/responseHandler.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +25,7 @@ class CircuitBreaker {
   private lastFailureTime = 0;
   private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
   private readonly failureThreshold = 5;
-  private readonly recoveryTimeoutMs = 60000; // 1 minute
+  private readonly recoveryTimeoutMs = 60000;
 
   async execute<T>(operation: () => Promise<T>): Promise<T> {
     if (this.state === 'OPEN') {
@@ -61,7 +66,6 @@ class CircuitBreaker {
 const circuitBreaker = new CircuitBreaker();
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -76,6 +80,7 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
+    const startTime = Date.now();
     
     // Validate input based on request type
     if (requestBody.escalationMode) {
@@ -83,19 +88,19 @@ serve(async (req) => {
       if (!validation.success) {
         return createValidationResponse(validation.errors!, 'Skill Escalation', corsHeaders);
       }
-      return await processSkillEscalation(validation.data!, openAIApiKey);
+      return await processSkillEscalation(validation.data!, openAIApiKey, startTime);
     } else if (requestBody.batchMode || Array.isArray(requestBody.questions)) {
       const validation = validateWithSchema(batchGradingSchema, requestBody, 'Batch Grading');
       if (!validation.success) {
         return createValidationResponse(validation.errors!, 'Batch Grading', corsHeaders);
       }
-      return await processEnhancedBatchQuestions(validation.data!, openAIApiKey);
+      return await processEnhancedBatchQuestions(validation.data!, openAIApiKey, startTime);
     } else {
       const validation = validateWithSchema(singleQuestionGradingSchema, requestBody, 'Single Question Grading');
       if (!validation.success) {
         return createValidationResponse(validation.errors!, 'Single Question Grading', corsHeaders);
       }
-      return await processSingleQuestion(validation.data!, openAIApiKey);
+      return await processSingleQuestion(validation.data!, openAIApiKey, startTime);
     }
 
   } catch (error) {
@@ -107,8 +112,9 @@ serve(async (req) => {
   }
 });
 
-async function processEnhancedBatchQuestions(requestBody: any, openAIApiKey: string) {
+async function processEnhancedBatchQuestions(requestBody: any, openAIApiKey: string, startTime: number) {
   const { questions, enhancedBatchPrompt, examId, rubric } = requestBody;
+  const correlationId = generateCorrelationId('batch_grade');
   
   if (!questions || !Array.isArray(questions)) {
     return new Response(
@@ -117,11 +123,9 @@ async function processEnhancedBatchQuestions(requestBody: any, openAIApiKey: str
     );
   }
 
-  // Use enhanced prompt if provided, otherwise fall back to standard batch prompt
   const finalPrompt = enhancedBatchPrompt || createEnhancedBatchPrompt(questions, rubric);
-  const questionDelimiter = '---END QUESTION---';
 
-  console.log(`🎯 Processing enhanced batch: ${questions.length} questions with cross-question leakage prevention`);
+  console.log(`🎯 [${correlationId}] Processing enhanced batch: ${questions.length} questions`);
 
   try {
     const result = await circuitBreaker.execute(async () => {
@@ -143,7 +147,7 @@ async function processEnhancedBatchQuestions(requestBody: any, openAIApiKey: str
               content: finalPrompt
             }
           ],
-          temperature: 0.2, // Lower temperature for more consistent batch processing
+          temperature: 0.2,
           max_tokens: 3000,
           response_format: { type: "json_object" }
         }),
@@ -163,37 +167,31 @@ async function processEnhancedBatchQuestions(requestBody: any, openAIApiKey: str
       throw new Error('No response content from OpenAI');
     }
 
-    let gradingResults;
-    try {
-      gradingResults = JSON.parse(content);
-    } catch (parseError) {
-      console.error('Failed to parse OpenAI response:', content);
-      // Attempt delimiter-based parsing as fallback
-      gradingResults = parseWithDelimiters(content, questionDelimiter, questions.length);
-    }
+    // Use enhanced response handler
+    const processedResults = handleBatchGradingResponse(content, questions, correlationId);
+    
+    const processingTime = Date.now() - startTime;
+    logOpenAISuccess('Batch Grading', processingTime, result.usage, correlationId);
 
-    // Validate and sanitize enhanced batch results
-    const sanitizedResults = validateAndSanitizeEnhancedBatchResults(gradingResults, questions);
-
-    console.log(`✅ Enhanced batch grading completed: ${questions.length} questions processed with leakage prevention`);
+    console.log(`✅ [${correlationId}] Enhanced batch grading completed: ${questions.length} questions processed`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        results: sanitizedResults.results || sanitizedResults,
+        results: processedResults.results || processedResults,
         usage: result.usage,
         batchSize: questions.length,
-        processingTime: Date.now(),
+        processingTime,
         enhancedProcessing: true,
-        crossQuestionLeakagePrevention: true
+        correlationId,
+        fallbackUsed: processedResults.fallbackUsed || false
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Enhanced batch processing failed:', error);
+    console.error(`❌ [${correlationId}] Enhanced batch processing failed:`, error);
     
-    // Fallback: Create basic results for each question
     const fallbackResults = questions.map((q: any, index: number) => ({
       questionNumber: q.questionNumber || index + 1,
       isCorrect: false,
@@ -212,6 +210,7 @@ async function processEnhancedBatchQuestions(requestBody: any, openAIApiKey: str
         error: error.message,
         results: fallbackResults,
         fallbackUsed: true,
+        correlationId,
         enhancedProcessing: false
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -219,17 +218,11 @@ async function processEnhancedBatchQuestions(requestBody: any, openAIApiKey: str
   }
 }
 
-async function processSkillEscalation(requestBody: any, openAIApiKey: string) {
-  const {
-    questionNumber,
-    questionText,
-    studentAnswer,
-    availableSkills,
-    escalationPrompt,
-    model = 'gpt-4.1-2025-04-14'
-  } = requestBody;
+async function processSkillEscalation(requestBody: any, openAIApiKey: string, startTime: number) {
+  const { questionNumber, questionText, studentAnswer, availableSkills, escalationPrompt, model = 'gpt-4.1-2025-04-14' } = requestBody;
+  const correlationId = generateCorrelationId('skill_esc');
 
-  console.log(`🎯 Processing skill escalation for Q${questionNumber} using ${model}`);
+  console.log(`🎯 [${correlationId}] Processing skill escalation for Q${questionNumber} using ${model}`);
 
   try {
     const result = await circuitBreaker.execute(async () => {
@@ -251,7 +244,7 @@ async function processSkillEscalation(requestBody: any, openAIApiKey: string) {
               content: escalationPrompt
             }
           ],
-          temperature: 0.1, // Very low temperature for consistent skill resolution
+          temperature: 0.1,
           max_tokens: 1000,
           response_format: { type: "json_object" }
         }),
@@ -271,41 +264,29 @@ async function processSkillEscalation(requestBody: any, openAIApiKey: string) {
       throw new Error('No response from skill escalation');
     }
 
-    let skillResult;
-    try {
-      skillResult = JSON.parse(content);
-    } catch (parseError) {
-      console.error('Failed to parse skill escalation response:', content);
-      throw new Error('Invalid skill escalation response format');
-    }
+    // Use enhanced response handler
+    const skillResult = handleSkillEscalationResponse(content, availableSkills, correlationId);
+    
+    const processingTime = Date.now() - startTime;
+    logOpenAISuccess('Skill Escalation', processingTime, result.usage, correlationId);
 
-    // Validate escalated skills
-    const validatedResult = {
-      matchedSkills: Array.isArray(skillResult.matchedSkills) 
-        ? skillResult.matchedSkills.filter((skill: string) => availableSkills.includes(skill)).slice(0, 2)
-        : [availableSkills[0] || 'General'],
-      confidence: Math.max(0, Math.min(1, Number(skillResult.confidence) || 0.8)),
-      reasoning: String(skillResult.reasoning || 'Skill escalation completed'),
-      primarySkill: skillResult.primarySkill || skillResult.matchedSkills?.[0] || 'General'
-    };
-
-    console.log(`✅ Skill escalation completed for Q${questionNumber}: ${validatedResult.matchedSkills.join(', ')}`);
+    console.log(`✅ [${correlationId}] Skill escalation completed for Q${questionNumber}: ${skillResult.matchedSkills.join(', ')}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        skillEscalation: validatedResult,
+        skillEscalation: skillResult,
         usage: result.usage,
         model,
+        correlationId,
         escalated: true
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Skill escalation processing failed:', error);
+    console.error(`❌ [${correlationId}] Skill escalation processing failed:`, error);
     
-    // Fallback skill assignment
     const fallbackResult = {
       matchedSkills: [availableSkills[0] || 'General'],
       confidence: 0.6,
@@ -318,6 +299,7 @@ async function processSkillEscalation(requestBody: any, openAIApiKey: string) {
         success: false,
         error: error.message,
         skillEscalation: fallbackResult,
+        correlationId,
         fallbackUsed: true
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -325,17 +307,9 @@ async function processSkillEscalation(requestBody: any, openAIApiKey: string) {
   }
 }
 
-async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
-  const {
-    questionText,
-    studentAnswer,
-    correctAnswer,
-    pointsPossible,
-    questionNumber,
-    studentName,
-    skillContext,
-    questionType
-  } = requestBody;
+async function processSingleQuestion(requestBody: any, openAIApiKey: string, startTime: number) {
+  const { questionText, studentAnswer, correctAnswer, pointsPossible, questionNumber, studentName, skillContext, questionType } = requestBody;
+  const correlationId = generateCorrelationId('single_grade');
 
   if (!questionText || !studentAnswer || !correctAnswer) {
     return new Response(
@@ -367,7 +341,7 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
             }
           ],
           temperature: 0.3,
-          max_tokens: 1500, // Increased for misconception analysis
+          max_tokens: 1500,
           response_format: { type: "json_object" }
         }),
       });
@@ -386,42 +360,25 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
       throw new Error('No response from OpenAI');
     }
 
-    let gradingResult;
-    try {
-      gradingResult = JSON.parse(content);
-    } catch (parseError) {
-      console.error('Failed to parse OpenAI response:', content);
-      throw new Error('Invalid response format from OpenAI');
-    }
+    // Use enhanced response handler
+    const gradingResult = handleSingleQuestionResponse(content, questionNumber, pointsPossible, correlationId);
+    
+    const processingTime = Date.now() - startTime;
+    logOpenAISuccess('Single Question Grading', processingTime, result.usage, correlationId);
 
-    // Validate and sanitize the response
+    // Add usage information
     const sanitizedResult = {
-      isCorrect: Boolean(gradingResult.isCorrect),
-      pointsEarned: Math.max(0, Math.min(pointsPossible, Number(gradingResult.pointsEarned) || 0)),
-      confidence: Math.max(0, Math.min(1, Number(gradingResult.confidence) || 0.5)),
-      reasoning: String(gradingResult.reasoning || 'OpenAI grading completed'),
-      complexityScore: Math.max(0, Math.min(1, Number(gradingResult.complexityScore) || 0.5)),
-      reasoningDepth: ['shallow', 'medium', 'deep'].includes(gradingResult.reasoningDepth) 
-        ? gradingResult.reasoningDepth 
-        : 'medium',
+      ...gradingResult,
       usage: {
         promptTokens: result.usage?.prompt_tokens || 0,
         completionTokens: result.usage?.completion_tokens || 0,
         totalTokens: result.usage?.total_tokens || 0
-      }
+      },
+      correlationId,
+      processingTime
     };
 
-    // Add misconception analysis if available
-    if (gradingResult.misconceptionCategory) {
-      sanitizedResult.misconceptionAnalysis = {
-        category: String(gradingResult.misconceptionCategory),
-        subtype: String(gradingResult.misconceptionSubtype || ''),
-        confidence: Math.max(0, Math.min(1, Number(gradingResult.misconceptionConfidence) || 0.7)),
-        reasoning: String(gradingResult.misconceptionReasoning || '')
-      };
-    }
-
-    console.log(`✅ OpenAI graded Q${questionNumber}: ${sanitizedResult.pointsEarned}/${pointsPossible} points${sanitizedResult.misconceptionAnalysis ? ` (Misconception: ${sanitizedResult.misconceptionAnalysis.category})` : ''}`);
+    console.log(`✅ [${correlationId}] OpenAI graded Q${questionNumber}: ${sanitizedResult.pointsEarned}/${pointsPossible} points`);
 
     return new Response(
       JSON.stringify(sanitizedResult),
@@ -429,26 +386,20 @@ async function processSingleQuestion(requestBody: any, openAIApiKey: string) {
     );
 
   } catch (error) {
-    console.error('Single question processing failed:', error);
+    console.error(`❌ [${correlationId}] Single question processing failed:`, error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        correlationId,
+        fallbackUsed: true
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 }
 
 function createSingleQuestionPrompt(requestBody: any): string {
-  const {
-    questionText,
-    studentAnswer,
-    correctAnswer,
-    pointsPossible,
-    questionNumber,
-    studentName,
-    skillContext,
-    subject,
-    questionType
-  } = requestBody;
+  const { questionText, studentAnswer, correctAnswer, pointsPossible, questionNumber, studentName, skillContext, subject, questionType } = requestBody;
 
   const isAnalyzableForMisconceptions = questionType === 'short-answer' || questionType === 'essay';
   
@@ -532,58 +483,4 @@ REQUIRED OUTPUT FORMAT (JSON object with results array):
 }
 
 CRITICAL: Return exactly ${questionCount} results. Process each question independently without cross-contamination.`;
-}
-
-function parseWithDelimiters(content: string, delimiter: string, expectedCount: number): any {
-  const blocks = content.split(delimiter);
-  const results = [];
-
-  for (let i = 0; i < Math.min(blocks.length, expectedCount); i++) {
-    const block = blocks[i].trim();
-    const result = {
-      questionNumber: i + 1,
-      isCorrect: block.toLowerCase().includes('correct'),
-      pointsEarned: block.match(/points?[:\s]*(\d+)/i)?.[1] ? parseInt(block.match(/points?[:\s]*(\d+)/i)[1]) : 0,
-      confidence: 0.7,
-      reasoning: `Delimiter-based parsing: ${block.substring(0, 100)}...`,
-      complexityScore: 0.5,
-      reasoningDepth: 'medium',
-      matchedSkills: [],
-      skillConfidence: 0.5
-    };
-    results.push(result);
-  }
-
-  return { results };
-}
-
-function validateAndSanitizeEnhancedBatchResults(results: any, questions: any[]): any {
-  if (!results || !results.results) {
-    if (Array.isArray(results)) {
-      results = { results };
-    } else {
-      throw new Error('Invalid enhanced results format from OpenAI');
-    }
-  }
-
-  const sanitizedResults = results.results.map((result: any, index: number) => {
-    const question = questions[index];
-    const pointsPossible = question?.pointsPossible || 1;
-    
-    return {
-      questionNumber: result.questionNumber || question?.questionNumber || index + 1,
-      isCorrect: Boolean(result.isCorrect),
-      pointsEarned: Math.max(0, Math.min(pointsPossible, Number(result.pointsEarned) || 0)),
-      confidence: Math.max(0, Math.min(1, Number(result.confidence) || 0.5)),
-      reasoning: String(result.reasoning || 'Enhanced batch processing result'),
-      complexityScore: Math.max(0, Math.min(1, Number(result.complexityScore) || 0.5)),
-      reasoningDepth: ['shallow', 'medium', 'deep'].includes(result.reasoningDepth) 
-        ? result.reasoningDepth 
-        : 'medium',
-      matchedSkills: Array.isArray(result.matchedSkills) ? result.matchedSkills : [],
-      skillConfidence: Math.max(0, Math.min(1, Number(result.skillConfidence) || 0.7))
-    };
-  });
-
-  return { results: sanitizedResults };
 }
