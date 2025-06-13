@@ -1,6 +1,10 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { 
+  wasmGradingSchema,
+  validateWithSchema,
+  createValidationResponse
+} from './validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -356,19 +360,14 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { studentAnswer, correctAnswer, questionClassification } = body;
-
-    if (!studentAnswer || !correctAnswer) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Missing required fields: studentAnswer and correctAnswer' 
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+    
+    // Validate input payload
+    const validation = validateWithSchema(wasmGradingSchema, body, 'WASM Grading');
+    if (!validation.success) {
+      return createValidationResponse(validation.errors!, 'WASM Grading', corsHeaders);
     }
+
+    const { studentAnswer, correctAnswer, questionClassification } = validation.data!;
 
     // Pre-warm model on first request
     if (!cachedModel && !isModelLoading) {

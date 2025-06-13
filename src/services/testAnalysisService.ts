@@ -1,7 +1,13 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { jsonValidationService } from './jsonValidationService';
 import { transactionService } from './transactionService';
+import { 
+  extractTextSchema, 
+  analyzeTestSchema,
+  ValidationErrorHandler,
+  type ExtractTextInput,
+  type AnalyzeTestInput
+} from '@/lib/validation/schemas';
 
 export interface ExtractTextRequest {
   fileContent: string;
@@ -101,12 +107,25 @@ export const extractTextFromFile = async (request: {
   fileName: string;
 }): Promise<ExtractTextResponse> => {
   try {
-    console.log('🔍 Extracting text from file with handwriting-resilient processing:', request.fileName);
+    // Validate input
+    const validation = ValidationErrorHandler.validateWithSchema(
+      extractTextSchema,
+      request,
+      'Extract Text'
+    );
+    
+    if (!validation.success) {
+      throw new Error(`Validation failed: ${validation.errors?.map(e => e.message).join(', ')}`);
+    }
+    
+    const validatedRequest = validation.data!;
+    
+    console.log('🔍 Extracting text from file with handwriting-resilient processing:', validatedRequest.fileName);
     
     const { data, error } = await supabase.functions.invoke('extract-text', {
       body: {
-        fileName: request.fileName,
-        fileContent: request.fileContent,
+        fileName: validatedRequest.fileName,
+        fileContent: validatedRequest.fileContent,
       },
     });
 
@@ -142,7 +161,7 @@ export const extractTextFromFile = async (request: {
       examId: data.examId || null,
       studentName: data.studentName || null,
       studentId: data.studentId || null,
-      fileName: request.fileName,
+      fileName: validatedRequest.fileName,
       structuredData: data.structuredData || {},
     };
   } catch (error) {
@@ -162,10 +181,23 @@ export const analyzeTest = async (request: {
   studentEmail?: string;
 }): Promise<AnalyzeTestResponse> => {
   try {
-    console.log('🔬 Analyzing test with modular skill classification system for exam:', request.examId);
+    // Validate input
+    const validation = ValidationErrorHandler.validateWithSchema(
+      analyzeTestSchema,
+      request,
+      'Analyze Test'
+    );
+    
+    if (!validation.success) {
+      throw new Error(`Validation failed: ${validation.errors?.map(e => e.message).join(', ')}`);
+    }
+    
+    const validatedRequest = validation.data!;
+    
+    console.log('🔬 Analyzing test with modular skill classification system for exam:', validatedRequest.examId);
     
     const { data, error } = await supabase.functions.invoke('analyze-test', {
-      body: request,
+      body: validatedRequest,
     });
 
     if (error) {
@@ -262,7 +294,9 @@ export const analyzeTest = async (request: {
         formatMismatchFixed: true,
         classIdResolutionEnabled: true,
         skillClassificationEnabled: true,
-        modularClassificationUsed: true
+        modularClassificationUsed: true,
+        zodValidationEnabled: true,
+        zodValidationTime: validation.validationTime
       }
     };
   } catch (error) {

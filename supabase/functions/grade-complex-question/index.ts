@@ -1,5 +1,13 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { 
+  singleQuestionGradingSchema,
+  batchGradingSchema,
+  skillEscalationSchema,
+  validateWithSchema,
+  createValidationResponse
+} from './validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,13 +77,25 @@ serve(async (req) => {
 
     const requestBody = await req.json();
     
-    // Support enhanced batch processing, skill escalation, and single question processing
+    // Validate input based on request type
     if (requestBody.escalationMode) {
-      return await processSkillEscalation(requestBody, openAIApiKey);
+      const validation = validateWithSchema(skillEscalationSchema, requestBody, 'Skill Escalation');
+      if (!validation.success) {
+        return createValidationResponse(validation.errors!, 'Skill Escalation', corsHeaders);
+      }
+      return await processSkillEscalation(validation.data!, openAIApiKey);
     } else if (requestBody.batchMode || Array.isArray(requestBody.questions)) {
-      return await processEnhancedBatchQuestions(requestBody, openAIApiKey);
+      const validation = validateWithSchema(batchGradingSchema, requestBody, 'Batch Grading');
+      if (!validation.success) {
+        return createValidationResponse(validation.errors!, 'Batch Grading', corsHeaders);
+      }
+      return await processEnhancedBatchQuestions(validation.data!, openAIApiKey);
     } else {
-      return await processSingleQuestion(requestBody, openAIApiKey);
+      const validation = validateWithSchema(singleQuestionGradingSchema, requestBody, 'Single Question Grading');
+      if (!validation.success) {
+        return createValidationResponse(validation.errors!, 'Single Question Grading', corsHeaders);
+      }
+      return await processSingleQuestion(validation.data!, openAIApiKey);
     }
 
   } catch (error) {

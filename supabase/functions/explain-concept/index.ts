@@ -1,6 +1,10 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { 
+  explainConceptSchema,
+  validateWithSchema,
+  createValidationResponse
+} from './validation.ts';
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 
@@ -140,7 +144,15 @@ serve(async (req) => {
   }
 
   try {
-    const { question, correctAnswer, explanation, subject, grade, skillName, questionType } = await req.json();
+    const requestBody = await req.json();
+    
+    // Validate input payload
+    const validation = validateWithSchema(explainConceptSchema, requestBody, 'Explain Concept');
+    if (!validation.success) {
+      return createValidationResponse(validation.errors!, 'Explain Concept', corsHeaders);
+    }
+
+    const { question, correctAnswer, explanation, subject, grade, skillName, questionType } = validation.data!;
 
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not configured');
