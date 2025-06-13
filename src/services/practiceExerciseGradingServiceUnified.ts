@@ -83,7 +83,9 @@ export class PracticeExerciseGradingServiceUnified {
         pointsEarned: r.pointsEarned || 0,
         pointsPossible: r.pointsPossible || 1,
         feedback: r.feedback || '',
-        gradingMethod: r.gradingMethod || 'unified',
+        gradingMethod: (r.gradingMethod === 'exact_match' || r.gradingMethod === 'flexible_match' || r.gradingMethod === 'ai_graded') 
+          ? r.gradingMethod 
+          : 'ai_graded' as const,
         confidence: r.confidence || 0
       })),
       overallFeedback: `You scored ${percentageScore.toFixed(1)}% on this exercise.`,
