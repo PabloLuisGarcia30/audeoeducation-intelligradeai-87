@@ -69,8 +69,8 @@ serve(async (req) => {
             role: 'system',
             content: `You are an expert educational content creator specializing in ${subject} for ${grade} students. ${
               includeMisconceptions 
-                ? 'Create engaging multiple-choice questions with distractors based on real student misconceptions.' 
-                : 'Create engaging practice exercises that build understanding.'
+                ? 'Create engaging multiple-choice questions with distractors based on real student misconceptions. Return your response in JSON format.' 
+                : 'Create engaging practice exercises that build understanding. Return your response in JSON format.'
             }`
           },
           {

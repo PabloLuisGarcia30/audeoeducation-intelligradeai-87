@@ -21,7 +21,7 @@ For each incorrect option (A, B, C, D - excluding the correct answer), you MUST:
    - Strategic Errors (wrong approach, off-topic response)
    - Meta-Cognitive Errors (overconfidence, ignoring feedback)
 
-EXAMPLE OUTPUT FORMAT:
+EXAMPLE OUTPUT FORMAT (return in JSON format):
 {
   "title": "Practice: ${skillName}",
   "description": "Practice exercises with misconception-aware feedback",
@@ -60,7 +60,7 @@ EXAMPLE OUTPUT FORMAT:
   ]
 }
 
-Generate 4-6 questions following this exact format. Each distractor MUST represent a genuine misconception students make with ${skillName} in ${grade} ${subject}.`;
+Generate 4-6 questions following this exact JSON format. Each distractor MUST represent a genuine misconception students make with ${skillName} in ${grade} ${subject}.`;
 }
 
 export function createMisconceptionPromptForSubject(subject: string): string {
