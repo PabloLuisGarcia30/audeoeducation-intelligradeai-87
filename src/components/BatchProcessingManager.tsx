@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Upload, Play, Pause, Square, Clock, AlertCircle, CheckCircle, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,28 +34,32 @@ export const BatchProcessingManager: React.FC<BatchProcessingManagerProps> = ({
     }
   };
 
-  const handleCreateBatchJob = () => {
+  const handleCreateBatchJob = async () => {
     if (selectedFiles.length === 0) {
       toast.error('Please select files first');
       return;
     }
 
-    const jobId = BatchProcessingService.createBatchJob(selectedFiles, priority);
-    toast.success(`Batch job created with ${selectedFiles.length} files`);
-    
-    // Subscribe to job updates
-    BatchProcessingService.subscribeToJob(jobId, (job) => {
-      if (job.status === 'completed' || job.status === 'failed') {
-        onJobComplete?.(job);
-        if (job.status === 'completed') {
-          toast.success(`Batch job completed: ${job.results.length} files processed`);
-        } else {
-          toast.error(`Batch job failed: ${job.errors.length} errors`);
+    try {
+      const jobId = await BatchProcessingService.createBatchJob(selectedFiles, priority);
+      toast.success(`Batch job created with ${selectedFiles.length} files`);
+      
+      // Subscribe to job updates
+      BatchProcessingService.subscribeToJob(jobId, (job) => {
+        if (job.status === 'completed' || job.status === 'failed') {
+          onJobComplete?.(job);
+          if (job.status === 'completed') {
+            toast.success(`Batch job completed: ${job.results.length} files processed`);
+          } else {
+            toast.error(`Batch job failed: ${job.errors.length} errors`);
+          }
         }
-      }
-    });
+      });
 
-    setSelectedFiles([]);
+      setSelectedFiles([]);
+    } catch (error) {
+      toast.error(`Failed to create batch job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handlePauseJob = (jobId: string) => {

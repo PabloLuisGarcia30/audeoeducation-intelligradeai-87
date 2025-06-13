@@ -17,7 +17,7 @@ export { CacheResponseService } from './cacheResponseService';
 export { CacheLoggingService } from './cacheLoggingService';
 
 export type { DocumentClassification, OcrMethod, AdaptiveOcrConfig, ProcessingMetrics } from './smartOcrService';
-export type { BatchJob, ProcessingQueue } from './batchProcessingService';
+export type { BatchJob, QueueStatus } from './batchProcessingService';
 export type { PerformanceMetric, SystemHealthMetrics, PerformanceReport } from './performanceMonitoringService';
 export type { DistilBertConfig, DistilBertGradingResult } from './distilBertLocalGrading';
 export type { QuestionClassification, SimpleAnswerValidation } from './enhancedQuestionClassifier';
