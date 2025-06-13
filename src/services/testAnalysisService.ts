@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { jsonValidationService } from './jsonValidationService';
 import { transactionService } from './transactionService';
@@ -45,7 +46,7 @@ export interface AnalyzeTestResponse {
     points_earned: number;
     points_possible: number;
   }>;
-  // Enhanced response with database storage info and critical fixes
+  // Enhanced response with database storage info and modular skill classification
   databaseStorage?: {
     testResultId: string;
     studentProfileId: string;
@@ -64,11 +65,13 @@ export interface AnalyzeTestResponse {
     studentIdGroupingUsed: boolean;
     answerKeyValidationEnabled: boolean;
     databasePersistenceEnabled: boolean;
-    // New metrics for critical fixes
+    // Enhanced metrics for modular skill classification
     formatMismatchFixed?: boolean;
     classIdResolutionEnabled?: boolean;
     validationSuccessRate?: number;
     enhancementLevel?: string;
+    skillClassificationEnabled?: boolean;
+    modularClassificationUsed?: boolean;
   };
 }
 
@@ -159,7 +162,7 @@ export const analyzeTest = async (request: {
   studentEmail?: string;
 }): Promise<AnalyzeTestResponse> => {
   try {
-    console.log('🔬 Analyzing test with critical fixes: format mismatch & class_id resolution for exam:', request.examId);
+    console.log('🔬 Analyzing test with modular skill classification system for exam:', request.examId);
     
     const { data, error } = await supabase.functions.invoke('analyze-test', {
       body: request,
@@ -193,7 +196,9 @@ export const analyzeTest = async (request: {
           validationErrors: validationResult.errors,
           fallbackUsed: true,
           formatMismatchFixed: true,
-          classIdResolutionEnabled: true
+          classIdResolutionEnabled: true,
+          skillClassificationEnabled: true,
+          modularClassificationUsed: true
         }
       };
       
@@ -202,19 +207,21 @@ export const analyzeTest = async (request: {
 
     const validatedData = validationResult.data;
 
-    // Log enhanced processing results with critical fixes
-    if (data.processingMetrics?.formatMismatchFixed) {
-      console.log('✅ Critical format mismatch fix applied successfully');
+    // Log enhanced processing results with modular skill classification
+    if (data.processingMetrics?.modularClassificationUsed) {
+      console.log('✅ Modular skill classification system applied successfully');
       console.log(`📊 Validation Success Rate: ${data.processingMetrics.validationSuccessRate || 100}%`);
       console.log(`🔧 Class ID Resolution: ${data.processingMetrics.classIdResolutionEnabled ? 'Enabled' : 'Disabled'}`);
+      console.log(`🧠 Skill Classification: ${data.processingMetrics.skillClassificationEnabled ? 'Enabled' : 'Disabled'}`);
     }
 
     // Enhanced database storage results logging
     if (data.databaseStorage?.savedToDatabase) {
-      console.log('✅ Test results saved with enhanced class_id resolution');
+      console.log('✅ Test results saved with modular skill classification system');
       console.log(`💾 Test Result ID: ${data.databaseStorage.testResultId}`);
       console.log(`📊 Questions stored: ${data.databaseStorage.questionsStored}`);
       console.log(`🎯 Enhancement level: ${data.processingMetrics?.enhancementLevel || 'unknown'}`);
+      console.log(`🧠 Modular classification: ${data.processingMetrics?.modularClassificationUsed ? 'Applied' : 'Not Applied'}`);
     } else {
       console.warn('⚠️ Test results were not saved to database');
       if (data.databaseStorage?.error) {
@@ -222,20 +229,22 @@ export const analyzeTest = async (request: {
       }
     }
 
-    // Log enhanced processing metrics with critical fixes
+    // Log enhanced processing metrics with modular skill classification
     if (data.processingMetrics) {
-      console.log('📈 Enhanced processing metrics with critical fixes:');
+      console.log('📈 Enhanced processing metrics with modular skill classification:');
       console.log(`• Format Mismatch Fixed: ${data.processingMetrics.formatMismatchFixed ? 'Yes' : 'No'}`);
       console.log(`• Class ID Resolution: ${data.processingMetrics.classIdResolutionEnabled ? 'Enabled' : 'Disabled'}`);
       console.log(`• JSON Validation: ${data.processingMetrics.jsonValidationEnabled ? 'Enabled' : 'Disabled'}`);
+      console.log(`• Skill Classification: ${data.processingMetrics.skillClassificationEnabled ? 'Enabled' : 'Disabled'}`);
+      console.log(`• Modular Classification: ${data.processingMetrics.modularClassificationUsed ? 'Applied' : 'Not Applied'}`);
       console.log(`• Validation Success Rate: ${data.processingMetrics.validationSuccessRate || 100}%`);
       console.log(`• Processing Time: ${data.processingMetrics.totalProcessingTime}ms`);
       console.log(`• Enhancement Level: ${data.processingMetrics.enhancementLevel || 'unknown'}`);
     }
 
-    console.log('✅ Test analysis successful with critical fixes applied, score:', validatedData.overallScore);
+    console.log('✅ Test analysis successful with modular skill classification applied, score:', validatedData.overallScore);
     
-    // Return enhanced response with critical fixes info
+    // Return enhanced response with modular skill classification info
     return {
       overall_score: validatedData.overallScore,
       grade: validatedData.grade,
@@ -251,11 +260,13 @@ export const analyzeTest = async (request: {
         transactionSafetyEnabled: true,
         validationSuccessful: true,
         formatMismatchFixed: true,
-        classIdResolutionEnabled: true
+        classIdResolutionEnabled: true,
+        skillClassificationEnabled: true,
+        modularClassificationUsed: true
       }
     };
   } catch (error) {
-    console.error('❌ Error in enhanced analyzeTest with critical fixes:', error);
+    console.error('❌ Error in enhanced analyzeTest with modular skill classification:', error);
     throw error;
   }
 };

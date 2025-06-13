@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -20,6 +19,127 @@ const BATCH_CONFIG = {
   ADAPTIVE_SIZING: true,
   MAX_TOKENS_PER_BATCH: 25000
 }
+
+// Skill classification configuration - replicated from frontend config
+const SKILL_CLASSIFICATION_CONFIG = {
+  contentSkillPatterns: [
+    // Math content skills
+    { pattern: 'algebra', confidence: 0.9, subject: 'Math' },
+    { pattern: 'geometry', confidence: 0.9, subject: 'Math' },
+    { pattern: 'calculus', confidence: 0.9, subject: 'Math' },
+    { pattern: 'trigonometry', confidence: 0.9, subject: 'Math' },
+    { pattern: 'fractions', confidence: 0.8, subject: 'Math' },
+    { pattern: 'equations', confidence: 0.8, subject: 'Math' },
+    { pattern: 'polynomials', confidence: 0.8, subject: 'Math' },
+    { pattern: 'logarithms', confidence: 0.8, subject: 'Math' },
+    
+    // Science content skills
+    { pattern: 'chemistry', confidence: 0.9, subject: 'Science' },
+    { pattern: 'physics', confidence: 0.9, subject: 'Science' },
+    { pattern: 'biology', confidence: 0.9, subject: 'Science' },
+    { pattern: 'molecules', confidence: 0.8, subject: 'Science' },
+    { pattern: 'atoms', confidence: 0.8, subject: 'Science' },
+    { pattern: 'genetics', confidence: 0.8, subject: 'Science' },
+    
+    // English content skills
+    { pattern: 'grammar', confidence: 0.9, subject: 'English' },
+    { pattern: 'vocabulary', confidence: 0.8, subject: 'English' },
+    { pattern: 'literature', confidence: 0.9, subject: 'English' },
+    { pattern: 'poetry', confidence: 0.8, subject: 'English' },
+    { pattern: 'shakespeare', confidence: 0.9, subject: 'English' },
+    
+    // Geography content skills
+    { pattern: 'geography', confidence: 0.9, subject: 'Geography' },
+    { pattern: 'cartography', confidence: 0.8, subject: 'Geography' },
+    { pattern: 'topography', confidence: 0.8, subject: 'Geography' },
+    { pattern: 'climate', confidence: 0.7, subject: 'Geography' },
+    { pattern: 'geological', confidence: 0.7, subject: 'Geography' },
+    { pattern: 'demographic', confidence: 0.8, subject: 'Geography' },
+    { pattern: 'population', confidence: 0.7, subject: 'Geography' },
+    { pattern: 'calculating', confidence: 0.7, subject: 'Geography' }
+  ],
+  
+  subjectSkillPatterns: [
+    // Cross-subject skills
+    { pattern: 'critical thinking', confidence: 0.9 },
+    { pattern: 'problem solving', confidence: 0.9 },
+    { pattern: 'analytical reasoning', confidence: 0.8 },
+    { pattern: 'reading comprehension', confidence: 0.8 },
+    { pattern: 'communication', confidence: 0.7 },
+    { pattern: 'research skills', confidence: 0.7 },
+    { pattern: 'study skills', confidence: 0.7 },
+    { pattern: 'time management', confidence: 0.6 },
+    { pattern: 'collaboration', confidence: 0.6 }
+  ],
+  
+  defaultConfidenceThreshold: 0.6,
+  fallbackSkillType: 'content'
+}
+
+// Skill classification service implementation
+class SkillClassificationService {
+  async classifySkill(context: {
+    skillName: string;
+    studentId?: string;
+    subject?: string;
+    grade?: string;
+    exerciseData?: any;
+  }): Promise<'content' | 'subject'> {
+    const { skillName, subject, exerciseData } = context;
+    
+    console.log(`🎯 Classifying skill: "${skillName}" using edge function classification`);
+    
+    // Strategy 1: Check exercise metadata
+    if (exerciseData?.skillType) {
+      console.log('✅ Using stored skill type from exercise data:', exerciseData.skillType);
+      return exerciseData.skillType;
+    }
+    
+    if (exerciseData?.skillMetadata?.skillType) {
+      console.log('✅ Using skill type from metadata:', exerciseData.skillMetadata.skillType);
+      return exerciseData.skillMetadata.skillType;
+    }
+    
+    // Strategy 2: Pattern matching
+    const skillLower = skillName.toLowerCase();
+    let bestMatch: { type: 'content' | 'subject'; confidence: number } | null = null;
+    
+    // Check content skill patterns
+    for (const pattern of SKILL_CLASSIFICATION_CONFIG.contentSkillPatterns) {
+      if (skillLower.includes(pattern.pattern.toLowerCase())) {
+        // Boost confidence if subject matches
+        const confidence = pattern.subject === subject 
+          ? Math.min(pattern.confidence + 0.1, 1.0)
+          : pattern.confidence;
+          
+        if (!bestMatch || confidence > bestMatch.confidence) {
+          bestMatch = { type: 'content', confidence };
+        }
+      }
+    }
+    
+    // Check subject skill patterns
+    for (const pattern of SKILL_CLASSIFICATION_CONFIG.subjectSkillPatterns) {
+      if (skillLower.includes(pattern.pattern.toLowerCase())) {
+        if (!bestMatch || pattern.confidence > bestMatch.confidence) {
+          bestMatch = { type: 'subject', confidence: pattern.confidence };
+        }
+      }
+    }
+    
+    if (bestMatch && bestMatch.confidence >= SKILL_CLASSIFICATION_CONFIG.defaultConfidenceThreshold) {
+      console.log(`📊 Pattern match for "${skillName}": ${bestMatch.type} (confidence: ${bestMatch.confidence})`);
+      return bestMatch.type;
+    }
+    
+    // Fallback
+    const fallbackType = SKILL_CLASSIFICATION_CONFIG.fallbackSkillType;
+    console.log(`🔄 Using fallback classification for "${skillName}": ${fallbackType}`);
+    return fallbackType;
+  }
+}
+
+const skillClassificationService = new SkillClassificationService();
 
 // JSON Schema validation interfaces
 interface GradingResult {
@@ -242,7 +362,7 @@ Target Skills: ${skills.map(s => s.skill_name).join(', ') || 'General'}
 Respond with ONLY the JSON object. No explanations, no markdown, no additional text.`;
 }
 
-// Enhanced database transaction handling with class_id resolution
+// Enhanced database transaction handling with class_id resolution and skill classification
 async function saveResultsToDatabase(
   supabase: any,
   examId: string,
@@ -252,9 +372,11 @@ async function saveResultsToDatabase(
   totalPointsPossible: number,
   overallScore: number,
   grade: string,
+  skillMappings: any[],
+  subject?: string,
   aiFeedback?: string
 ): Promise<{ success: boolean; testResultId?: string; error?: string }> {
-  console.log('💾 Starting database transaction with class_id resolution...');
+  console.log('💾 Starting database transaction with skill classification and class_id resolution...');
   
   try {
     // First, get or create student profile
@@ -346,6 +468,94 @@ async function saveResultsToDatabase(
     
     console.log(`✅ Test result saved: ${testResult.id} with class_id: ${classId}`);
     
+    // Process and save skill scores with classification
+    const skillScoresToSave = new Map<string, { 
+      type: 'content' | 'subject'; 
+      pointsEarned: number; 
+      pointsPossible: number; 
+      score: number 
+    }>();
+    
+    for (const result of gradingResults) {
+      const questionMapping = skillMappings.find(mapping => mapping.question_number === result.questionNumber);
+      
+      if (questionMapping && result.skillAlignment) {
+        for (const skillName of result.skillAlignment) {
+          // Classify the skill using the new service
+          const skillType = await skillClassificationService.classifySkill({
+            skillName,
+            subject,
+            exerciseData: questionMapping
+          });
+          
+          // Aggregate scores for each skill
+          if (skillScoresToSave.has(skillName)) {
+            const existing = skillScoresToSave.get(skillName)!;
+            existing.pointsEarned += result.pointsEarned;
+            existing.pointsPossible += (questionMapping.points || 1);
+            existing.score = (existing.pointsEarned / existing.pointsPossible) * 100;
+          } else {
+            const pointsPossible = questionMapping.points || 1;
+            skillScoresToSave.set(skillName, {
+              type: skillType,
+              pointsEarned: result.pointsEarned,
+              pointsPossible,
+              score: (result.pointsEarned / pointsPossible) * 100
+            });
+          }
+          
+          console.log(`📊 Classified "${skillName}" as ${skillType} skill`);
+        }
+      }
+    }
+    
+    // Save skill scores to appropriate tables
+    const contentSkills: any[] = [];
+    const subjectSkills: any[] = [];
+    
+    for (const [skillName, skillData] of skillScoresToSave) {
+      const scoreRecord = {
+        test_result_id: testResult.id,
+        authenticated_student_id: studentProfileId,
+        skill_name: skillName,
+        score: skillData.score,
+        points_earned: skillData.pointsEarned,
+        points_possible: skillData.pointsPossible
+      };
+      
+      if (skillData.type === 'content') {
+        contentSkills.push(scoreRecord);
+      } else {
+        subjectSkills.push(scoreRecord);
+      }
+    }
+    
+    // Insert content skill scores
+    if (contentSkills.length > 0) {
+      const { error: contentError } = await supabase
+        .from('content_skill_scores')
+        .insert(contentSkills);
+      
+      if (contentError) {
+        console.error('Failed to save content skill scores:', contentError);
+      } else {
+        console.log(`✅ Saved ${contentSkills.length} content skill scores`);
+      }
+    }
+    
+    // Insert subject skill scores
+    if (subjectSkills.length > 0) {
+      const { error: subjectError } = await supabase
+        .from('subject_skill_scores')
+        .insert(subjectSkills);
+      
+      if (subjectError) {
+        console.error('Failed to save subject skill scores:', subjectError);
+      } else {
+        console.log(`✅ Saved ${subjectSkills.length} subject skill scores`);
+      }
+    }
+    
     return {
       success: true,
       testResultId: testResult.id
@@ -412,7 +622,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🔬 Enhanced analyze-test function with fixed response format & class_id resolution')
+    console.log('🔬 Enhanced analyze-test function with modular skill classification & class_id resolution')
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -446,7 +656,17 @@ serve(async (req) => {
       .select('*')
       .eq('exam_id', examId)
     
+    // Get exam subject for skill classification
+    const { data: examInfo } = await supabase
+      .from('exams')
+      .select('*')
+      .eq('exam_id', examId)
+      .maybeSingle()
+    
+    const examSubject = examInfo?.class_name || 'General'
+    
     console.log(`📋 Found ${allQuestions.length} questions, ${answerKeys?.length || 0} answer keys`)
+    console.log(`📚 Exam subject: ${examSubject}`)
     
     if (!allQuestions.length || !answerKeys?.length) {
       console.log('⚠️ No questions or answer keys found')
@@ -513,7 +733,6 @@ serve(async (req) => {
                 content: prompt
               }
             ],
-            // Removed conflicting response_format constraint
             temperature: 0.1,
             max_tokens: 4000,
           }),
@@ -574,7 +793,7 @@ serve(async (req) => {
     const processingTime = Date.now() - startTime
     const validationSuccessRate = totalApiCalls > 0 ? ((totalApiCalls - totalValidationFailures) / totalApiCalls) * 100 : 100
     
-    // Save to database with enhanced class_id resolution
+    // Save to database with enhanced class_id resolution and skill classification
     const dbResult = await saveResultsToDatabase(
       supabase,
       examId,
@@ -584,23 +803,26 @@ serve(async (req) => {
       totalPointsPossible,
       overallScore,
       grade,
-      `Enhanced processing: ${gradingResults.length} questions validated with ${validationSuccessRate.toFixed(1)}% success rate`
+      skillMappings || [],
+      examSubject,
+      `Enhanced processing with modular skill classification: ${gradingResults.length} questions validated with ${validationSuccessRate.toFixed(1)}% success rate`
     )
     
-    console.log(`✅ Enhanced processing completed:`)
+    console.log(`✅ Enhanced processing completed with modular skill classification:`)
     console.log(`📊 Questions processed: ${allQuestions.length}`)
     console.log(`🔢 API calls: ${totalApiCalls}`)
     console.log(`✔️ Validation success rate: ${validationSuccessRate.toFixed(1)}%`)
     console.log(`⏱️ Processing time: ${processingTime}ms`)
     console.log(`🎯 Overall score: ${overallScore.toFixed(1)}%`)
     console.log(`💾 Database result: ${dbResult.success ? 'Success' : 'Failed'}`)
+    console.log(`🧠 Skill classification: Modular system applied`)
     
     return new Response(JSON.stringify({
       overallScore: Math.round(overallScore * 100) / 100,
       grade,
       total_points_earned: totalPointsEarned,
       total_points_possible: totalPointsPossible,
-      ai_feedback: `Enhanced validation processing: ${gradingResults.length} questions processed with ${validationSuccessRate.toFixed(1)}% validation success rate`,
+      ai_feedback: `Enhanced validation processing with modular skill classification: ${gradingResults.length} questions processed with ${validationSuccessRate.toFixed(1)}% validation success rate`,
       databaseStorage: {
         savedToDatabase: dbResult.success,
         testResultId: dbResult.testResultId,
@@ -616,7 +838,9 @@ serve(async (req) => {
         transactionSafetyEnabled: true,
         formatMismatchFixed: true,
         classIdResolutionEnabled: true,
-        enhancementLevel: 'phase_1_critical_fixes'
+        skillClassificationEnabled: true,
+        modularClassificationUsed: true,
+        enhancementLevel: 'phase_2_modular_classification'
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -624,11 +848,11 @@ serve(async (req) => {
     })
 
   } catch (error) {
-    console.error('❌ Error in enhanced analyze-test function:', error)
+    console.error('❌ Error in enhanced analyze-test function with modular classification:', error)
     return new Response(JSON.stringify({ 
       error: error.message,
       timestamp: new Date().toISOString(),
-      enhancementLevel: 'phase_1_critical_fixes'
+      enhancementLevel: 'phase_2_modular_classification'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
