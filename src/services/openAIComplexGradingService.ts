@@ -1,20 +1,19 @@
 import { supabase } from "@/integrations/supabase/client";
 import { QuestionCacheService, QuestionCacheResult } from "./questionCacheService";
-import { SkillMapping, QuestionSkillMappings, EnhancedLocalGradingResult } from "./enhancedLocalGradingService";
 import { QuestionBatchOptimizer, QuestionBatch } from "./questionBatchOptimizer";
 import { EnhancedBatchGradingService } from "./enhancedBatchGradingService";
+import { 
+  QuestionInput, 
+  GradedAnswer, 
+  BatchGradingResult, 
+  EnhancedGradingResult,
+  SkillMapping, 
+  QuestionSkillMappings,
+  CommonAnswerPattern,
+  BatchProcessingConfig
+} from "./grading/types";
 
-export interface OpenAIGradingResult extends EnhancedLocalGradingResult {
-  openAIUsage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-    estimatedCost: number;
-  };
-  complexityScore?: number;
-  reasoningDepth?: 'shallow' | 'medium' | 'deep';
-}
-
+// Legacy interface for backward compatibility
 export interface ComplexQuestionBatch {
   questions: any[];
   totalEstimatedCost: number;
@@ -39,7 +38,7 @@ export class OpenAIComplexGradingService {
     examId: string,
     studentName: string,
     skillMappings: QuestionSkillMappings
-  ): Promise<OpenAIGradingResult[]> {
+  ): Promise<EnhancedGradingResult[]> {
     console.log(`🎯 Conservative OpenAI grading ${questions.length} complex questions with quality-first batching for student: ${studentName}`);
     
     // PHASE 2: Pass pre-validated answer keys to maintain context
@@ -66,18 +65,21 @@ export class OpenAIComplexGradingService {
           clearInterval(checkInterval);
           
           // Convert enhanced batch results to OpenAI grading results
-          const results: OpenAIGradingResult[] = job.results.map((result, index) => {
+          const results: EnhancedGradingResult[] = job.results.map((result, index) => {
             const question = questions[index];
             const questionSkillMappings = skillMappings[question.questionNumber] || [];
             
             return {
               questionNumber: result.questionNumber,
+              questionId: result.questionId || question.questionNumber.toString(),
               isCorrect: result.isCorrect,
+              score: result.pointsEarned || 0,
               pointsEarned: result.pointsEarned,
               pointsPossible: result.pointsPossible,
               confidence: result.confidence,
+              model: 'openai',
               gradingMethod: result.gradingMethod === 'openai_batch' ? 'conservative_openai_batch' : result.gradingMethod,
-              reasoning: result.reasoning,
+              rationale: result.rationale || result.reasoning,
               skillMappings: questionSkillMappings,
               complexityScore: result.complexityScore,
               reasoningDepth: result.reasoningDepth,
@@ -276,7 +278,7 @@ Respond with ONLY the JSON array containing results for all ${questionCount} que
     answerKey: any,
     skillMappings: SkillMapping[],
     studentName: string
-  ): Promise<OpenAIGradingResult> {
+  ): Promise<EnhancedGradingResult> {
     const studentAnswer = question.detectedAnswer?.selectedOption?.trim() || '';
     const correctAnswer = answerKey.correct_answer?.trim() || '';
     const pointsPossible = answerKey.points || 1;
@@ -305,12 +307,15 @@ Respond with ONLY the JSON array containing results for all ${questionCount} que
       
       return {
         questionNumber: question.questionNumber,
+        questionId: question.questionNumber.toString(),
         isCorrect,
+        score: (pointsEarned / pointsPossible) * 100,
         pointsEarned,
         pointsPossible,
         confidence: data.confidence || 0.8,
+        model: 'openai',
         gradingMethod: 'openai_complex_reasoning',
-        reasoning: data.reasoning || 'OpenAI complex reasoning analysis',
+        rationale: data.reasoning || 'OpenAI complex reasoning analysis',
         skillMappings,
         openAIUsage: {
           promptTokens: data.usage?.promptTokens || 0,
@@ -341,15 +346,18 @@ Respond with ONLY the JSON array containing results for all ${questionCount} que
     answerKey: any,
     skillMappings: SkillMapping[],
     errorReason: string
-  ): OpenAIGradingResult {
+  ): EnhancedGradingResult {
     return {
       questionNumber: question.questionNumber,
+      questionId: question.questionNumber.toString(),
       isCorrect: false,
+      score: 0,
       pointsEarned: 0,
       pointsPossible: answerKey.points || 1,
       confidence: 0.3,
+      model: 'openai',
       gradingMethod: 'openai_fallback',
-      reasoning: `OpenAI grading unavailable: ${errorReason}. Manual review recommended.`,
+      rationale: `OpenAI grading unavailable: ${errorReason}. Manual review recommended.`,
       skillMappings,
       qualityFlags: {
         hasMultipleMarks: question.detectedAnswer?.multipleMarksDetected || false,
@@ -364,13 +372,7 @@ Respond with ONLY the JSON array containing results for all ${questionCount} que
 
   static async preProcessCommonExamQuestions(
     examId: string,
-    commonAnswerPatterns: Array<{
-      questionNumber: number;
-      questionText: string;
-      correctAnswer: string;
-      commonStudentAnswers: string[];
-      isComplex: boolean;
-    }>
+    commonAnswerPatterns: CommonAnswerPattern[]
   ): Promise<{ processed: number; cached: number; errors: number }> {
     console.log(`🔄 Pre-processing ${commonAnswerPatterns.length} common OpenAI questions for exam: ${examId}`);
     
@@ -534,7 +536,7 @@ Respond with ONLY the JSON array containing results for all ${questionCount} que
     };
   }
 
-  static generateEnhancedCostReport(results: OpenAIGradingResult[]): {
+  static generateEnhancedCostReport(results: EnhancedGradingResult[]): {
     totalCost: number;
     totalTokens: number;
     averageCostPerQuestion: number;
@@ -568,7 +570,7 @@ Respond with ONLY the JSON array containing results for all ${questionCount} que
         batchedQuestions++;
       }
       
-      const method = result.gradingMethod;
+      const method = result.gradingMethod || 'unknown';
       costBreakdown[method] = (costBreakdown[method] || 0) + cost;
     }
 
@@ -594,7 +596,7 @@ Respond with ONLY the JSON array containing results for all ${questionCount} que
     };
   }
 
-  static generateConservativeCostReport(results: OpenAIGradingResult[]): {
+  static generateConservativeCostReport(results: EnhancedGradingResult[]): {
     totalCost: number;
     totalTokens: number;
     averageCostPerQuestion: number;

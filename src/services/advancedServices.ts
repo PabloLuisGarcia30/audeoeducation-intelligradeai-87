@@ -1,4 +1,3 @@
-
 // Barrel export for advanced services including new caching services
 export { PerformanceMonitoringService } from './performanceMonitoringService';
 export { SmartOcrService } from './smartOcrService';
@@ -16,15 +15,36 @@ export { SkillAwareCacheService } from './skillAwareCacheService';
 export { CacheResponseService } from './cacheResponseService';
 export { CacheLoggingService } from './cacheLoggingService';
 
+// New canonical grading types
+export type { 
+  QuestionInput,
+  GradedAnswer,
+  BatchGradingResult,
+  BatchProcessingConfig,
+  SkillMapping,
+  QuestionSkillMappings,
+  EnhancedGradingResult,
+  CommonAnswerPattern,
+  QuestionCacheKey,
+  QuestionCacheResult
+} from './grading/types';
+
+// Legacy type aliases for backward compatibility
+export type { 
+  OpenAIGradingResult,
+  EnhancedLocalGradingResult,
+  BatchQuestionResult
+} from './grading/types';
+
 export type { DocumentClassification, OcrMethod, AdaptiveOcrConfig, ProcessingMetrics } from './smartOcrService';
 export type { BatchJob, QueueStatus } from './batchProcessingService';
 export type { PerformanceMetric, SystemHealthMetrics, PerformanceReport } from './performanceMonitoringService';
 export type { DistilBertConfig, DistilBertGradingResult } from './distilBertLocalGrading';
 export type { QuestionClassification, SimpleAnswerValidation } from './enhancedQuestionClassifier';
-export type { OpenAIGradingResult, ComplexQuestionBatch } from './openAIComplexGradingService';
+export type { ComplexQuestionBatch } from './openAIComplexGradingService';
 export type { HybridGradingResults } from './hybridGradingResultsMerger';
-export type { QuestionCacheKey, QuestionCacheResult, QuestionCacheStats } from './questionCacheService';
-export type { CommonAnswerPattern, ExamPreProcessingConfig, PreProcessingReport } from './examPreProcessingService';
+export type { QuestionCacheStats } from './questionCacheService';
+export type { ExamPreProcessingConfig, PreProcessingReport } from './examPreProcessingService';
 export type { SkillPreClassificationResult, SkillMappingCache } from './examSkillPreClassificationService';
 
 // New caching types
