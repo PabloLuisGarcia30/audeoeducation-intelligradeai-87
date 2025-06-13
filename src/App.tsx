@@ -92,6 +92,15 @@ function AppRoutes() {
           </ProtectedRoute>
         } 
       />
+
+      <Route 
+        path="/student-dashboard/results-history" 
+        element={
+          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+            <StudentResultsHistory />
+          </ProtectedRoute>
+        } 
+      />
       
       <Route 
         path="/student-dashboard/trailblazer" 
