@@ -12,7 +12,7 @@ import {
   handleBatchGradingResponse,
   handleSkillEscalationResponse
 } from './responseHandler.ts';
-import { generateCorrelationId, logOpenAISuccess } from '../../../src/lib/openai/responseHandler.ts';
+import { generateCorrelationId, logOpenAISuccess } from './responseUtils.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
