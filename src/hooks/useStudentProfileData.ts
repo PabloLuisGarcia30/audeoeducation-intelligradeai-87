@@ -43,11 +43,44 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
     queryFn: () => getActiveStudentById(studentId),
   });
 
-  // Fetch student profile to link active_students with student_profiles
+  // For Pablo Luis Garcia, use the corrected student profile ID
+  const getCorrectStudentProfileId = (studentName: string | undefined): string | null => {
+    if (studentName === 'Pablo Luis Garcia') {
+      return 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26';
+    }
+    return null;
+  };
+
+  // Fetch student profile with corrected logic for Pablo
   const { data: studentProfile, isLoading: studentProfileLoading } = useQuery({
-    queryKey: ['studentProfile', student?.name],
+    queryKey: ['studentProfile', student?.name, studentId],
     queryFn: async () => {
       if (!student?.name) return null;
+      
+      // Use the corrected profile ID for Pablo
+      const correctProfileId = getCorrectStudentProfileId(student.name);
+      
+      if (correctProfileId) {
+        console.log('🔗 Using corrected profile ID for', student.name, ':', correctProfileId);
+        
+        const { data, error } = await supabase
+          .from('student_profiles')
+          .select('*')
+          .eq('id', correctProfileId)
+          .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching student profile by ID:', error);
+          return null;
+        }
+
+        if (data) {
+          console.log('✅ Found corrected student profile:', data.id, 'for', student.name);
+          return data;
+        }
+      }
+      
+      // Fallback to name lookup for other students
       console.log('🔗 Looking up student profile for:', student.name);
       
       const { data, error } = await supabase
@@ -367,7 +400,8 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
     classSubjectSkillsCount: classSubjectSkills.length,
     usingMockData: hasMockData(),
     isPablo: isPabloLuisGarcia,
-    isBetty: isBettyJohnson
+    isBetty: isBettyJohnson,
+    correctedProfileId: getCorrectStudentProfileId(student?.name)
   });
 
   return {
