@@ -9,6 +9,10 @@ export interface GradingJob {
     examId?: string;
     studentId?: string;
     config?: any;
+    // Batch processing properties
+    batchProcessing?: boolean;
+    filesData?: any[];
+    method?: string;
   };
   result_payload?: any;
   status: 'pending' | 'processing' | 'completed' | 'failed';

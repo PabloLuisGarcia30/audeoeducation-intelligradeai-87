@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { GradingQueueService } from './gradingQueueService';
 
@@ -93,8 +94,8 @@ export class EnhancedBatchProcessingService {
 
       // Convert database job to EnhancedBatchJob format
       // Check if this is a batch processing job or regular grading job
-      const isBatchJob = job.payload?.batchProcessing || job.payload?.method === 'batch_file_processing';
-      const filesData = isBatchJob ? (job.payload?.filesData || []) : [];
+      const isBatchJob = job.payload.batchProcessing || job.payload.method === 'batch_file_processing';
+      const filesData = isBatchJob ? (job.payload.filesData || []) : [];
       
       return {
         id: job.id,
