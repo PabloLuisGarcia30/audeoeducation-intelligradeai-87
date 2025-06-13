@@ -7,13 +7,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
 
-// --- ENHANCED CONFIG ---
+// --- ENHANCED CONFIG WITH ATOMIC OPERATIONS ---
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-const MAX_API_CALLS_PER_MINUTE = Number(Deno.env.get("API_RATE_LIMIT") || 50); // Increased for higher throughput
-const MAX_CONCURRENT_JOBS = 12; // Increased from 8
-const MAX_FILES_PER_BATCH = 12; // Increased from 6 - Phase 1 optimization
-const JOB_CLEANUP_DAYS = 2; // completed/failed jobs deleted after this
+const MAX_API_CALLS_PER_MINUTE = Number(Deno.env.get("API_RATE_LIMIT") || 50);
+const MAX_CONCURRENT_JOBS = 12; // Global limit enforced atomically
+const MAX_FILES_PER_BATCH = 12;
+const JOB_CLEANUP_DAYS = 2;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -135,8 +135,8 @@ async function handleJobSubmission(req: Request) {
     throw new Error(`Failed to create job: ${error.message}`);
   }
 
-  // Trigger processing
-  processNextJobs().catch(console.error);
+  // Trigger processing with atomic concurrency control
+  processNextJobsAtomic().catch(console.error);
 
   // Enhanced queue position/ETA calculation
   const { count: pendingCount } = await supabase
@@ -151,7 +151,7 @@ async function handleJobSubmission(req: Request) {
     jobId,
     position: pendingCount || 0,
     estimatedWait: estimatedWait,
-    optimizationEnabled: true,
+    atomicProcessingEnabled: true,
     maxConcurrentJobs: MAX_CONCURRENT_JOBS,
     maxFilesPerBatch: MAX_FILES_PER_BATCH
   }), {
@@ -183,8 +183,8 @@ async function handleStatusCheck(url: URL) {
 
   return new Response(JSON.stringify({
     ...job,
-    optimizationStats: {
-      batchOptimizationEnabled: true,
+    atomicProcessingStats: {
+      concurrencyControlEnabled: true,
       maxConcurrentJobs: MAX_CONCURRENT_JOBS,
       maxFilesPerBatch: MAX_FILES_PER_BATCH
     }
@@ -195,11 +195,13 @@ async function handleStatusCheck(url: URL) {
 
 async function handleQueueStats() {
   try {
-    // Aggregate queue info
-    const [total, pending, active, completed, failed] = await Promise.all([
+    // Use atomic function to get processing count
+    const { data: processingCount } = await supabase.rpc('get_processing_job_count');
+    
+    // Get other counts
+    const [total, pending, completed, failed] = await Promise.all([
       supabase.from('jobs').select('id', { count: 'exact', head: true }),
       supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'processing'),
       supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
       supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed')
     ]);
@@ -207,15 +209,15 @@ async function handleQueueStats() {
     return new Response(JSON.stringify({
       totalJobs: total.count || 0,
       pendingJobs: pending.count || 0,
-      activeJobs: active.count || 0,
+      activeJobs: processingCount || 0,
       completedJobs: completed.count || 0,
       failedJobs: failed.count || 0,
       currentApiCallRate: apiCallTracker.getCurrentMinuteCallCount(),
       maxConcurrentJobs: MAX_CONCURRENT_JOBS,
       maxApiCallsPerMinute: MAX_API_CALLS_PER_MINUTE,
       maxFilesPerBatch: MAX_FILES_PER_BATCH,
-      optimizationLevel: "Phase 1 - Safe Optimization",
-      throughputImprovement: "3-4x expected"
+      concurrencyControl: "Atomic with Row-Level Locking",
+      raceConditionPrevention: "Enabled"
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
@@ -229,91 +231,115 @@ async function handleQueueStats() {
 }
 
 async function handleProcessNext() {
-  await processNextJobs();
+  await processNextJobsAtomic();
   return new Response(JSON.stringify({ 
-    message: 'Processing triggered',
-    optimizationEnabled: true
+    message: 'Atomic processing triggered',
+    concurrencyControlEnabled: true
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   });
 }
 
-// --- CORE JOB PROCESSING ---
+// --- ATOMIC JOB PROCESSING WITH CONCURRENCY CONTROL ---
 
-async function processNextJobs() {
+async function processNextJobsAtomic() {
   try {
-    // Count currently active jobs
-    const { data: activeJobs } = await supabase
-      .from('jobs')
-      .select('id')
-      .eq('status', 'processing');
-
-    const activeCount = activeJobs?.length || 0;
+    // Step 1: Try to acquire distributed lock
+    const { data: gotLock, error: lockError } = await supabase.rpc('try_acquire_queue_lock');
     
-    if (activeCount >= MAX_CONCURRENT_JOBS) {
-      console.log(`Max concurrent jobs reached: ${activeCount}/${MAX_CONCURRENT_JOBS}`);
+    if (lockError) {
+      console.error('Lock acquisition failed:', lockError);
       return;
     }
     
-    if (apiCallTracker.getCurrentMinuteCallCount() >= MAX_API_CALLS_PER_MINUTE) {
-      console.log('Rate limit reached');
+    if (!gotLock) {
+      console.log('Another instance is processing jobs; skipping this cycle');
       return;
     }
 
-    // Find next pending jobs (priority order)
-    const { data: nextJobs } = await supabase
-      .from('jobs')
-      .select('*')
-      .eq('status', 'pending')
-      .order('priority', { ascending: false })
-      .order('created_at')
-      .limit(MAX_CONCURRENT_JOBS - activeCount);
+    console.log('🔒 Acquired queue processing lock');
 
-    if (!nextJobs?.length) {
-      console.log('No pending jobs found');
-      return;
-    }
-
-    console.log(`Processing ${nextJobs.length} jobs with enhanced optimization`);
-
-    for (const job of nextJobs) {
-      // Set job to processing
-      const { error } = await supabase
-        .from('jobs')
-        .update({ 
-          status: 'processing', 
-          started_at: nowIso() 
-        })
-        .eq('id', job.id);
-
-      if (error) {
-        console.error(`Failed to update job ${job.id}:`, error);
-        continue;
+    try {
+      // Step 2: Check rate limits
+      if (apiCallTracker.getCurrentMinuteCallCount() >= MAX_API_CALLS_PER_MINUTE) {
+        console.log('Rate limit reached, skipping job processing');
+        return;
       }
 
-      // Launch processing in background (no await)
-      processJobWithOptimization(job).catch(async (error) => {
-        console.error(`Job ${job.id} failed:`, error);
-        await supabase
-          .from('jobs')
-          .update({ 
-            status: 'failed', 
-            errors: [error.message], 
-            completed_at: nowIso() 
-          })
-          .eq('id', job.id);
+      // Step 3: Get current processing job count atomically
+      const { data: currentProcessingCount, error: countError } = await supabase.rpc('get_processing_job_count');
+      
+      if (countError) {
+        console.error('Failed to get processing count:', countError);
+        return;
+      }
+
+      const availableSlots = MAX_CONCURRENT_JOBS - (currentProcessingCount || 0);
+      
+      if (availableSlots <= 0) {
+        console.log(`Max concurrent jobs reached: ${currentProcessingCount}/${MAX_CONCURRENT_JOBS}`);
+        return;
+      }
+
+      console.log(`🎯 Available slots: ${availableSlots} (current: ${currentProcessingCount}/${MAX_CONCURRENT_JOBS})`);
+
+      // Step 4: Atomically claim pending jobs with row-level locking
+      const { data: claimedJobs, error: claimError } = await supabase.rpc('claim_pending_jobs', { 
+        batch_size: availableSlots 
       });
 
-      // Record API call
-      apiCallTracker.recordCall();
+      if (claimError) {
+        console.error('Job claiming failed:', claimError);
+        return;
+      }
+
+      if (!claimedJobs || claimedJobs.length === 0) {
+        console.log('No pending jobs available to claim');
+        return;
+      }
+
+      console.log(`✅ Atomically claimed ${claimedJobs.length} jobs`);
+
+      // Step 5: Launch processing for each claimed job (non-blocking)
+      for (const job of claimedJobs) {
+        console.log(`🚀 Starting job ${job.id} with ${job.files.length} files`);
+        
+        // Launch processing in background (no await)
+        processJobWithOptimization(job).catch(async (error) => {
+          console.error(`❌ Job ${job.id} failed:`, error);
+          await supabase
+            .from('jobs')
+            .update({ 
+              status: 'failed', 
+              errors: [error.message], 
+              completed_at: nowIso() 
+            })
+            .eq('id', job.id);
+        });
+
+        // Record API call for rate limiting
+        apiCallTracker.recordCall();
+      }
+
+    } finally {
+      // Step 6: Always release the distributed lock
+      const { error: unlockError } = await supabase.rpc('release_queue_lock');
+      if (unlockError) {
+        console.error('Failed to release queue lock:', unlockError);
+      } else {
+        console.log('🔓 Released queue processing lock');
+      }
     }
+
   } catch (error) {
-    console.error('Error in processNextJobs:', error);
+    console.error('Error in atomic job processing:', error);
+    // Ensure lock is released even if there's an error
+    await supabase.rpc('release_queue_lock').catch(console.error);
   }
 }
 
 async function processJobWithOptimization(job: any) {
-  console.log(`Starting optimized job ${job.id} with ${job.files.length} files`);
+  console.log(`🔄 Processing job ${job.id} with ${job.files.length} files`);
   
   const totalFiles = job.files.length;
   let allResults: any[] = [];
@@ -336,7 +362,7 @@ async function processJobWithOptimization(job: any) {
 
     while (retry <= job.max_retries) {
       try {
-        console.log(`Job ${job.id}: Processing optimized group ${groupIndex + 1}/${fileGroups.length} (${group.length} files)`);
+        console.log(`Job ${job.id}: Processing group ${groupIndex + 1}/${fileGroups.length} (${group.length} files)`);
         
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/extract-text-batch`, {
           method: 'POST',
@@ -355,7 +381,7 @@ async function processJobWithOptimization(job: any) {
         const json = await resp.json();
         results = json.results || [];
         
-        console.log(`Job ${job.id}: Group ${groupIndex + 1} completed with ${results.length} results`);
+        console.log(`✅ Job ${job.id}: Group ${groupIndex + 1} completed with ${results.length} results`);
         break; // Success, exit retry loop
         
       } catch (error) {
@@ -387,19 +413,19 @@ async function processJobWithOptimization(job: any) {
       })
       .eq('id', job.id);
 
-    console.log(`Job ${job.id} progress: ${progress}% (${processedFiles}/${totalFiles} files)`);
+    console.log(`📊 Job ${job.id} progress: ${progress}% (${processedFiles}/${totalFiles} files)`);
     
     // Record API call for this batch
     apiCallTracker.recordCall();
 
-    // Small delay between batches to be nice to the system
+    // Small delay between batches
     if (groupIndex + 1 < fileGroups.length) {
-      await new Promise((resolve) => setTimeout(resolve, 300)); // Reduced delay for faster processing
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
   }
 
   // Mark job complete
-  console.log(`Completing optimized job ${job.id} with ${allResults.length} results`);
+  console.log(`🎉 Completing job ${job.id} with ${allResults.length} results`);
   
   await supabase
     .from('jobs')
@@ -410,7 +436,7 @@ async function processJobWithOptimization(job: any) {
     })
     .eq('id', job.id);
 
-  console.log(`Job ${job.id} completed successfully with optimization`);
+  console.log(`✅ Job ${job.id} completed successfully with atomic processing`);
 }
 
 async function cleanupOldJobs() {

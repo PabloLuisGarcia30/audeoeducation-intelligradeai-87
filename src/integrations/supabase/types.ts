@@ -3856,6 +3856,23 @@ export type Database = {
         }
         Returns: number
       }
+      claim_pending_jobs: {
+        Args: { batch_size: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          errors: Json
+          files: Json
+          id: string
+          max_retries: number
+          priority: string
+          progress: number
+          results: Json
+          retry_count: number
+          started_at: string | null
+          status: string
+        }[]
+      }
       detect_goal_achievements: {
         Args: { p_student_id: string; p_goal_id: string }
         Returns: undefined
@@ -3947,6 +3964,10 @@ export type Database = {
       get_or_create_adaptive_profile: {
         Args: { p_student_id: string }
         Returns: string
+      }
+      get_processing_job_count: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       get_question_timing_analytics: {
         Args: { student_uuid: string }
@@ -4125,6 +4146,14 @@ export type Database = {
       migrate_student_data_to_auth_users: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      release_queue_lock: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      try_acquire_queue_lock: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
       update_concept_mastery: {
         Args: {
