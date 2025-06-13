@@ -1,4 +1,5 @@
-// Barrel export for advanced services including new caching services
+
+// Barrel export for advanced services including new unified grading services
 export { PerformanceMonitoringService } from './performanceMonitoringService';
 export { SmartOcrService } from './smartOcrService';
 export { BatchProcessingService } from './batchProcessingService';
@@ -9,6 +10,12 @@ export { HybridGradingResultsMerger } from './hybridGradingResultsMerger';
 export { QuestionCacheService } from './questionCacheService';
 export { ExamPreProcessingService } from './examPreProcessingService';
 export { ExamSkillPreClassificationService } from './examSkillPreClassificationService';
+
+// New unified grading services
+export { gradeBatchUnified, gradeComplexQuestions } from './grading/UnifiedBatchGradingService';
+export { OpenAIGraderAdapter } from './grading/adapters/OpenAIGraderAdapter';
+export { DistilBERTGraderAdapter } from './grading/adapters/DistilBERTGraderAdapter';
+export { getCachedResults, writeResults, getCacheStats, cleanupCache } from './grading/cache/GradingCache';
 
 // New caching services
 export { SkillAwareCacheService } from './skillAwareCacheService';
@@ -51,3 +58,6 @@ export type { SkillPreClassificationResult, SkillMappingCache } from './examSkil
 export type { SkillAwareCacheKey, SkillAwareCacheResult, SkillCacheStats } from './skillAwareCacheService';
 export type { CacheResponseConfig } from './cacheResponseService';
 export type { CacheLogEvent } from './cacheLoggingService';
+
+// New grading interfaces
+export type { BatchGrader, GraderConfig } from './grading/BatchGrader';
