@@ -1292,6 +1292,57 @@ export type Database = {
           },
         ]
       }
+      file_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          file_group_data: Json
+          id: string
+          max_retries: number
+          priority: string
+          processing_time_ms: number | null
+          result_json: Json | null
+          retry_count: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_group_data: Json
+          id?: string
+          max_retries?: number
+          priority?: string
+          processing_time_ms?: number | null
+          result_json?: Json | null
+          retry_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_group_data?: Json
+          id?: string
+          max_retries?: number
+          priority?: string
+          processing_time_ms?: number | null
+          result_json?: Json | null
+          retry_count?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       goal_achievements: {
         Row: {
           achieved_at: string | null
@@ -4018,6 +4069,25 @@ export type Database = {
         }
         Returns: number
       }
+      claim_file_jobs: {
+        Args: { batch_size?: number }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          file_group_data: Json
+          id: string
+          max_retries: number
+          priority: string
+          processing_time_ms: number | null
+          result_json: Json | null
+          retry_count: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }[]
+      }
       claim_pending_jobs: {
         Args: { batch_size: number }
         Returns: {
@@ -4129,6 +4199,16 @@ export type Database = {
           common_prerequisites_gaps: string[]
           remediation_themes: string[]
           cognitive_patterns: Json
+        }[]
+      }
+      get_file_job_queue_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          pending_jobs: number
+          processing_jobs: number
+          completed_jobs_today: number
+          failed_jobs_today: number
+          avg_processing_time_ms: number
         }[]
       }
       get_grading_queue_stats: {

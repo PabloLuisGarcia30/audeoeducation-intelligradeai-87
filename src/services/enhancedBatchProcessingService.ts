@@ -1,6 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { GradingQueueService } from './gradingQueueService';
+import { FileJobService, type FileJob } from './fileJobService';
 
 export interface EnhancedBatchJob {
   id: string;
@@ -48,74 +49,33 @@ export class EnhancedBatchProcessingService {
   private static jobListeners: Map<string, (job: EnhancedBatchJob) => void> = new Map();
 
   /**
-   * Create a batch job using the database-backed queue
+   * Create a batch job using the new decoupled file processing system
    */
   static async createBatchJob(files: File[], priority: 'low' | 'normal' | 'high' | 'urgent' = 'normal'): Promise<string> {
-    console.log(`🎯 Creating database-backed batch job with ${files.length} files (priority: ${priority})`);
+    console.log(`🎯 Creating decoupled batch job with ${files.length} files (priority: ${priority})`);
     
     try {
-      // Convert files to a serializable format for the database
-      const filesData = files.map(file => ({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        lastModified: file.lastModified
-      }));
+      // Use the new FileJobService instead of the grading queue
+      const result = await FileJobService.createFileJob(files, { priority });
 
-      // Submit job to database queue with batch processing payload
-      const result = await GradingQueueService.submitGradingJob(
-        [], // Empty questions array for batch processing
-        {
-          batchProcessing: true,
-          filesData: filesData,
-          method: 'batch_file_processing'
-        },
-        {
-          priority: priority
-        }
-      );
-
-      console.log(`✅ Database batch job created: ${result.jobId}`);
+      console.log(`✅ Decoupled batch job created: ${result.jobId}`);
       return result.jobId;
       
     } catch (error) {
-      console.error('Failed to create database batch job:', error);
+      console.error('Failed to create decoupled batch job:', error);
       throw error;
     }
   }
 
   /**
-   * Get job status from database
+   * Get job status from the file jobs system
    */
   static async getJob(jobId: string): Promise<EnhancedBatchJob | null> {
     try {
-      const job = await GradingQueueService.getJobStatus(jobId);
-      if (!job) return null;
+      const fileJob = await FileJobService.getJobStatus(jobId);
+      if (!fileJob) return null;
 
-      // Convert database job to EnhancedBatchJob format
-      // Check if this is a batch processing job or regular grading job
-      const isBatchJob = job.payload.batchProcessing || job.payload.method === 'batch_file_processing';
-      const filesData = isBatchJob ? (job.payload.filesData || []) : [];
-      
-      return {
-        id: job.id,
-        files: filesData,
-        status: job.status as any,
-        priority: job.priority as any,
-        createdAt: new Date(job.created_at).getTime(),
-        startedAt: job.started_at ? new Date(job.started_at).getTime() : undefined,
-        completedAt: job.completed_at ? new Date(job.completed_at).getTime() : undefined,
-        progress: this.calculateProgress(job),
-        results: job.result_payload?.results || [],
-        errors: job.error_message ? [job.error_message] : [],
-        estimatedTimeRemaining: this.calculateEstimatedTime(job),
-        processingMetrics: {
-          filesPerSecond: 0,
-          averageFileSize: 0,
-          totalProcessingTime: job.processing_time_ms || 0,
-          batchOptimizationUsed: isBatchJob
-        }
-      };
+      return this.convertFileJobToEnhanced(fileJob);
     } catch (error) {
       console.error(`Error getting job ${jobId}:`, error);
       return null;
@@ -123,17 +83,17 @@ export class EnhancedBatchProcessingService {
   }
 
   /**
-   * Subscribe to job updates using Supabase realtime
+   * Subscribe to job updates using the file job service
    */
   static subscribeToJob(jobId: string, callback: (job: EnhancedBatchJob) => void): void {
-    console.log(`🔔 Subscribing to database job updates: ${jobId}`);
+    console.log(`🔔 Subscribing to decoupled job updates: ${jobId}`);
     
     // Store callback for this job
     this.jobListeners.set(jobId, callback);
 
-    // Subscribe to realtime updates
-    const unsubscribe = GradingQueueService.subscribeToJobUpdates(jobId, async (dbJob) => {
-      const enhancedJob = await this.convertDbJobToEnhanced(dbJob);
+    // Subscribe to file job updates
+    const unsubscribe = FileJobService.subscribeToJob(jobId, async (fileJob: FileJob) => {
+      const enhancedJob = this.convertFileJobToEnhanced(fileJob);
       if (enhancedJob) {
         callback(enhancedJob);
       }
@@ -149,14 +109,15 @@ export class EnhancedBatchProcessingService {
       (callback as any).unsubscribe();
     }
     this.jobListeners.delete(jobId);
+    FileJobService.unsubscribeFromJob(jobId);
   }
 
   /**
-   * Get queue status from database
+   * Get queue status from the file job system
    */
   static async getQueueStatus(): Promise<EnhancedProcessingQueue> {
     try {
-      const stats = await GradingQueueService.getQueueStats();
+      const stats = await FileJobService.getQueueStats();
       
       return {
         activeJobs: [], // These will be populated by individual job queries
@@ -186,14 +147,11 @@ export class EnhancedBatchProcessingService {
   }
 
   /**
-   * Pause job (mark as paused in database)
+   * Pause job (mark as failed with pause message)
    */
   static async pauseJob(jobId: string): Promise<boolean> {
     try {
-      // Note: This would require adding pause functionality to the database
-      // For now, we'll log the intent
-      console.log(`⏸️ Pause requested for job ${jobId} (not yet implemented in database)`);
-      return false;
+      return await FileJobService.cancelJob(jobId);
     } catch (error) {
       console.error(`Error pausing job ${jobId}:`, error);
       return false;
@@ -205,7 +163,7 @@ export class EnhancedBatchProcessingService {
    */
   static async resumeJob(jobId: string): Promise<boolean> {
     try {
-      return await GradingQueueService.retryJob(jobId);
+      return await FileJobService.retryJob(jobId);
     } catch (error) {
       console.error(`Error resuming job ${jobId}:`, error);
       return false;
@@ -213,57 +171,59 @@ export class EnhancedBatchProcessingService {
   }
 
   // Helper methods
-  private static async convertDbJobToEnhanced(dbJob: any): Promise<EnhancedBatchJob | null> {
-    try {
-      // Check if this is a batch processing job or regular grading job
-      const isBatchJob = dbJob.payload?.batchProcessing || dbJob.payload?.method === 'batch_file_processing';
-      const filesData = isBatchJob ? (dbJob.payload?.filesData || []) : [];
-      
-      return {
-        id: dbJob.id,
-        files: filesData,
-        status: dbJob.status as any,
-        priority: dbJob.priority as any,
-        createdAt: new Date(dbJob.created_at).getTime(),
-        startedAt: dbJob.started_at ? new Date(dbJob.started_at).getTime() : undefined,
-        completedAt: dbJob.completed_at ? new Date(dbJob.completed_at).getTime() : undefined,
-        progress: this.calculateProgress(dbJob),
-        results: dbJob.result_payload?.results || [],
-        errors: dbJob.error_message ? [dbJob.error_message] : [],
-        estimatedTimeRemaining: this.calculateEstimatedTime(dbJob),
-        processingMetrics: {
-          filesPerSecond: 0,
-          averageFileSize: 0,
-          totalProcessingTime: dbJob.processing_time_ms || 0,
-          batchOptimizationUsed: isBatchJob
-        }
-      };
-    } catch (error) {
-      console.error('Error converting database job:', error);
-      return null;
-    }
-  }
-
-  private static calculateProgress(dbJob: any): number {
-    if (dbJob.status === 'completed') return 100;
-    if (dbJob.status === 'failed') return 0;
-    if (dbJob.status === 'processing') {
-      // Check if we have progress data in result_payload
-      if (dbJob.result_payload?.progress) {
-        return dbJob.result_payload.progress;
+  private static convertFileJobToEnhanced(fileJob: FileJob): EnhancedBatchJob {
+    const filesData = fileJob.file_group_data?.files || [];
+    
+    return {
+      id: fileJob.id,
+      files: filesData, // Note: These are FileData objects, not actual File objects
+      status: fileJob.status as any,
+      priority: fileJob.priority,
+      createdAt: new Date(fileJob.created_at).getTime(),
+      startedAt: fileJob.started_at ? new Date(fileJob.started_at).getTime() : undefined,
+      completedAt: fileJob.completed_at ? new Date(fileJob.completed_at).getTime() : undefined,
+      progress: this.calculateProgress(fileJob),
+      results: fileJob.result_json?.results || [],
+      errors: fileJob.error_message ? [fileJob.error_message] : [],
+      estimatedTimeRemaining: this.calculateEstimatedTime(fileJob),
+      processingMetrics: {
+        filesPerSecond: 0,
+        averageFileSize: this.calculateAverageFileSize(filesData),
+        totalProcessingTime: fileJob.processing_time_ms || 0,
+        batchOptimizationUsed: true
       }
-      return 50; // Default estimate
-    }
-    return 0;
+    };
   }
 
-  private static calculateEstimatedTime(dbJob: any): number {
-    if (dbJob.status === 'completed' || dbJob.status === 'failed') return 0;
-    if (dbJob.status === 'processing' && dbJob.started_at) {
-      const elapsed = Date.now() - new Date(dbJob.started_at).getTime();
-      return Math.max(0, 30000 - elapsed); // Estimate 30 seconds total
+  private static calculateProgress(fileJob: FileJob): number {
+    if (fileJob.status === 'completed') return 100;
+    if (fileJob.status === 'failed') return 0;
+    if (fileJob.status === 'processing') {
+      // Check if we have progress data in result_json
+      if (fileJob.result_json?.progress) {
+        return fileJob.result_json.progress;
+      }
+      return 50; // Default estimate for processing
     }
-    return 30000; // Default estimate
+    return 0; // pending
+  }
+
+  private static calculateEstimatedTime(fileJob: FileJob): number {
+    if (fileJob.status === 'completed' || fileJob.status === 'failed') return 0;
+    if (fileJob.status === 'processing' && fileJob.started_at) {
+      const elapsed = Date.now() - new Date(fileJob.started_at).getTime();
+      const filesCount = fileJob.file_group_data?.files?.length || 1;
+      const estimatedTotal = filesCount * 2000; // 2 seconds per file estimate
+      return Math.max(0, estimatedTotal - elapsed);
+    }
+    const filesCount = fileJob.file_group_data?.files?.length || 1;
+    return filesCount * 2000; // Default estimate
+  }
+
+  private static calculateAverageFileSize(filesData: any[]): number {
+    if (!filesData || filesData.length === 0) return 0;
+    const totalSize = filesData.reduce((sum, file) => sum + (file.size || 0), 0);
+    return totalSize / filesData.length;
   }
 
   private static getDefaultQueueStatus(): EnhancedProcessingQueue {
@@ -300,15 +260,16 @@ export class EnhancedBatchProcessingService {
       }
     });
     this.jobListeners.clear();
+    FileJobService.cleanup();
   }
 
   // Legacy methods for backward compatibility
   static loadQueueState(): void {
-    console.log('📂 Loading queue state from database (no local storage needed)');
+    console.log('📂 Loading queue state from decoupled database system');
   }
 
   static updateAutoScalingConfig(config: any): void {
-    console.log('⚙️ Auto-scaling config update (handled by database queue)');
+    console.log('⚙️ Auto-scaling config update (handled by decoupled file job system)');
   }
 }
 

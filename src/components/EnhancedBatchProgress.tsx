@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Zap, DollarSign, Target, AlertCircle } from 'lucide-react';
-import { EnhancedBatchProcessingService, EnhancedBatchJob } from '@/services/enhancedBatchProcessingService';
+import { FileJobService, type FileJob } from '@/services/fileJobService';
 
 interface EnhancedBatchProgressProps {
   jobId: string;
@@ -15,7 +15,7 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
   jobId,
   onComplete
 }) => {
-  const [job, setJob] = useState<EnhancedBatchJob | null>(null);
+  const [job, setJob] = useState<FileJob | null>(null);
   const [isVisible, setIsVisible] = useState(true);
   const [loading, setLoading] = useState(true);
 
@@ -26,31 +26,31 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
 
     const loadInitialJob = async () => {
       try {
-        const initialJob = await EnhancedBatchProcessingService.getJob(jobId);
+        const initialJob = await FileJobService.getJobStatus(jobId);
         if (mounted && initialJob) {
           setJob(initialJob);
           setLoading(false);
           
           // Check if already completed
           if (initialJob.status === 'completed' && onComplete) {
-            onComplete(initialJob.results);
+            onComplete(initialJob.result_json?.results || []);
           }
         }
       } catch (error) {
-        console.error('Error loading initial job:', error);
+        console.error('Error loading initial file job:', error);
         setLoading(false);
       }
     };
 
     // Subscribe to real-time updates
-    EnhancedBatchProcessingService.subscribeToJob(jobId, (updatedJob) => {
+    FileJobService.subscribeToJob(jobId, (updatedJob) => {
       if (!mounted) return;
       
-      console.log(`📦 Job update received: ${updatedJob.status}`);
+      console.log(`📦 File job update received: ${updatedJob.status}`);
       setJob(updatedJob);
       
       if (updatedJob.status === 'completed' && onComplete) {
-        onComplete(updatedJob.results);
+        onComplete(updatedJob.result_json?.results || []);
       }
     });
 
@@ -58,7 +58,7 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
 
     return () => {
       mounted = false;
-      EnhancedBatchProcessingService.unsubscribeFromJob(jobId);
+      FileJobService.unsubscribeFromJob(jobId);
     };
   }, [jobId, onComplete]);
 
@@ -68,7 +68,7 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
         <CardContent className="p-6">
           <div className="flex items-center space-x-2">
             <Clock className="h-4 w-4 animate-spin" />
-            <span>Loading batch job...</span>
+            <span>Loading decoupled file processing job...</span>
           </div>
         </CardContent>
       </Card>
@@ -97,13 +97,14 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
     return `${minutes}m ${seconds % 60}s`;
   };
 
-  const totalFiles = job.files.length;
-  const processedFiles = Math.floor((job.progress / 100) * totalFiles);
+  const totalFiles = job.file_group_data?.files?.length || 0;
+  const progress = job.result_json?.progress || 0;
+  const processedFiles = job.result_json?.processedFiles || 0;
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Database-Backed Batch Processing</CardTitle>
+        <CardTitle className="text-sm font-medium">Decoupled File Processing</CardTitle>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className={`${getStatusColor(job.status)} text-white`}>
             {job.status.toUpperCase()}
@@ -121,9 +122,9 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span>Progress: {processedFiles}/{totalFiles} files</span>
-            <span>{job.progress.toFixed(1)}%</span>
+            <span>{progress.toFixed(1)}%</span>
           </div>
-          <Progress value={job.progress} className="w-full" />
+          <Progress value={progress} className="w-full" />
         </div>
 
         {/* Job Info */}
@@ -132,9 +133,11 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
             <Clock className="h-4 w-4 text-gray-500" />
             <div>
               <div className="text-sm font-medium">
-                {job.estimatedTimeRemaining ? `${Math.ceil(job.estimatedTimeRemaining / 1000)}s remaining` : 'Calculating...'}
+                {job.status === 'processing' ? 'Processing...' : 
+                 job.status === 'pending' ? 'Queued' :
+                 job.status === 'completed' ? 'Completed' : 'Failed'}
               </div>
-              <div className="text-xs text-gray-500">Time Remaining</div>
+              <div className="text-xs text-gray-500">Status</div>
             </div>
           </div>
           
@@ -149,7 +152,7 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
           <div className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-gray-500" />
             <div>
-              <div className="text-sm font-medium">Database Queue</div>
+              <div className="text-sm font-medium">Decoupled Queue</div>
               <div className="text-xs text-gray-500">Processing Mode</div>
             </div>
           </div>
@@ -164,32 +167,41 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
         </div>
 
         {/* Processing Time */}
-        {job.startedAt && (
+        {job.started_at && (
           <div className="text-sm text-gray-600">
-            {job.status === 'completed' && job.completedAt ? (
-              <span>✅ Completed in {formatTime(job.completedAt - job.startedAt)}</span>
+            {job.status === 'completed' && job.completed_at ? (
+              <span>✅ Completed in {formatTime(job.processing_time_ms || 0)}</span>
             ) : job.status === 'processing' ? (
-              <span>⏱️ Running for {formatTime(Date.now() - job.startedAt)}</span>
+              <span>⏱️ Running for {formatTime(Date.now() - new Date(job.started_at).getTime())}</span>
             ) : (
-              <span>⏳ Queued since {new Date(job.createdAt).toLocaleTimeString()}</span>
+              <span>⏳ Queued since {new Date(job.created_at).toLocaleTimeString()}</span>
             )}
           </div>
         )}
 
         {/* Errors */}
-        {job.errors.length > 0 && (
+        {job.error_message && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
             <div className="flex items-center gap-2 text-red-800 text-sm font-medium mb-1">
               <AlertCircle className="h-4 w-4" />
-              {job.errors.length} Error{job.errors.length > 1 ? 's' : ''}
+              Processing Error
             </div>
             <div className="text-red-700 text-xs">
-              {job.errors.slice(0, 2).map((error, index) => (
-                <div key={index}>• {error}</div>
-              ))}
-              {job.errors.length > 2 && (
-                <div>• ... and {job.errors.length - 2} more</div>
-              )}
+              {job.error_message}
+            </div>
+          </div>
+        )}
+
+        {/* Results Summary */}
+        {job.result_json?.results && (
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className="text-blue-800 text-xs font-medium mb-1">
+              📊 Processing Results:
+            </div>
+            <div className="text-blue-700 text-xs space-y-1">
+              <div>• Successful: {job.result_json.results.filter((r: any) => r.success).length}</div>
+              <div>• Failed: {job.result_json.results.filter((r: any) => !r.success).length}</div>
+              <div>• Processing Method: {job.result_json.metadata?.processingMethod || 'decoupled_processing'}</div>
             </div>
           </div>
         )}
@@ -198,24 +210,25 @@ export const EnhancedBatchProgress: React.FC<EnhancedBatchProgressProps> = ({
         {job.status === 'completed' && (
           <div className="bg-green-50 border border-green-200 rounded-md p-3">
             <div className="text-green-800 text-sm font-medium">
-              🎉 Batch processing completed successfully!
+              🎉 File processing completed successfully!
             </div>
             <div className="text-green-700 text-xs mt-1">
-              {job.results.length} files processed using database-backed queue
+              {job.result_json?.metadata?.successfulFiles || 0} files processed using decoupled architecture
             </div>
           </div>
         )}
 
-        {/* Database Queue Benefits */}
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-          <div className="text-blue-800 text-xs font-medium mb-1">
-            ✨ Database-Backed Processing Benefits:
+        {/* Architecture Benefits */}
+        <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
+          <div className="text-purple-800 text-xs font-medium mb-1">
+            🚀 Decoupled Architecture Benefits:
           </div>
-          <div className="text-blue-700 text-xs space-y-1">
-            <div>• Persistent job state - survives browser refresh</div>
-            <div>• Horizontal scaling across multiple servers</div>
-            <div>• Real-time progress updates via Supabase</div>
-            <div>• Automatic retry and error handling</div>
+          <div className="text-purple-700 text-xs space-y-1">
+            <div>• Zero HTTP overhead between components</div>
+            <div>• Horizontal scaling with multiple workers</div>
+            <div>• Persistent job state across system restarts</div>
+            <div>• Real-time progress updates via database</div>
+            <div>• Independent worker scaling and deployment</div>
           </div>
         </div>
       </CardContent>
