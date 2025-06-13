@@ -1,4 +1,5 @@
 
+
 import { UnifiedClassSessionIntegration } from "./unifiedClassSessionIntegration";
 import { UnifiedTrailblazerIntegration } from "./unifiedTrailblazerIntegration";
 import { UnifiedHomeLearnerIntegration } from "./unifiedHomeLearnerIntegration";
@@ -92,6 +93,27 @@ export class EnhancedActionLogger {
   }
 
   /**
+   * Helper function to safely parse JSON context_summary
+   */
+  private static parseContextSummary(contextSummary: any): Record<string, any> {
+    if (!contextSummary) return {};
+    
+    if (typeof contextSummary === 'string') {
+      try {
+        return JSON.parse(contextSummary);
+      } catch {
+        return {};
+      }
+    }
+    
+    if (typeof contextSummary === 'object' && contextSummary !== null) {
+      return contextSummary;
+    }
+    
+    return {};
+  }
+
+  /**
    * Get action logs for a specific student
    * @param studentId - The ID of the student
    * @param limit - The maximum number of logs to return (default: 50)
@@ -118,7 +140,7 @@ export class EnhancedActionLogger {
         timestamp: item.created_at,
         reference_table: item.reference_table,
         reference_id: item.reference_id,
-        context_summary: item.context_summary,
+        context_summary: EnhancedActionLogger.parseContextSummary(item.context_summary),
         session_type: item.session_type
       }));
     } catch (error) {
@@ -153,7 +175,7 @@ export class EnhancedActionLogger {
         timestamp: item.created_at,
         reference_table: item.reference_table,
         reference_id: item.reference_id,
-        context_summary: item.context_summary,
+        context_summary: EnhancedActionLogger.parseContextSummary(item.context_summary),
         session_type: item.session_type
       }));
     } catch (error) {
