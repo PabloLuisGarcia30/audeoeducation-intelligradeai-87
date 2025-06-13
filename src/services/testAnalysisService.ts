@@ -4,10 +4,10 @@ import { transactionService } from './transactionService';
 import { 
   extractTextSchema, 
   analyzeTestSchema,
-  ValidationErrorHandler,
   type ExtractTextInput,
   type AnalyzeTestInput
 } from '@/lib/validation/schemas';
+import { ValidationErrorHandler } from '@/lib/validation/errorHandler';
 
 export interface ExtractTextRequest {
   fileContent: string;
