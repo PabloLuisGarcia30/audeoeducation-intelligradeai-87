@@ -300,9 +300,8 @@ export function LearnerProfileDisplay({ studentId, classId, className, onBack }:
 
           <TabsContent value="progress">
             <StudentProgressChart
-              testResults={testResults}
-              isClassView={isClassView}
-              student={student}
+              studentId={studentId}
+              timeRange={30}
             />
           </TabsContent>
         </Tabs>

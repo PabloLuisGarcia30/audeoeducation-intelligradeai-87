@@ -125,7 +125,11 @@ export class ProgressAnalyticsService {
         return [];
       }
 
-      return data || [];
+      // Type cast the skill_type to ensure TypeScript compatibility
+      return (data || []).map(item => ({
+        ...item,
+        skill_type: (item.skill_type as 'content' | 'subject') || 'content'
+      }));
     } catch (error) {
       console.error('Failed to fetch progress metrics:', error);
       return [];
