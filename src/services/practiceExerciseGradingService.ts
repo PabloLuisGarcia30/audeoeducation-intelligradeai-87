@@ -1,9 +1,11 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { SmartAnswerGradingService, type GradingResult } from './smartAnswerGradingService';
 import { MistakePatternService } from './mistakePatternService';
 import { updateExerciseStatus } from './classSessionService';
 import { trailblazerService } from './trailblazerService';
+import { UnifiedGradingService } from './grading/core/UnifiedGradingService';
+import { PracticeExerciseAdapter } from './grading/adapters/PracticeExerciseAdapter';
+import type { SessionType } from './grading/types/UnifiedGradingTypes';
 
 export interface PracticeExerciseAnswer {
   questionId: string;
@@ -29,7 +31,7 @@ export interface QuestionResult {
     subtypeName?: string;
     confidence?: number;
     reasoning?: string;
-    misconceptionId?: string; // FIXED: Added misconceptionId property
+    misconceptionId?: string;
   };
 }
 
@@ -40,12 +42,12 @@ export interface ExerciseSubmissionResult {
   questionResults: QuestionResult[];
   overallFeedback: string;
   completedAt: Date;
-  trailblazerMisconceptions?: string[]; // NEW: List of misconception IDs recorded
+  trailblazerMisconceptions?: string[];
 }
 
 export class PracticeExerciseGradingService {
   /**
-   * Grade a complete practice exercise submission with enhanced tracking and Trailblazer integration
+   * Grade a complete practice exercise submission using the unified grading system
    */
   static async gradeExerciseSubmission(
     answers: PracticeExerciseAnswer[],
@@ -58,7 +60,184 @@ export class PracticeExerciseGradingService {
       exerciseType?: string;
       skillsTargeted?: string[];
     },
-    trailblazerSessionId?: string // Trailblazer session ID for integration
+    trailblazerSessionId?: string,
+    sessionType: SessionType = 'practice_exercise',
+    studentId?: string,
+    classId?: string
+  ): Promise<ExerciseSubmissionResult> {
+    try {
+      console.log(`🎯 Unified grading: "${exerciseTitle}" with ${answers.length} questions`);
+      if (trailblazerSessionId) {
+        console.log(`🧠 Trailblazer session integration: ${trailblazerSessionId}`);
+      }
+
+      // Convert legacy format to unified format
+      const unifiedQuestions = PracticeExerciseAdapter.convertToUnifiedQuestions(
+        answers,
+        exerciseTitle,
+        studentId,
+        {
+          sessionType,
+          sessionId: trailblazerSessionId || studentExerciseId || 'practice',
+          classId,
+          exerciseId: studentExerciseId,
+          subject: enhancedMetadata?.subject,
+          grade: enhancedMetadata?.grade
+        }
+      );
+
+      // Create grading context
+      const gradingContext = PracticeExerciseAdapter.createGradingContext(
+        sessionType,
+        trailblazerSessionId || studentExerciseId || 'practice',
+        studentId,
+        'student', // Default name
+        studentExerciseId,
+        classId,
+        enhancedMetadata?.subject,
+        enhancedMetadata?.grade,
+        trailblazerSessionId
+      );
+
+      // Use unified grading system for batch processing
+      const batchRequest = {
+        questions: unifiedQuestions,
+        context: gradingContext,
+        priority: 'normal' as const
+      };
+
+      const batchResult = await UnifiedGradingService.gradeBatch(batchRequest);
+      
+      // Convert back to legacy format for backward compatibility
+      const legacyResult = PracticeExerciseAdapter.convertToLegacyResults(
+        batchResult.results,
+        exerciseTitle
+      );
+
+      // Continue with legacy misconception tracking for now
+      await this.recordLegacyMistakePatterns(
+        batchResult.results,
+        answers,
+        exerciseTitle,
+        studentExerciseId,
+        skillName,
+        enhancedMetadata
+      );
+
+      // Handle trailblazer misconceptions
+      if (trailblazerSessionId) {
+        await this.recordTrailblazerMisconceptions(
+          batchResult.results,
+          trailblazerSessionId
+        );
+      }
+
+      // Update exercise status if we have a student exercise ID
+      if (studentExerciseId) {
+        await updateExerciseStatus(studentExerciseId, 'completed', legacyResult.percentageScore);
+      }
+
+      console.log(`✅ Unified grading completed: ${legacyResult.totalScore}/${legacyResult.totalPossible} points (${legacyResult.percentageScore.toFixed(1)}%)`);
+
+      return legacyResult;
+
+    } catch (error) {
+      console.error('❌ Critical error in unified exercise grading:', error);
+      
+      // Fallback to legacy grading if unified system fails
+      console.log('🔄 Falling back to legacy grading system...');
+      return this.legacyGradeExerciseSubmission(
+        answers,
+        exerciseTitle,
+        studentExerciseId,
+        skillName,
+        enhancedMetadata,
+        trailblazerSessionId
+      );
+    }
+  }
+
+  /**
+   * Record mistake patterns using existing legacy system for backward compatibility
+   */
+  private static async recordLegacyMistakePatterns(
+    unifiedResults: any[],
+    originalAnswers: PracticeExerciseAnswer[],
+    exerciseTitle: string,
+    studentExerciseId?: string,
+    skillName?: string,
+    enhancedMetadata?: any
+  ): Promise<void> {
+    if (!studentExerciseId) return;
+
+    for (let i = 0; i < unifiedResults.length; i++) {
+      const result = unifiedResults[i];
+      const originalAnswer = originalAnswers[i];
+
+      if (!result || !originalAnswer) continue;
+
+      const mistakeData = {
+        studentExerciseId,
+        questionId: result.questionId,
+        questionNumber: i + 1,
+        questionType: originalAnswer.questionType,
+        studentAnswer: originalAnswer.studentAnswer,
+        correctAnswer: originalAnswer.correctAnswer,
+        isCorrect: result.isCorrect,
+        skillTargeted: skillName || 'Unknown',
+        mistakeType: result.isCorrect ? undefined : this.determineMistakeType(originalAnswer, result),
+        confidenceScore: result.confidence,
+        gradingMethod: result.gradingMethod,
+        feedbackGiven: result.feedback,
+        questionContext: `Question ${i + 1} from exercise: ${exerciseTitle}`,
+        subject: enhancedMetadata?.subject,
+        grade: enhancedMetadata?.grade,
+        misconceptionCategory: result.misconceptionAnalysis?.categoryName,
+        conceptMissedDescription: result.misconceptionAnalysis?.subtypeName
+      };
+
+      try {
+        await MistakePatternService.recordMistakePattern(mistakeData);
+      } catch (error) {
+        console.warn(`Failed to record mistake pattern for question ${i + 1}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Record trailblazer misconceptions from unified results
+   */
+  private static async recordTrailblazerMisconceptions(
+    unifiedResults: any[],
+    trailblazerSessionId: string
+  ): Promise<void> {
+    for (let i = 0; i < unifiedResults.length; i++) {
+      const result = unifiedResults[i];
+      
+      if (!result.isCorrect && result.misconceptionAnalysis?.misconceptionId) {
+        try {
+          await trailblazerService.recordSessionMisconception(
+            trailblazerSessionId,
+            result.misconceptionAnalysis.misconceptionId,
+            i + 1
+          );
+        } catch (error) {
+          console.warn(`Failed to record trailblazer misconception for question ${i + 1}:`, error);
+        }
+      }
+    }
+  }
+
+  /**
+   * Legacy grading fallback method (original implementation)
+   */
+  private static async legacyGradeExerciseSubmission(
+    answers: PracticeExerciseAnswer[],
+    exerciseTitle: string,
+    studentExerciseId?: string,
+    skillName?: string,
+    enhancedMetadata?: any,
+    trailblazerSessionId?: string
   ): Promise<ExerciseSubmissionResult> {
     try {
       console.log(`🎯 Grading exercise submission: "${exerciseTitle}" with ${answers.length} questions`);
@@ -262,7 +441,7 @@ export class PracticeExerciseGradingService {
    */
   private static determineMistakeType(
     answer: PracticeExerciseAnswer,
-    gradingResult: GradingResult
+    gradingResult: any
   ): string {
     if (gradingResult.misconceptionAnalysis?.categoryName) {
       return gradingResult.misconceptionAnalysis.categoryName;
@@ -287,12 +466,7 @@ export class PracticeExerciseGradingService {
   private static generateOverallFeedback(
     questionResults: QuestionResult[], 
     percentageScore: number,
-    enhancedMetadata?: {
-      subject?: string;
-      grade?: string;
-      exerciseType?: string;
-      skillsTargeted?: string[];
-    },
+    enhancedMetadata?: any,
     trailblazerSessionId?: string
   ): string {
     const correctCount = questionResults.filter(q => q.isCorrect).length;
@@ -311,17 +485,14 @@ export class PracticeExerciseGradingService {
       feedback += "This material needs more review. Don't worry - targeted practice will help you improve.";
     }
 
-    // Add misconception insights
     if (misconceptionCount > 0) {
       feedback += ` Our analysis identified ${misconceptionCount} specific learning patterns that we can help you address.`;
     }
 
-    // Add Trailblazer session context
     if (trailblazerSessionId) {
       feedback += " Your learning progress and any areas for improvement have been recorded in your learning session for personalized recommendations.";
     }
 
-    // Add subject-specific encouragement
     if (enhancedMetadata?.subject) {
       feedback += ` Keep practicing ${enhancedMetadata.subject} - every attempt helps you learn!`;
     }
@@ -330,7 +501,7 @@ export class PracticeExerciseGradingService {
   }
 
   /**
-   * NEW: Grade an exercise submission specifically for Trailblazer sessions
+   * NEW: Grade an exercise submission specifically for Trailblazer sessions using unified system
    * This is a convenience method that automatically handles Trailblazer integration
    */
   static async gradeTrailblazerExercise(
@@ -352,7 +523,39 @@ export class PracticeExerciseGradingService {
         exerciseType: 'trailblazer_practice',
         skillsTargeted: [skillName]
       },
-      trailblazerSessionId
+      trailblazerSessionId,
+      'trailblazer'
+    );
+  }
+
+  /**
+   * Grade an exercise submission for class sessions using unified system
+   */
+  static async gradeClassExercise(
+    answers: PracticeExerciseAnswer[],
+    exerciseTitle: string,
+    classSessionId: string,
+    studentId: string,
+    classId: string,
+    skillName: string,
+    subject?: string,
+    grade?: string
+  ): Promise<ExerciseSubmissionResult> {
+    return this.gradeExerciseSubmission(
+      answers,
+      exerciseTitle,
+      undefined,
+      skillName,
+      {
+        subject,
+        grade,
+        exerciseType: 'class_session',
+        skillsTargeted: [skillName]
+      },
+      classSessionId,
+      'class_session',
+      studentId,
+      classId
     );
   }
 }

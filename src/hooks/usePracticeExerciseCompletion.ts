@@ -24,24 +24,30 @@ export function usePracticeExerciseCompletion({
       score, 
       skillName, 
       exerciseData,
-      classId 
+      classId,
+      sessionType = 'practice_exercise',
+      sessionId
     }: { 
       exerciseId: string; 
       score: number; 
       skillName: string; 
       exerciseData: any;
       classId?: string;
+      sessionType?: 'practice_exercise' | 'trailblazer' | 'class_session';
+      sessionId?: string;
     }) => {
       if (!user?.id) {
         throw new Error('User must be authenticated to complete practice exercises');
       }
 
-      console.log('🎯 Completing practice exercise for authenticated user:', {
+      console.log('🎯 Completing practice exercise with unified integration:', {
         userId: user.id,
         exerciseId,
         score,
         skillName,
         classId,
+        sessionType,
+        sessionId,
         hasExerciseData: !!exerciseData
       });
       
@@ -60,96 +66,122 @@ export function usePracticeExerciseCompletion({
       
       // Then process skill score updates using authenticated user ID with class context
       setIsUpdatingSkills(true);
-      console.log('🔄 Processing skill score updates...');
+      console.log('🔄 Processing skill score updates with unified integration...');
       
       const skillUpdateResult = await practiceExerciseSkillService.processPracticeExerciseCompletion({
         studentId: user.id,
         exerciseId,
         skillName,
         exerciseScore: score,
-        exerciseData,
-        classId
+        classId: classId,
+        exerciseData: exerciseData,
+        sessionType: sessionType,
+        sessionId: sessionId
       });
 
-      console.log('📊 Skill update result:', skillUpdateResult);
-
-      // Integrate with unified results system
-      try {
-        const skillType = exerciseData?.skillType || exerciseData?.skillMetadata?.skillType || 'content';
-        const pointsEarned = Math.round((score / 100) * 10); // Scale to 10 points max
-        const pointsPossible = 10;
-
-        await UnifiedHomeLearnerIntegration.recordPracticeCompletion(
-          user.id,
-          exerciseId,
-          skillName,
-          skillType,
-          score,
-          pointsEarned,
-          pointsPossible,
-          {
-            exercise_type: 'practice',
-            class_id: classId,
-            total_questions: exerciseData?.totalQuestions || 4,
-            grading_method: 'enhanced_ai'
-          }
-        );
-
-        console.log('✅ Integrated practice exercise with unified results system');
-      } catch (error) {
-        console.warn('⚠️ Failed to integrate with unified results system:', error);
-        // Don't fail the main operation if unified integration fails
+      // Trigger callback with skill improvements if provided
+      if (onSkillUpdated && skillUpdateResult.skillUpdates) {
+        onSkillUpdated(skillUpdateResult.skillUpdates);
       }
+      
+      // Record in unified student results for cross-session analytics
+      if (sessionType && sessionId) {
+        try {
+          const skillType = exerciseData?.skillType || 
+                           exerciseData?.skillMetadata?.skillType || 
+                           'content'; // fallback
 
-      if (!skillUpdateResult.success) {
-        console.warn('⚠️ Skill score update failed:', skillUpdateResult.error);
-        toast.error('Exercise completed but skill scores could not be updated');
-      } else {
-        console.log('✅ Skill scores updated successfully:', skillUpdateResult.skillUpdates);
-        
-        // Enhanced success message with skill type information
-        const skillType = exerciseData?.skillType || exerciseData?.skillMetadata?.skillType;
-        const improvementMessages = skillUpdateResult.skillUpdates
-          .filter(update => update.updatedScore > update.currentScore)
-          .map(update => `${update.skillName} (${update.skillType}): ${update.currentScore}% → ${update.updatedScore}%`);
+          console.log(`🔗 Recording unified result for ${sessionType} session:`, {
+            sessionType,
+            sessionId,
+            skillName,
+            skillType,
+            score
+          });
 
-        if (improvementMessages.length > 0) {
-          const skillTypeMsg = skillType ? ` [${skillType === 'content' ? 'Content' : 'Subject'} Skill]` : '';
-          toast.success(`Exercise completed!${skillTypeMsg} Skill improvements: ${improvementMessages.join(', ')}`);
-        } else {
-          const skillTypeMsg = skillType ? ` [${skillType === 'content' ? 'Content' : 'Subject'} Skill]` : '';
-          toast.success(`Exercise completed successfully!${skillTypeMsg}`);
-        }
-
-        // Notify parent component
-        if (onSkillUpdated) {
-          onSkillUpdated(skillUpdateResult.skillUpdates);
+          switch (sessionType) {
+            case 'trailblazer':
+              // Record trailblazer session completion
+              await UnifiedHomeLearnerIntegration.recordPracticeCompletion(
+                user.id,
+                sessionId,
+                skillName,
+                skillType,
+                score,
+                Math.round(score * (exerciseData?.totalPoints || 10) / 100),
+                exerciseData?.totalPoints || 10,
+                {
+                  exercise_type: 'trailblazer_practice',
+                  overall_score: score,
+                  grading_method: 'unified_ai',
+                  session_type: 'trailblazer'
+                }
+              );
+              break;
+              
+            case 'class_session':
+              // Record class session completion
+              await UnifiedHomeLearnerIntegration.recordPracticeCompletion(
+                user.id,
+                sessionId,
+                skillName,
+                skillType,
+                score,
+                Math.round(score * (exerciseData?.totalPoints || 10) / 100),
+                exerciseData?.totalPoints || 10,
+                {
+                  exercise_type: 'class_practice',
+                  overall_score: score,
+                  grading_method: 'unified_ai',
+                  session_type: 'class_session',
+                  class_id: classId
+                }
+              );
+              break;
+              
+            default: // practice_exercise
+              // Record home learner practice completion
+              await UnifiedHomeLearnerIntegration.recordPracticeCompletion(
+                user.id,
+                sessionId,
+                skillName,
+                skillType,
+                score,
+                Math.round(score * (exerciseData?.totalPoints || 10) / 100),
+                exerciseData?.totalPoints || 10,
+                {
+                  exercise_type: 'home_practice',
+                  overall_score: score,
+                  grading_method: 'unified_ai',
+                  session_type: 'home_learner'
+                }
+              );
+              break;
+          }
+          
+          console.log('✅ Unified session result recorded successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to record unified session result:', error);
+          // Don't fail the completion process if unified recording fails
         }
       }
 
       setIsUpdatingSkills(false);
-      return { exerciseId, skillUpdates: skillUpdateResult.skillUpdates };
-    },
-    onSuccess: () => {
-      if (!user?.id) return;
+      console.log('✅ Practice exercise completion processed successfully');
       
-      console.log('🔄 Invalidating queries to refresh skill data');
-      
-      // Invalidate relevant queries to refresh skill data using authenticated user ID
-      queryClient.invalidateQueries({ 
-        queryKey: ['studentContentSkills'] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['studentSubjectSkills'] 
-      });
-      queryClient.invalidateQueries({ 
-        queryKey: ['studentExercises'] 
-      });
+      return skillUpdateResult;
     },
     onError: (error) => {
+      setIsUpdatingSkills(false);
       console.error('❌ Error completing practice exercise:', error);
       toast.error('Failed to complete exercise. Please try again.');
-      setIsUpdatingSkills(false);
+    },
+    onSuccess: () => {
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['contentSkillScores'] });
+      queryClient.invalidateQueries({ queryKey: ['subjectSkillScores'] });
+      queryClient.invalidateQueries({ queryKey: ['studentExercises'] });
+      queryClient.invalidateQueries({ queryKey: ['practiceAnalytics'] });
     }
   });
 

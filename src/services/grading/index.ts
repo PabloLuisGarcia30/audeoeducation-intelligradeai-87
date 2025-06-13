@@ -13,3 +13,6 @@ export { OpenAIGradingProcessor } from './core/OpenAIGradingProcessor';
 export { ResultProcessor } from './core/ResultProcessor';
 export { CacheManager } from './core/CacheManager';
 export { PersistenceManager } from './core/PersistenceManager';
+
+// Adapters for legacy integration
+export { PracticeExerciseAdapter } from './adapters/PracticeExerciseAdapter';

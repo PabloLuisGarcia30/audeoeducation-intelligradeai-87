@@ -5,7 +5,7 @@ import { EnhancedPracticeAnswerKeyService } from './enhancedPracticeAnswerKeySer
 
 export class EnhancedPracticeExerciseGradingService extends PracticeExerciseGradingService {
   /**
-   * Grade exercise submission with enhanced misconception tracking
+   * Grade exercise submission with enhanced misconception tracking using unified system
    */
   static async gradeExerciseWithMisconceptionTracking(
     answers: PracticeExerciseAnswer[],
@@ -26,17 +26,19 @@ export class EnhancedPracticeExerciseGradingService extends PracticeExerciseGrad
     const answerKey = await EnhancedPracticeAnswerKeyService.getEnhancedAnswerKey(exerciseId);
     let misconceptionsLogged = 0;
 
-    // Grade the exercise using the parent class method
+    // Use the unified grading system via parent class
     const result = await this.gradeExerciseSubmission(
       answers,
       exerciseTitle,
-      undefined, // No student exercise ID
+      undefined,
       skillName,
       enhancedMetadata,
-      trailblazerSessionId
+      trailblazerSessionId,
+      trailblazerSessionId ? 'trailblazer' : 'practice_exercise',
+      studentId
     );
 
-    // Log misconceptions for incorrect MCQ answers
+    // Log misconceptions for incorrect MCQ answers using existing service
     if (answerKey?.questions) {
       for (let i = 0; i < answers.length; i++) {
         const answer = answers[i];
@@ -63,7 +65,7 @@ export class EnhancedPracticeExerciseGradingService extends PracticeExerciseGrad
       }
     }
 
-    console.log(`🎯 Exercise grading completed with ${misconceptionsLogged} misconceptions logged`);
+    console.log(`🎯 Enhanced exercise grading completed with ${misconceptionsLogged} misconceptions logged`);
 
     return {
       ...result,

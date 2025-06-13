@@ -22,6 +22,8 @@ export type ComplexityLevel = 'simple' | 'medium' | 'complex';
 
 export type PriorityLevel = 'low' | 'normal' | 'high' | 'urgent';
 
+export type SessionType = 'class_session' | 'trailblazer' | 'home_learner' | 'practice_exercise';
+
 export interface UnifiedQuestionContext {
   questionId: string;
   questionNumber: number;
@@ -122,11 +124,23 @@ export interface GradingContext {
   studentName?: string;
   exerciseId?: string;
   sessionId?: string;
+  sessionType?: SessionType;
+  classId?: string;
   subject?: string;
   grade?: string;
   exerciseType?: string;
   skillsTargeted?: string[];
   configuration: GradingConfiguration;
+  // Session-specific context
+  sessionContext?: {
+    sessionType: SessionType;
+    sessionId: string;
+    classId?: string;
+    teacherId?: string;
+    lessonPlanId?: string;
+    trailblazerSessionId?: string;
+    practiceSessionId?: string;
+  };
 }
 
 export interface BatchGradingRequest {
@@ -162,4 +176,16 @@ export interface GradingRouterDecision {
   estimatedTime: number;
   batchRecommended: boolean;
   complexityLevel: ComplexityLevel;
+}
+
+// Helper types for converting from legacy formats
+export interface LegacyPracticeExerciseAnswer {
+  questionId: string;
+  studentAnswer: string;
+  questionType: 'multiple-choice' | 'true-false' | 'short-answer' | 'essay';
+  correctAnswer: string;
+  acceptableAnswers?: string[];
+  keywords?: string[];
+  options?: string[];
+  points: number;
 }
