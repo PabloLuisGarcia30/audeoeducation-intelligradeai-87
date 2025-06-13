@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
@@ -112,29 +111,29 @@ async function getGPTConceptAnalysisWithConfidence(
   openAIApiKey: string
 ): Promise<{ concept_missed: string; concept_id: string | null; confidence: number } | null> {
   try {
-    const prompt = `You are an expert educational diagnostician and learning architect.
+    const prompt = `You are an educational diagnostician.
 
-Your job is to:
-1. Analyze a student's incorrect answer and identify the specific concept they are misunderstanding.
-2. Provide a confidence score (0.0 to 1.0) for your assessment.
-3. Generate a precise concept description using no more than 5 clear words.
+Task:
+1. Identify the exact misunderstood concept from a student's incorrect answer.
+2. Provide a confidence score (0.0–1.0).
+3. Clearly describe the concept in 5 words or fewer.
 
-**Confidence Scoring Guidelines:**
-- 0.9-1.0: Very clear misconception, obvious from the student's work
-- 0.7-0.9: Strong evidence of specific concept gap
-- 0.5-0.7: Moderate confidence, some ambiguity exists
-- 0.3-0.5: Low confidence, multiple possible explanations
-- 0.0-0.3: Very uncertain, insufficient evidence
+Confidence scoring guide:
+- 0.9–1.0: Very clear misconception
+- 0.7–0.9: Strong evidence
+- 0.5–0.7: Moderate confidence
+- 0.3–0.5: Low confidence
+- 0.0–0.3: Very uncertain
 
-**Context:**
-Question: ${questionContext}
-Skill Being Tested: ${skillTargeted}
-Student Answer: "${studentAnswer}"
-Correct Answer: "${correctAnswer}"
+Context provided:
+- Question: ${questionContext}
+- Skill tested: ${skillTargeted}
+- Student's answer: "${studentAnswer}"
+- Correct answer: "${correctAnswer}"
 
-**Output format (JSON only):**
+Respond ONLY in JSON:
 {
-  "concept_missed": "Specific concept in 5 words or less",
+  "concept_missed": "5 words or fewer",
   "concept_id": null,
   "confidence": 0.85
 }`;
