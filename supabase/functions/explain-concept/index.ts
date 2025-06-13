@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { 
@@ -21,6 +22,78 @@ interface ExplanationContext {
   grade: string;
   skillName: string;
   questionType?: string;
+}
+
+interface GradeConfig {
+  wordLimit: number;
+  temperature: number;
+  vocabularyLevel: string;
+  toneDescription: string;
+  analogySources: string;
+  gradeCategory: string;
+}
+
+// Grade-appropriate configuration
+function getGradeConfig(grade: string): GradeConfig {
+  const gradeNumber = extractGradeNumber(grade);
+  
+  if (gradeNumber <= 5) {
+    // Elementary (K-5)
+    return {
+      wordLimit: 150,
+      temperature: 0.8,
+      vocabularyLevel: 'simple, age-appropriate',
+      toneDescription: 'fun, engaging, and memorable',
+      analogySources: 'animals, fairy tales, playground games, toys, and familiar activities',
+      gradeCategory: 'elementary'
+    };
+  } else if (gradeNumber <= 8) {
+    // Middle School (6-8)
+    return {
+      wordLimit: 180,
+      temperature: 0.75,
+      vocabularyLevel: 'moderate, with some advanced terms explained simply',
+      toneDescription: 'engaging and relatable',
+      analogySources: 'social media, popular movies, sports, video games, and teen interests',
+      gradeCategory: 'middle school'
+    };
+  } else if (gradeNumber <= 12) {
+    // High School (9-12)
+    return {
+      wordLimit: 200,
+      temperature: 0.7,
+      vocabularyLevel: 'sophisticated but accessible',
+      toneDescription: 'clear, professional, and relatable',
+      analogySources: 'real-world careers, current events, technology, and practical applications',
+      gradeCategory: 'high school'
+    };
+  } else {
+    // College/Adult (13+)
+    return {
+      wordLimit: 220,
+      temperature: 0.6,
+      vocabularyLevel: 'academic and precise',
+      toneDescription: 'insightful, professional, and comprehensive',
+      analogySources: 'professional scenarios, historical examples, scientific principles, and advanced concepts',
+      gradeCategory: 'college/adult'
+    };
+  }
+}
+
+function extractGradeNumber(grade: string): number {
+  // Extract numeric part from grade strings like "Grade 10", "10th Grade", "Grade K", etc.
+  const match = grade.match(/(\d+)/);
+  if (match) {
+    return parseInt(match[1]);
+  }
+  
+  // Handle special cases
+  if (grade.toLowerCase().includes('k') || grade.toLowerCase().includes('kindergarten')) {
+    return 0;
+  }
+  
+  // Default to middle school if unclear
+  return 7;
 }
 
 // Simple question-type-based routing
@@ -86,22 +159,24 @@ function shouldFallbackToGPT4o(result: string, wasSimpleQuestion: boolean): bool
 }
 
 async function generateExplanationWithModel(model: string, context: ExplanationContext): Promise<string> {
-  const systemPrompt = `You are a fun, creative teacher who loves using wild and memorable analogies to explain concepts to 12-year-old students. Your specialty is making complex ideas stick in students' minds through absolutely unforgettable comparisons and fun stories.
+  const gradeConfig = getGradeConfig(context.grade);
+  
+  const systemPrompt = `You are a ${gradeConfig.toneDescription} teacher who loves using memorable analogies to explain concepts to ${gradeConfig.gradeCategory} students. Your specialty is making complex ideas stick in students' minds through unforgettable comparisons and engaging stories.
 
-STRICT WORD COUNT REQUIREMENT: Your response must be EXACTLY 180 words or less. This is a hard limit that cannot be exceeded.
+STRICT WORD COUNT REQUIREMENT: Your response must be EXACTLY ${gradeConfig.wordLimit} words or less. This is a hard limit that cannot be exceeded.
 
-Your mission:
-- Create FUN, WILD, and MEMORABLE analogies that students will never forget
-- Use comparisons to things kids love: video games, movies, sports, animals, food, adventures
-- Make it feel like you're telling an exciting story, not just explaining a concept
-- Use simple words but BIG imagination
+Your mission for ${gradeConfig.gradeCategory} students:
+- Create ${gradeConfig.toneDescription.toUpperCase()} and MEMORABLE analogies that students will never forget
+- Use comparisons to: ${gradeConfig.analogySources}
+- Make it feel like you're telling an engaging story, not just explaining a concept
+- Use ${gradeConfig.vocabularyLevel} vocabulary
 - Include at least one creative analogy or metaphor that makes the concept "click"
 - Make students think "OH! Now I totally get it!" and remember it forever
-- Keep it engaging and entertaining - learning should be fun!
-- Write EXACTLY 180 words or less - this is critical
-- Use encouraging and enthusiastic language that gets students excited about learning
+- Keep it engaging and educational - learning should be meaningful
+- Write EXACTLY ${gradeConfig.wordLimit} words or less - this is critical
+- Use encouraging and enthusiastic language appropriate for ${gradeConfig.gradeCategory} level
 
-Remember: The best explanations are the ones students remember months later because they were so fun and creative!
+Remember: The best explanations are the ones students remember months later because they were so engaging and well-matched to their level!
 
 The student is learning ${context.subject} in ${context.grade} and working on the skill: ${context.skillName}`;
 
@@ -111,7 +186,7 @@ The correct answer was: "${context.correctAnswer}"
 
 The basic explanation given was: "${context.explanation}"
 
-Please create a FUN, MEMORABLE explanation using creative analogies that a 12-year-old will never forget! Make it exciting and use wild comparisons that will make this concept stick in their mind forever. CRITICAL: Keep it to exactly 180 words or less. Help them really grasp why this answer is correct through an amazing analogy or story!`;
+Please create a ${gradeConfig.toneDescription.toUpperCase()}, MEMORABLE explanation using creative analogies that a ${gradeConfig.gradeCategory} student will never forget! Make it engaging and use comparisons that will make this concept stick in their mind forever. CRITICAL: Keep it to exactly ${gradeConfig.wordLimit} words or less. Help them really grasp why this answer is correct through an amazing analogy or story!`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -125,8 +200,8 @@ Please create a FUN, MEMORABLE explanation using creative analogies that a 12-ye
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.8,
-      max_tokens: 250,
+      temperature: gradeConfig.temperature,
+      max_tokens: Math.min(300, gradeConfig.wordLimit + 50),
     }),
   });
 
@@ -168,11 +243,14 @@ serve(async (req) => {
       questionType
     };
 
-    console.log('Using simplified question-type routing for explanations...');
+    console.log(`Using grade-appropriate routing for ${context.grade} student...`);
     
     // Simple question-type-based routing
     const routingDecision = routeByQuestionType(context);
+    const gradeConfig = getGradeConfig(context.grade);
+    
     console.log(`Routing decision: ${routingDecision.selectedModel}`);
+    console.log(`Grade configuration: ${gradeConfig.gradeCategory} level with ${gradeConfig.wordLimit} word limit`);
     console.log(`Reasoning: ${routingDecision.reasoning}`);
 
     let detailedExplanation: string;
@@ -208,6 +286,7 @@ serve(async (req) => {
     // Log routing results for analytics
     console.log(`Successfully generated explanation using ${usedModel}${fallbackTriggered ? ' (after fallback)' : ''}`);
     console.log(`Cost factor: ${usedModel === 'gpt-4.1-2025-04-14' ? '8x' : '1x'} baseline`);
+    console.log(`Grade-appropriate settings: ${gradeConfig.gradeCategory}, ${gradeConfig.wordLimit} words, temperature ${gradeConfig.temperature}`);
 
     return new Response(JSON.stringify({ 
       detailedExplanation,
@@ -217,7 +296,13 @@ serve(async (req) => {
         fallbackTriggered,
         complexityScore: routingDecision.complexityScore,
         confidence: 95, // High confidence in question-type routing
-        reasoning: routingDecision.reasoning
+        reasoning: routingDecision.reasoning,
+        gradeConfiguration: {
+          category: gradeConfig.gradeCategory,
+          wordLimit: gradeConfig.wordLimit,
+          temperature: gradeConfig.temperature,
+          vocabularyLevel: gradeConfig.vocabularyLevel
+        }
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
