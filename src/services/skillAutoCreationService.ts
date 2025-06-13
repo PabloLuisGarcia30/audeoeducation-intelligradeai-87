@@ -160,16 +160,22 @@ export class SkillAutoCreationService {
 
       if (createError) throw createError;
 
-      // Link to class
-      const linkTableName = reviewItem.skill_type === 'content' ? 'class_content_skills' : 'class_subject_skills';
-      const linkColumnName = reviewItem.skill_type === 'content' ? 'content_skill_id' : 'subject_skill_id';
-      
-      await supabase
-        .from(linkTableName)
-        .insert({
-          class_id: reviewItem.class_id,
-          [linkColumnName]: newSkill.id
-        });
+      // Link to class - Fixed TypeScript error by using explicit conditional logic
+      if (reviewItem.skill_type === 'content') {
+        await supabase
+          .from('class_content_skills')
+          .insert({
+            class_id: reviewItem.class_id,
+            content_skill_id: newSkill.id
+          });
+      } else {
+        await supabase
+          .from('class_subject_skills')
+          .insert({
+            class_id: reviewItem.class_id,
+            subject_skill_id: newSkill.id
+          });
+      }
 
       // Update review status
       await supabase
