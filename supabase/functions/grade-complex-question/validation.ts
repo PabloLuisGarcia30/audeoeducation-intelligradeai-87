@@ -1,5 +1,4 @@
-
-import { z } from 'zod';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 // Validation schemas specific to grade-complex-question
 export const singleQuestionGradingSchema = z.object({

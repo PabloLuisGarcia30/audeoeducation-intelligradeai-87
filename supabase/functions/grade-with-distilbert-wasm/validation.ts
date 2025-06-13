@@ -1,5 +1,4 @@
-
-import { z } from 'zod';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 export const wasmGradingSchema = z.object({
   studentAnswer: z.string().min(1, 'Student answer is required'),
