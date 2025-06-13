@@ -93,6 +93,120 @@ export type Database = {
         }
         Relationships: []
       }
+      adaptive_learning_profiles: {
+        Row: {
+          cognitive_load_tolerance: string | null
+          confidence_trend: string | null
+          created_at: string | null
+          engagement_score: number | null
+          fatigue_threshold_minutes: number | null
+          help_seeking_frequency: string | null
+          id: string
+          learning_modality: string | null
+          learning_velocity: number | null
+          mistake_recovery_style: string | null
+          optimal_difficulty_progression: string | null
+          optimal_session_length_minutes: number | null
+          preferred_explanation_style: string | null
+          scaffolding_preferences: Json | null
+          student_id: string
+          updated_at: string | null
+          zone_of_proximal_development: Json | null
+        }
+        Insert: {
+          cognitive_load_tolerance?: string | null
+          confidence_trend?: string | null
+          created_at?: string | null
+          engagement_score?: number | null
+          fatigue_threshold_minutes?: number | null
+          help_seeking_frequency?: string | null
+          id?: string
+          learning_modality?: string | null
+          learning_velocity?: number | null
+          mistake_recovery_style?: string | null
+          optimal_difficulty_progression?: string | null
+          optimal_session_length_minutes?: number | null
+          preferred_explanation_style?: string | null
+          scaffolding_preferences?: Json | null
+          student_id: string
+          updated_at?: string | null
+          zone_of_proximal_development?: Json | null
+        }
+        Update: {
+          cognitive_load_tolerance?: string | null
+          confidence_trend?: string | null
+          created_at?: string | null
+          engagement_score?: number | null
+          fatigue_threshold_minutes?: number | null
+          help_seeking_frequency?: string | null
+          id?: string
+          learning_modality?: string | null
+          learning_velocity?: number | null
+          mistake_recovery_style?: string | null
+          optimal_difficulty_progression?: string | null
+          optimal_session_length_minutes?: number | null
+          preferred_explanation_style?: string | null
+          scaffolding_preferences?: Json | null
+          student_id?: string
+          updated_at?: string | null
+          zone_of_proximal_development?: Json | null
+        }
+        Relationships: []
+      }
+      adaptive_recommendations_log: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          current_confidence: number | null
+          current_performance: number | null
+          effectiveness_score: number | null
+          id: string
+          implementation_timestamp: string | null
+          rationale: string
+          recommendation_data: Json
+          recommendation_type: string
+          skill_context: string
+          student_id: string
+          student_response: string | null
+          trigger_event: string
+          was_implemented: boolean | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          current_confidence?: number | null
+          current_performance?: number | null
+          effectiveness_score?: number | null
+          id?: string
+          implementation_timestamp?: string | null
+          rationale: string
+          recommendation_data: Json
+          recommendation_type: string
+          skill_context: string
+          student_id: string
+          student_response?: string | null
+          trigger_event: string
+          was_implemented?: boolean | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          current_confidence?: number | null
+          current_performance?: number | null
+          effectiveness_score?: number | null
+          id?: string
+          implementation_timestamp?: string | null
+          rationale?: string
+          recommendation_data?: Json
+          recommendation_type?: string
+          skill_context?: string
+          student_id?: string
+          student_response?: string | null
+          trigger_event?: string
+          was_implemented?: boolean | null
+        }
+        Relationships: []
+      }
       affective_response_flags: {
         Row: {
           behavioral_data: Json | null
@@ -675,6 +789,75 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_analytics: {
+        Row: {
+          ai_responses: number | null
+          breakthrough_indicators: number | null
+          concepts_clarified: string[] | null
+          confusion_indicators: number | null
+          conversation_id: string
+          created_at: string | null
+          difficulty_adjustments_made: number | null
+          explanation_styles_used: string[] | null
+          help_requests: number | null
+          id: string
+          learning_objectives_achieved: boolean | null
+          misconceptions_addressed: string[] | null
+          session_duration_minutes: number | null
+          skills_practiced: string[] | null
+          student_id: string
+          student_messages: number | null
+          student_satisfaction_score: number | null
+          topic_changes: number | null
+          total_messages: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ai_responses?: number | null
+          breakthrough_indicators?: number | null
+          concepts_clarified?: string[] | null
+          confusion_indicators?: number | null
+          conversation_id: string
+          created_at?: string | null
+          difficulty_adjustments_made?: number | null
+          explanation_styles_used?: string[] | null
+          help_requests?: number | null
+          id?: string
+          learning_objectives_achieved?: boolean | null
+          misconceptions_addressed?: string[] | null
+          session_duration_minutes?: number | null
+          skills_practiced?: string[] | null
+          student_id: string
+          student_messages?: number | null
+          student_satisfaction_score?: number | null
+          topic_changes?: number | null
+          total_messages?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ai_responses?: number | null
+          breakthrough_indicators?: number | null
+          concepts_clarified?: string[] | null
+          confusion_indicators?: number | null
+          conversation_id?: string
+          created_at?: string | null
+          difficulty_adjustments_made?: number | null
+          explanation_styles_used?: string[] | null
+          help_requests?: number | null
+          id?: string
+          learning_objectives_achieved?: boolean | null
+          misconceptions_addressed?: string[] | null
+          session_duration_minutes?: number | null
+          skills_practiced?: string[] | null
+          student_id?: string
+          student_messages?: number | null
+          student_satisfaction_score?: number | null
+          topic_changes?: number | null
+          total_messages?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       daily_prompt_cache: {
         Row: {
           created_at: string | null
@@ -1184,6 +1367,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      learning_trajectory_events: {
+        Row: {
+          behavioral_signals: Json | null
+          confidence_after: number | null
+          confidence_before: number | null
+          created_at: string | null
+          difficulty_level: string
+          event_type: string
+          explanation_attempts_count: number | null
+          help_requests_count: number | null
+          id: string
+          intervention_triggered: boolean | null
+          performance_after: number | null
+          performance_before: number | null
+          question_context: Json | null
+          session_id: string | null
+          skill_name: string
+          skill_type: string
+          student_id: string
+          successful_explanation_type: string | null
+          time_to_resolution_seconds: number | null
+        }
+        Insert: {
+          behavioral_signals?: Json | null
+          confidence_after?: number | null
+          confidence_before?: number | null
+          created_at?: string | null
+          difficulty_level: string
+          event_type: string
+          explanation_attempts_count?: number | null
+          help_requests_count?: number | null
+          id?: string
+          intervention_triggered?: boolean | null
+          performance_after?: number | null
+          performance_before?: number | null
+          question_context?: Json | null
+          session_id?: string | null
+          skill_name: string
+          skill_type: string
+          student_id: string
+          successful_explanation_type?: string | null
+          time_to_resolution_seconds?: number | null
+        }
+        Update: {
+          behavioral_signals?: Json | null
+          confidence_after?: number | null
+          confidence_before?: number | null
+          created_at?: string | null
+          difficulty_level?: string
+          event_type?: string
+          explanation_attempts_count?: number | null
+          help_requests_count?: number | null
+          id?: string
+          intervention_triggered?: boolean | null
+          performance_after?: number | null
+          performance_before?: number | null
+          question_context?: Json | null
+          session_id?: string | null
+          skill_name?: string
+          skill_type?: string
+          student_id?: string
+          successful_explanation_type?: string | null
+          time_to_resolution_seconds?: number | null
+        }
+        Relationships: []
       }
       lesson_plan_practice_exercises: {
         Row: {
@@ -3409,6 +3658,10 @@ export type Database = {
           cognitive_patterns: Json
         }[]
       }
+      get_or_create_adaptive_profile: {
+        Args: { p_student_id: string }
+        Returns: string
+      }
       get_question_timing_analytics: {
         Args: { student_uuid: string }
         Returns: {
@@ -3545,6 +3798,19 @@ export type Database = {
           suggested_interventions: string[]
         }[]
       }
+      log_learning_event: {
+        Args: {
+          p_student_id: string
+          p_event_type: string
+          p_skill_name: string
+          p_skill_type: string
+          p_difficulty_level: string
+          p_performance_change?: number
+          p_confidence_change?: number
+          p_context?: Json
+        }
+        Returns: string
+      }
       migrate_student_data_to_auth_users: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3556,6 +3822,10 @@ export type Database = {
           p_score_change: number
           p_time_spent: number
         }
+        Returns: undefined
+      }
+      update_learning_velocity: {
+        Args: { p_student_id: string; p_performance_change: number }
         Returns: undefined
       }
       update_misconception_persistence: {
