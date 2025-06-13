@@ -1,4 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
+import { skillClassificationService } from './skillClassification/SkillClassificationService';
 
 export interface PracticeExerciseSkillUpdate {
   studentId: string; // Now expects authenticated user ID
@@ -36,7 +38,7 @@ export class PracticeExerciseSkillService {
       // Use the authenticated user ID directly (no need to resolve student profile)
       const authenticatedUserId = update.studentId;
       
-      // Extract skill metadata from exercise data
+      // Extract skill scores from exercise data using new classification service
       const skillScores = await this.extractSkillScoresFromExerciseData(update);
       
       // Calculate updated skill scores
@@ -91,7 +93,7 @@ export class PracticeExerciseSkillService {
   }
 
   /**
-   * Extract skill scores from exercise data using stored metadata
+   * Extract skill scores from exercise data using centralized classification service
    */
   private async extractSkillScoresFromExerciseData(update: PracticeExerciseSkillUpdate): Promise<Array<{
     skillName: string;
@@ -102,20 +104,14 @@ export class PracticeExerciseSkillService {
   }>> {
     const exerciseData = update.exerciseData;
     
-    // Extract skill type from stored metadata (preferred method)
-    let skillType: 'content' | 'subject' = 'content'; // fallback default
-    
-    if (exerciseData?.skillType) {
-      skillType = exerciseData.skillType;
-      console.log('✅ Using stored skill type from exercise data:', skillType);
-    } else if (exerciseData?.skillMetadata?.skillType) {
-      skillType = exerciseData.skillMetadata.skillType;
-      console.log('✅ Using skill type from metadata:', skillType);
-    } else {
-      // Fallback to pattern-based detection only if no metadata available
-      console.warn('⚠️ No skill type metadata found, using fallback detection for:', update.skillName);
-      skillType = this.detectSkillTypeFallback(update.skillName);
-    }
+    // Use centralized skill classification service
+    const skillType = await skillClassificationService.classifySkill({
+      skillName: update.skillName,
+      studentId: update.studentId,
+      exerciseData: exerciseData,
+      subject: exerciseData?.metadata?.subject,
+      grade: exerciseData?.metadata?.grade
+    });
     
     const totalQuestions = exerciseData?.questions?.length || 5;
     const scorePercentage = update.exerciseScore;
@@ -139,9 +135,18 @@ export class PracticeExerciseSkillService {
     // Additional skills from metadata (if available)
     if (exerciseData?.skillMetadata?.additionalSkills) {
       for (const additionalSkill of exerciseData.skillMetadata.additionalSkills) {
+        // Classify each additional skill
+        const additionalSkillType = await skillClassificationService.classifySkill({
+          skillName: additionalSkill.name,
+          studentId: update.studentId,
+          exerciseData: exerciseData,
+          subject: exerciseData?.metadata?.subject,
+          grade: exerciseData?.metadata?.grade
+        });
+        
         skills.push({
           skillName: additionalSkill.name,
-          skillType: additionalSkill.type || skillType,
+          skillType: additionalSkillType,
           score: scorePercentage * (additionalSkill.weight || 0.5), // Weighted score
           pointsEarned: Math.round(pointsEarned * (additionalSkill.weight || 0.5)),
           pointsPossible: Math.round(pointsPossible * (additionalSkill.weight || 0.5))
@@ -149,7 +154,7 @@ export class PracticeExerciseSkillService {
       }
     }
 
-    console.log(`📊 Extracted ${skills.length} skill(s) with metadata-based classification`);
+    console.log(`📊 Extracted ${skills.length} skill(s) using centralized classification service`);
     return skills;
   }
 

@@ -1,5 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import { skillClassificationService } from './skillClassification/SkillClassificationService';
 
 export interface PracticeExerciseResult {
   exerciseId: string;
@@ -161,36 +161,15 @@ export class PracticeExerciseResultsService {
   }
 
   /**
-   * Determine skill type based on skill name and available scores
+   * Determine skill type using centralized classification service
    */
-  static async determineSkillType(studentId: string, skillName: string): Promise<'content' | 'subject'> {
+  static async determineSkillType(studentId: string, skillName: string, exerciseData?: any): Promise<'content' | 'subject'> {
     try {
-      // Check if this skill exists in content_skill_scores for this student
-      const { data: contentScores } = await supabase
-        .from('content_skill_scores')
-        .select('id')
-        .eq('authenticated_student_id', studentId)
-        .eq('skill_name', skillName)
-        .limit(1);
-
-      if (contentScores && contentScores.length > 0) {
-        return 'content';
-      }
-
-      // Check if this skill exists in subject_skill_scores for this student
-      const { data: subjectScores } = await supabase
-        .from('subject_skill_scores')
-        .select('id')
-        .eq('authenticated_student_id', studentId)
-        .eq('skill_name', skillName)
-        .limit(1);
-
-      if (subjectScores && subjectScores.length > 0) {
-        return 'subject';
-      }
-
-      // Default to content if no existing records found
-      return 'content';
+      return await skillClassificationService.classifySkill({
+        skillName,
+        studentId,
+        exerciseData
+      });
     } catch (error) {
       console.error('Error determining skill type:', error);
       return 'content'; // Default fallback
