@@ -905,9 +905,11 @@ export type Database = {
       }
       exam_skill_mappings: {
         Row: {
+          auto_created_skill: boolean | null
           concept_missed_short: string | null
           confidence: number
           created_at: string
+          creation_confidence: number | null
           exam_id: string
           id: string
           question_number: number
@@ -915,12 +917,16 @@ export type Database = {
           skill_name: string
           skill_type: string
           skill_weight: number
+          suggested_skill_description: string | null
+          suggested_skill_name: string | null
           updated_at: string
         }
         Insert: {
+          auto_created_skill?: boolean | null
           concept_missed_short?: string | null
           confidence?: number
           created_at?: string
+          creation_confidence?: number | null
           exam_id: string
           id?: string
           question_number: number
@@ -928,12 +934,16 @@ export type Database = {
           skill_name: string
           skill_type: string
           skill_weight?: number
+          suggested_skill_description?: string | null
+          suggested_skill_name?: string | null
           updated_at?: string
         }
         Update: {
+          auto_created_skill?: boolean | null
           concept_missed_short?: string | null
           confidence?: number
           created_at?: string
+          creation_confidence?: number | null
           exam_id?: string
           id?: string
           question_number?: number
@@ -941,6 +951,8 @@ export type Database = {
           skill_name?: string
           skill_type?: string
           skill_weight?: number
+          suggested_skill_description?: string | null
+          suggested_skill_name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -2009,6 +2021,120 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      skill_auto_creation_log: {
+        Row: {
+          auto_created_at: string
+          class_id: string
+          confidence: number
+          context_data: Json | null
+          created_at: string
+          exam_id: string
+          id: string
+          reasoning: string
+          skill_description: string
+          skill_id: string
+          skill_name: string
+          skill_type: string
+        }
+        Insert: {
+          auto_created_at?: string
+          class_id: string
+          confidence: number
+          context_data?: Json | null
+          created_at?: string
+          exam_id: string
+          id?: string
+          reasoning: string
+          skill_description: string
+          skill_id: string
+          skill_name: string
+          skill_type: string
+        }
+        Update: {
+          auto_created_at?: string
+          class_id?: string
+          confidence?: number
+          context_data?: Json | null
+          created_at?: string
+          exam_id?: string
+          id?: string
+          reasoning?: string
+          skill_description?: string
+          skill_id?: string
+          skill_name?: string
+          skill_type?: string
+        }
+        Relationships: []
+      }
+      skill_review_queue: {
+        Row: {
+          class_id: string
+          confidence: number
+          context_evidence: string
+          created_at: string
+          created_skill_id: string | null
+          created_skill_type: string | null
+          exam_id: string
+          grade: string
+          id: string
+          reasoning: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          skill_description: string
+          skill_name: string
+          skill_type: string
+          status: string
+          subject: string
+          topic: string | null
+          updated_at: string
+        }
+        Insert: {
+          class_id: string
+          confidence: number
+          context_evidence: string
+          created_at?: string
+          created_skill_id?: string | null
+          created_skill_type?: string | null
+          exam_id: string
+          grade: string
+          id?: string
+          reasoning: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          skill_description: string
+          skill_name: string
+          skill_type: string
+          status?: string
+          subject: string
+          topic?: string | null
+          updated_at?: string
+        }
+        Update: {
+          class_id?: string
+          confidence?: number
+          context_evidence?: string
+          created_at?: string
+          created_skill_id?: string | null
+          created_skill_type?: string | null
+          exam_id?: string
+          grade?: string
+          id?: string
+          reasoning?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          skill_description?: string
+          skill_name?: string
+          skill_type?: string
+          status?: string
+          subject?: string
+          topic?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       student_action_logs: {
         Row: {

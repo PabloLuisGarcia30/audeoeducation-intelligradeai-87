@@ -167,7 +167,59 @@ export class UnifiedDataMigrationService {
   }
 
   /**
-   * Run complete data migration
+   * Migrate exam skill mappings to include auto-creation data
+   */
+  static async migrateExamSkillMappings(): Promise<{
+    success: boolean;
+    migratedCount: number;
+    error?: string;
+  }> {
+    try {
+      console.log('🔄 Starting migration of exam skill mappings with auto-creation support...');
+
+      // Get existing mappings that might need auto-creation flags
+      const { data: mappings, error: mappingsError } = await supabase
+        .from('exam_skill_mappings')
+        .select('*')
+        .is('auto_created_skill', null); // Only get mappings that haven't been updated yet
+
+      if (mappingsError) {
+        throw new Error(`Failed to fetch exam skill mappings: ${mappingsError.message}`);
+      }
+
+      if (!mappings || mappings.length === 0) {
+        console.log('No exam skill mappings found to migrate');
+        return { success: true, migratedCount: 0 };
+      }
+
+      // Update existing mappings to set auto_created_skill = false (they were created before auto-creation)
+      const { error: updateError } = await supabase
+        .from('exam_skill_mappings')
+        .update({ auto_created_skill: false })
+        .is('auto_created_skill', null);
+
+      if (updateError) {
+        throw new Error(`Failed to update exam skill mappings: ${updateError.message}`);
+      }
+
+      console.log(`✅ Successfully updated ${mappings.length} exam skill mappings with auto-creation flags`);
+
+      return {
+        success: true,
+        migratedCount: mappings.length
+      };
+    } catch (error) {
+      console.error('❌ Error migrating exam skill mappings:', error);
+      return {
+        success: false,
+        migratedCount: 0,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Run complete data migration including new auto-creation features
    */
   static async runCompleteMigration(): Promise<{
     success: boolean;
@@ -175,24 +227,27 @@ export class UnifiedDataMigrationService {
     details: {
       skillResults: number;
       misconceptions: number;
+      examMappings: number;
     };
     error?: string;
   }> {
     try {
-      console.log('🚀 Starting complete data migration to unified system...');
+      console.log('🚀 Starting complete data migration to unified system with auto-creation support...');
 
-      const [skillMigration, misconceptionMigration] = await Promise.all([
+      const [skillMigration, misconceptionMigration, mappingMigration] = await Promise.all([
         this.migratePracticeExerciseData(),
-        this.migrateMisconceptionData()
+        this.migrateMisconceptionData(),
+        this.migrateExamSkillMappings()
       ]);
 
-      const totalMigrated = skillMigration.migratedCount + misconceptionMigration.migratedCount;
-      const success = skillMigration.success && misconceptionMigration.success;
+      const totalMigrated = skillMigration.migratedCount + misconceptionMigration.migratedCount + mappingMigration.migratedCount;
+      const success = skillMigration.success && misconceptionMigration.success && mappingMigration.success;
 
       if (!success) {
         const errors = [
           skillMigration.error && `Skills: ${skillMigration.error}`,
-          misconceptionMigration.error && `Misconceptions: ${misconceptionMigration.error}`
+          misconceptionMigration.error && `Misconceptions: ${misconceptionMigration.error}`,
+          mappingMigration.error && `Mappings: ${mappingMigration.error}`
         ].filter(Boolean);
 
         throw new Error(`Migration failed: ${errors.join(', ')}`);
@@ -205,7 +260,8 @@ export class UnifiedDataMigrationService {
         totalMigrated,
         details: {
           skillResults: skillMigration.migratedCount,
-          misconceptions: misconceptionMigration.migratedCount
+          misconceptions: misconceptionMigration.migratedCount,
+          examMappings: mappingMigration.migratedCount
         }
       };
     } catch (error) {
@@ -215,7 +271,8 @@ export class UnifiedDataMigrationService {
         totalMigrated: 0,
         details: {
           skillResults: 0,
-          misconceptions: 0
+          misconceptions: 0,
+          examMappings: 0
         },
         error: error instanceof Error ? error.message : 'Unknown error'
       };

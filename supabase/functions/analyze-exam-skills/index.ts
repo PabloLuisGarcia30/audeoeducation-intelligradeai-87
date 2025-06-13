@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -12,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Enhanced class-specific exam skill analysis function called');
+    console.log('Enhanced class-specific exam skill analysis function called with auto-creation');
     
     const { examId } = await req.json();
     
@@ -53,10 +54,13 @@ serve(async (req) => {
 
     console.log('Step 2: Fetching exam data and ensuring class association');
     
-    // Fetch exam data with class information - CRITICAL for class-specific skills
+    // Fetch exam data with class information
     const { data: examData, error: examError } = await supabase
       .from('exams')
-      .select('*, classes:active_classes(*)')
+      .select(`
+        *,
+        classes:active_classes(*)
+      `)
       .eq('exam_id', examId)
       .maybeSingle();
 
@@ -65,12 +69,12 @@ serve(async (req) => {
     }
 
     if (!examData.class_id) {
-      throw new Error('Exam must be associated with a class for class-specific skill pre-classification');
+      throw new Error('Exam must be associated with a class for class-specific skill analysis with auto-creation');
     }
 
-    console.log('Step 3: Prioritizing class-specific skills over standard curriculum');
+    console.log('Step 3: Fetching class-specific skills with auto-creation capability');
 
-    // STEP 3a: Fetch class-specific content skills FIRST (highest priority)
+    // Fetch class-specific content skills
     const { data: classContentSkills, error: contentSkillsError } = await supabase
       .from('class_content_skills')
       .select(`
@@ -90,7 +94,7 @@ serve(async (req) => {
       throw new Error(`Class content skills fetch failed: ${contentSkillsError.message}`);
     }
 
-    // STEP 3b: Fetch class-specific subject skills FIRST (highest priority)
+    // Fetch class-specific subject skills
     const { data: classSubjectSkills, error: subjectSkillsError } = await supabase
       .from('class_subject_skills')
       .select(`
@@ -120,7 +124,7 @@ serve(async (req) => {
       className: examData.classes?.name || 'Unknown'
     });
 
-    // STEP 3c: Fallback to standard curriculum skills if class has no custom skills
+    // Fallback to standard curriculum skills if class has no custom skills
     let availableContentSkills = classSpecificContentSkills;
     let availableSubjectSkills = classSpecificSubjectSkills;
     let usingFallbackSkills = false;
@@ -129,7 +133,6 @@ serve(async (req) => {
       console.log('No class-specific skills found, falling back to standard curriculum skills');
       usingFallbackSkills = true;
 
-      // Fetch standard curriculum skills as fallback
       const { data: standardContentSkills } = await supabase
         .from('content_skills')
         .select('*')
@@ -149,10 +152,6 @@ serve(async (req) => {
         contentSkills: availableContentSkills.length,
         subjectSkills: availableSubjectSkills.length
       });
-    }
-
-    if (availableContentSkills.length === 0 && availableSubjectSkills.length === 0) {
-      throw new Error('No skills found for this class or standard curriculum. Please ensure skills are properly configured.');
     }
 
     // Fetch answer keys
@@ -178,9 +177,9 @@ serve(async (req) => {
       .select()
       .single();
 
-    console.log('Step 4: Performing enhanced class-specific AI skill mapping analysis with concept grouping');
+    console.log('Step 4: Performing enhanced AI skill mapping with auto-creation capabilities');
 
-    // Prepare class-specific skills data for AI with IDs for validation
+    // Prepare skills data for AI with auto-creation capability
     const contentSkillsText = availableContentSkills.map(skill => 
       `ID:${skill.id} | ${skill.skill_name} | ${skill.topic || 'General'} | ${skill.skill_description}`
     ).join('\n');
@@ -198,65 +197,73 @@ serve(async (req) => {
       `Q${ak.question_number}: ${ak.question_text} (Type: ${ak.question_type})`
     ).join('\n') || '';
 
-    const systemPrompt = `You are an educational skill mapping expert. Analyze each question and map it ONLY to relevant content and subject skills from the provided ${usingFallbackSkills ? 'standard curriculum' : 'class-specific'} skill lists.
+    const systemPrompt = `You are an educational skill mapping expert. Map each question exclusively to the provided ${usingFallbackSkills ? 'standard curriculum' : 'class-specific'} skill lists with auto-creation capability.
 
 CRITICAL CONSTRAINTS:
-- You MUST ONLY use skills from the provided lists below
-- You CANNOT create new skills or suggest skills not in these lists
-- Each skill mapping MUST use the exact skill ID provided
-- If no suitable skill exists in the lists, mark as "no_suitable_skill"
-- This analysis is for ${examData.classes?.name || 'Unknown Class'} (${examData.classes?.subject} ${examData.classes?.grade})
+- Primarily use ONLY skills provided in lists below
+- Always use exact skill IDs provided when a suitable skill exists
+- If no suitable skill exists, explicitly suggest a concise new skill (name + description) 
+- New skills will be automatically added to the skill database
+- Analysis context: ${examData.classes?.name || 'Unknown Class'} (${examData.classes?.subject} ${examData.classes?.grade})
 
-NEW ENHANCEMENT - CONCEPT GROUPING:
-- For each skill mapping, provide a "concept_missed_short" - a brief 2-4 word identifier for the core concept being tested
-- This should be a simple, groupable concept name (e.g., "Linear Equations", "Photosynthesis", "Essay Structure")
-- Use consistent naming across questions that test the same underlying concept
-- This enables analytics to group missed concepts across multiple questions
+ENHANCED FEATURE – CONCEPT GROUPING:
+- Provide "concept_missed_short": concise, groupable 2-4 word identifier per concept (e.g., "Linear Equations")
+- Ensure consistent naming for the same concept across all questions
 
-${usingFallbackSkills ? 'STANDARD CURRICULUM' : 'CLASS-SPECIFIC'} CONTENT SKILLS (ONLY use these IDs):
+AUTO-CREATION GUIDELINES:
+- Only suggest new skills when existing skills are genuinely insufficient
+- New skill names should be 2-6 words, descriptive and precise
+- New skill descriptions should be 10-30 words explaining what the skill tests
+- Confidence levels: >0.8 = auto-create, 0.6-0.8 = review queue, <0.6 = flag for manual review
+
+PROVIDED ${usingFallbackSkills ? 'STANDARD CURRICULUM' : 'CLASS-SPECIFIC'} CONTENT SKILLS:
 ${contentSkillsText}
 
-${usingFallbackSkills ? 'STANDARD CURRICULUM' : 'CLASS-SPECIFIC'} SUBJECT SKILLS (ONLY use these IDs):
+PROVIDED ${usingFallbackSkills ? 'STANDARD CURRICULUM' : 'CLASS-SPECIFIC'} SUBJECT SKILLS:
 ${subjectSkillsText}
 
-For each question, identify:
-1. Which content skills it tests (0-2 most relevant from the list above)
-2. Which subject skills it tests (0-2 most relevant from the list above)
-3. Weight for each skill (0.1-1.0 based on relevance)
-4. Confidence in the mapping (0.1-1.0)
-5. Concept_missed_short for grouping analytics (2-4 words describing the core concept)
+For each question, explicitly identify:
+1. Relevant content skills (0-2 max) from existing list OR suggest new ones
+2. Relevant subject skills (0-2 max) from existing list OR suggest new ones  
+3. Skill weight (0.1-1.0 relevance scale)
+4. Mapping confidence (0.1-1.0 scale)
+5. "concept_missed_short" (2-4 word core concept)
 
-Return JSON format:
+Return ONLY structured JSON:
 {
   "mappings": [
     {
       "question_number": 1,
       "content_skills": [
         {
-          "skill_id": "exact-uuid-from-list", 
-          "skill_name": "exact-name-from-list", 
-          "weight": 0.8, 
+          "skill_id": "existing-uuid-or-null-for-new",
+          "skill_name": "exact-skill-name-or-new-name",
+          "skill_description": "existing-or-new-description",
+          "is_new_skill": false,
+          "weight": 0.8,
           "confidence": 0.9,
           "concept_missed_short": "Linear Equations"
         }
       ],
       "subject_skills": [
         {
-          "skill_id": "exact-uuid-from-list", 
-          "skill_name": "exact-name-from-list", 
-          "weight": 1.0, 
-          "confidence": 0.95,
+          "skill_id": "existing-uuid-or-null-for-new", 
+          "skill_name": "exact-skill-name-or-new-name",
+          "skill_description": "existing-or-new-description",
+          "is_new_skill": true,
+          "weight": 1.0,
+          "confidence": 0.85,
           "concept_missed_short": "Algebraic Reasoning"
         }
-      ],
-      "no_suitable_skills": false
+      ]
     }
   ],
   "summary": {
     "total_questions_mapped": 10,
-    "content_skills_used": 5,
-    "subject_skills_used": 3,
-    "questions_without_suitable_skills": 0,
+    "existing_content_skills_used": 5,
+    "existing_subject_skills_used": 3,
+    "new_content_skills_suggested": 2,
+    "new_subject_skills_suggested": 1,
     "unique_concepts_identified": 8
   }
 }`;
@@ -264,18 +271,18 @@ Return JSON format:
     const userPrompt = `Map these questions to ${usingFallbackSkills ? 'standard curriculum' : 'class-specific'} skills for exam: ${examData.title}
 Class: ${examData.classes?.name || 'Unknown'} (${examData.classes?.subject} ${examData.classes?.grade})
 
-QUESTIONS:
-${questionsText}
+Enable auto-creation of new skills when existing skills are insufficient. Include concept_missed_short for each skill mapping.
 
-IMPORTANT: Only use skill IDs and names from the provided ${usingFallbackSkills ? 'standard curriculum' : 'class-specific'} lists. Include concept_missed_short for each skill mapping to enable concept grouping analytics.`;
+QUESTIONS:
+${questionsText}`;
 
     const aiPayload = {
-      model: "gpt-4.1-2025-04-14",
+      model: "gpt-4o-2024-11-20",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      max_tokens: 3000,
+      max_tokens: 4000,
       temperature: 0.1
     };
 
@@ -303,61 +310,148 @@ IMPORTANT: Only use skill IDs and names from the provided ${usingFallbackSkills 
       throw new Error('AI returned invalid skill mapping format');
     }
 
-    console.log('Step 5: Validating and storing enhanced class-specific skill mappings with concept grouping');
+    console.log('Step 5: Processing skill mappings with auto-creation logic');
 
-    // Validate skill mappings against class-specific skill pools
     const mappingInserts = [];
     let contentSkillsFound = 0;
     let subjectSkillsFound = 0;
     let invalidSkillsRejected = 0;
-    
+    let autoCreatedSkills = 0;
+    let skillsQueuedForReview = 0;
+
+    // Process each mapping with auto-creation logic
     for (const mapping of skillMappings.mappings || []) {
-      // Validate and insert content skill mappings
+      // Process content skills
       for (const contentSkill of mapping.content_skills || []) {
-        if (!validContentSkillIds.has(contentSkill.skill_id)) {
-          console.warn(`Rejected invalid content skill ID: ${contentSkill.skill_id} for Q${mapping.question_number}`);
-          invalidSkillsRejected++;
-          continue;
+        if (contentSkill.is_new_skill) {
+          // Handle new skill creation
+          const newSkillResult = await createOrQueueSkill(
+            supabase,
+            'content',
+            contentSkill,
+            examData,
+            examId
+          );
+          
+          if (newSkillResult.action === 'created') {
+            mappingInserts.push({
+              exam_id: examId,
+              question_number: mapping.question_number,
+              skill_type: 'content',
+              skill_id: newSkillResult.skillId,
+              skill_name: contentSkill.skill_name,
+              skill_weight: Math.min(Math.max(contentSkill.weight || 1.0, 0), 2.0),
+              confidence: Math.min(Math.max(contentSkill.confidence || 1.0, 0), 1.0),
+              concept_missed_short: contentSkill.concept_missed_short || 'Unknown Concept',
+              auto_created_skill: true,
+              creation_confidence: contentSkill.confidence
+            });
+            autoCreatedSkills++;
+            contentSkillsFound++;
+          } else if (newSkillResult.action === 'queued') {
+            // Add to mappings but mark as suggested
+            mappingInserts.push({
+              exam_id: examId,
+              question_number: mapping.question_number,
+              skill_type: 'content',
+              skill_id: null, // No skill ID yet
+              skill_name: contentSkill.skill_name,
+              skill_weight: Math.min(Math.max(contentSkill.weight || 1.0, 0), 2.0),
+              confidence: Math.min(Math.max(contentSkill.confidence || 1.0, 0), 1.0),
+              concept_missed_short: contentSkill.concept_missed_short || 'Unknown Concept',
+              auto_created_skill: false,
+              suggested_skill_name: contentSkill.skill_name,
+              suggested_skill_description: contentSkill.skill_description,
+              creation_confidence: contentSkill.confidence
+            });
+            skillsQueuedForReview++;
+          }
+        } else {
+          // Handle existing skill validation
+          if (!validContentSkillIds.has(contentSkill.skill_id)) {
+            console.warn(`Rejected invalid content skill ID: ${contentSkill.skill_id} for Q${mapping.question_number}`);
+            invalidSkillsRejected++;
+            continue;
+          }
+          
+          mappingInserts.push({
+            exam_id: examId,
+            question_number: mapping.question_number,
+            skill_type: 'content',
+            skill_id: contentSkill.skill_id,
+            skill_name: contentSkill.skill_name,
+            skill_weight: Math.min(Math.max(contentSkill.weight || 1.0, 0), 2.0),
+            confidence: Math.min(Math.max(contentSkill.confidence || 1.0, 0), 1.0),
+            concept_missed_short: contentSkill.concept_missed_short || 'Unknown Concept',
+            auto_created_skill: false
+          });
+          contentSkillsFound++;
         }
-        
-        const validatedWeight = Math.min(Math.max(contentSkill.weight || 1.0, 0), 2.0);
-        const validatedConfidence = Math.min(Math.max(contentSkill.confidence || 1.0, 0), 1.0);
-        
-        mappingInserts.push({
-          exam_id: examId,
-          question_number: mapping.question_number,
-          skill_type: 'content',
-          skill_id: contentSkill.skill_id,
-          skill_name: contentSkill.skill_name,
-          skill_weight: validatedWeight,
-          confidence: validatedConfidence,
-          concept_missed_short: contentSkill.concept_missed_short || 'Unknown Concept'
-        });
-        contentSkillsFound++;
       }
       
-      // Validate and insert subject skill mappings
+      // Process subject skills (similar logic)
       for (const subjectSkill of mapping.subject_skills || []) {
-        if (!validSubjectSkillIds.has(subjectSkill.skill_id)) {
-          console.warn(`Rejected invalid subject skill ID: ${subjectSkill.skill_id} for Q${mapping.question_number}`);
-          invalidSkillsRejected++;
-          continue;
+        if (subjectSkill.is_new_skill) {
+          const newSkillResult = await createOrQueueSkill(
+            supabase,
+            'subject',
+            subjectSkill,
+            examData,
+            examId
+          );
+          
+          if (newSkillResult.action === 'created') {
+            mappingInserts.push({
+              exam_id: examId,
+              question_number: mapping.question_number,
+              skill_type: 'subject',
+              skill_id: newSkillResult.skillId,
+              skill_name: subjectSkill.skill_name,
+              skill_weight: Math.min(Math.max(subjectSkill.weight || 1.0, 0), 2.0),
+              confidence: Math.min(Math.max(subjectSkill.confidence || 1.0, 0), 1.0),
+              concept_missed_short: subjectSkill.concept_missed_short || 'Unknown Concept',
+              auto_created_skill: true,
+              creation_confidence: subjectSkill.confidence
+            });
+            autoCreatedSkills++;
+            subjectSkillsFound++;
+          } else if (newSkillResult.action === 'queued') {
+            mappingInserts.push({
+              exam_id: examId,
+              question_number: mapping.question_number,
+              skill_type: 'subject',
+              skill_id: null,
+              skill_name: subjectSkill.skill_name,
+              skill_weight: Math.min(Math.max(subjectSkill.weight || 1.0, 0), 2.0),
+              confidence: Math.min(Math.max(subjectSkill.confidence || 1.0, 0), 1.0),
+              concept_missed_short: subjectSkill.concept_missed_short || 'Unknown Concept',
+              auto_created_skill: false,
+              suggested_skill_name: subjectSkill.skill_name,
+              suggested_skill_description: subjectSkill.skill_description,
+              creation_confidence: subjectSkill.confidence
+            });
+            skillsQueuedForReview++;
+          }
+        } else {
+          if (!validSubjectSkillIds.has(subjectSkill.skill_id)) {
+            console.warn(`Rejected invalid subject skill ID: ${subjectSkill.skill_id} for Q${mapping.question_number}`);
+            invalidSkillsRejected++;
+            continue;
+          }
+          
+          mappingInserts.push({
+            exam_id: examId,
+            question_number: mapping.question_number,
+            skill_type: 'subject',
+            skill_id: subjectSkill.skill_id,
+            skill_name: subjectSkill.skill_name,
+            skill_weight: Math.min(Math.max(subjectSkill.weight || 1.0, 0), 2.0),
+            confidence: Math.min(Math.max(subjectSkill.confidence || 1.0, 0), 1.0),
+            concept_missed_short: subjectSkill.concept_missed_short || 'Unknown Concept',
+            auto_created_skill: false
+          });
+          subjectSkillsFound++;
         }
-        
-        const validatedWeight = Math.min(Math.max(subjectSkill.weight || 1.0, 0), 2.0);
-        const validatedConfidence = Math.min(Math.max(subjectSkill.confidence || 1.0, 0), 1.0);
-        
-        mappingInserts.push({
-          exam_id: examId,
-          question_number: mapping.question_number,
-          skill_type: 'subject',
-          skill_id: subjectSkill.skill_id,
-          skill_name: subjectSkill.skill_name,
-          skill_weight: validatedWeight,
-          confidence: validatedConfidence,
-          concept_missed_short: subjectSkill.concept_missed_short || 'Unknown Concept'
-        });
-        subjectSkillsFound++;
       }
     }
 
@@ -384,14 +478,14 @@ IMPORTANT: Only use skill IDs and names from the provided ${usingFallbackSkills 
         analysis_completed_at: new Date().toISOString(),
         ai_analysis_data: {
           ...skillMappings,
-          validation_stats: {
+          auto_creation_stats: {
+            auto_created_skills: autoCreatedSkills,
+            skills_queued_for_review: skillsQueuedForReview,
             invalid_skills_rejected: invalidSkillsRejected,
             class_id: examData.class_id,
             class_name: examData.classes?.name || 'Unknown',
             used_class_specific_skills: !usingFallbackSkills,
             used_fallback_skills: usingFallbackSkills,
-            available_content_skills: availableContentSkills.length,
-            available_subject_skills: availableSubjectSkills.length,
             concept_grouping_enabled: true,
             unique_concepts_identified: skillMappings.summary?.unique_concepts_identified || 0
           }
@@ -399,11 +493,9 @@ IMPORTANT: Only use skill IDs and names from the provided ${usingFallbackSkills 
       })
       .eq('id', analysisRecord.id);
 
-    console.log('Enhanced class-specific skill analysis with concept grouping completed successfully');
+    console.log('Enhanced skill analysis with auto-creation completed successfully');
     console.log(`Mapped ${skillMappings.mappings?.length || 0} questions with ${contentSkillsFound} content skills and ${subjectSkillsFound} subject skills`);
-    console.log(`Using ${usingFallbackSkills ? 'standard curriculum' : 'class-specific'} skills for ${examData.classes?.name || 'Unknown Class'}`);
-    console.log(`Rejected ${invalidSkillsRejected} invalid skill suggestions`);
-    console.log(`Identified ${skillMappings.summary?.unique_concepts_identified || 0} unique concepts for grouping analytics`);
+    console.log(`Auto-created ${autoCreatedSkills} skills, queued ${skillsQueuedForReview} for review`);
 
     return new Response(
       JSON.stringify({
@@ -411,17 +503,16 @@ IMPORTANT: Only use skill IDs and names from the provided ${usingFallbackSkills 
         exam_id: examId,
         class_id: examData.class_id,
         class_name: examData.classes?.name || 'Unknown',
-        used_class_specific_skills: !usingFallbackSkills,
-        used_fallback_skills: usingFallbackSkills,
         total_questions: answerKeys?.length || 0,
         mapped_questions: skillMappings.mappings?.length || 0,
         content_skills_found: contentSkillsFound,
         subject_skills_found: subjectSkillsFound,
+        auto_created_skills: autoCreatedSkills,
+        skills_queued_for_review: skillsQueuedForReview,
         invalid_skills_rejected: invalidSkillsRejected,
         concept_grouping_enabled: true,
         unique_concepts_identified: skillMappings.summary?.unique_concepts_identified || 0,
-        class_scoped_validation: true,
-        skill_mappings: skillMappings
+        auto_creation_enabled: true
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -460,3 +551,113 @@ IMPORTANT: Only use skill IDs and names from the provided ${usingFallbackSkills 
     );
   }
 })
+
+// Helper function to create or queue skills based on confidence
+async function createOrQueueSkill(
+  supabase: any,
+  skillType: 'content' | 'subject',
+  skillData: any,
+  examData: any,
+  examId: string
+): Promise<{ action: 'created' | 'queued' | 'rejected', skillId?: string }> {
+  const confidence = skillData.confidence || 0;
+  
+  // High confidence: auto-create
+  if (confidence > 0.8) {
+    try {
+      const newSkillData = {
+        skill_name: skillData.skill_name,
+        skill_description: skillData.skill_description,
+        subject: examData.classes?.subject || 'Math',
+        grade: examData.classes?.grade || 'Grade 10',
+        ...(skillType === 'content' && { topic: 'Auto-Generated' })
+      };
+
+      const tableName = skillType === 'content' ? 'content_skills' : 'subject_skills';
+      const { data: newSkill, error } = await supabase
+        .from(tableName)
+        .insert(newSkillData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Link to class
+      const linkTableName = skillType === 'content' ? 'class_content_skills' : 'class_subject_skills';
+      const linkColumnName = skillType === 'content' ? 'content_skill_id' : 'subject_skill_id';
+      
+      await supabase
+        .from(linkTableName)
+        .insert({
+          class_id: examData.class_id,
+          [linkColumnName]: newSkill.id
+        });
+
+      // Log auto-creation
+      await supabase
+        .from('skill_auto_creation_log')
+        .insert({
+          skill_id: newSkill.id,
+          skill_name: skillData.skill_name,
+          skill_type: skillType,
+          skill_description: skillData.skill_description,
+          confidence: confidence,
+          reasoning: `Auto-created with high confidence (${confidence}) during exam analysis`,
+          exam_id: examId,
+          class_id: examData.class_id,
+          context_data: { auto_created: true }
+        });
+
+      console.log(`Auto-created ${skillType} skill: ${skillData.skill_name} (ID: ${newSkill.id})`);
+      return { action: 'created', skillId: newSkill.id };
+
+    } catch (error) {
+      console.error(`Failed to auto-create ${skillType} skill:`, error);
+      // Fall back to review queue
+      return await queueSkillForReview(supabase, skillType, skillData, examData, examId, confidence);
+    }
+  }
+  
+  // Medium confidence: queue for review
+  if (confidence >= 0.6) {
+    return await queueSkillForReview(supabase, skillType, skillData, examData, examId, confidence);
+  }
+  
+  // Low confidence: reject
+  console.log(`Rejected ${skillType} skill suggestion due to low confidence: ${skillData.skill_name} (${confidence})`);
+  return { action: 'rejected' };
+}
+
+async function queueSkillForReview(
+  supabase: any,
+  skillType: 'content' | 'subject',
+  skillData: any,
+  examData: any,
+  examId: string,
+  confidence: number
+): Promise<{ action: 'queued' }> {
+  try {
+    await supabase
+      .from('skill_review_queue')
+      .insert({
+        skill_name: skillData.skill_name,
+        skill_type: skillType,
+        skill_description: skillData.skill_description,
+        topic: skillType === 'content' ? 'Pending Review' : null,
+        subject: examData.classes?.subject || 'Math',
+        grade: examData.classes?.grade || 'Grade 10',
+        confidence: confidence,
+        reasoning: `Suggested during exam analysis with medium confidence (${confidence})`,
+        context_evidence: `Question mapping suggested this skill was needed but not found in existing skill set`,
+        exam_id: examId,
+        class_id: examData.class_id
+      });
+
+    console.log(`Queued ${skillType} skill for review: ${skillData.skill_name} (confidence: ${confidence})`);
+    return { action: 'queued' };
+
+  } catch (error) {
+    console.error(`Failed to queue ${skillType} skill for review:`, error);
+    return { action: 'queued' }; // Still return queued even if logging failed
+  }
+}
