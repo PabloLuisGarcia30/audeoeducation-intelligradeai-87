@@ -14,38 +14,15 @@ import {
   Clock,
   BarChart3
 } from "lucide-react";
-import { SmartGoalService, type GoalAnalytics, type StudentGoal } from "@/services/smartGoalService";
+import { type GoalAnalytics, type StudentGoal, type GoalAchievement } from "@/services/smartGoalService";
 
 interface GoalInsightsPanelProps {
-  studentId: string;
+  analytics: GoalAnalytics | null;
+  goals: StudentGoal[];
+  achievements: GoalAchievement[];
 }
 
-export function GoalInsightsPanel({ studentId }: GoalInsightsPanelProps) {
-  const [analytics, setAnalytics] = useState<GoalAnalytics | null>(null);
-  const [goals, setGoals] = useState<StudentGoal[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadInsights();
-  }, [studentId]);
-
-  const loadInsights = async () => {
-    try {
-      setLoading(true);
-      const [analyticsData, goalsData] = await Promise.all([
-        SmartGoalService.getGoalAnalytics(studentId),
-        SmartGoalService.getStudentGoals(studentId)
-      ]);
-      
-      setAnalytics(analyticsData);
-      setGoals(goalsData);
-    } catch (error) {
-      console.error('Failed to load goal insights:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+export function GoalInsightsPanel({ analytics, goals, achievements }: GoalInsightsPanelProps) {
   const getInsights = () => {
     if (!analytics || goals.length === 0) return [];
 
@@ -158,23 +135,6 @@ export function GoalInsightsPanel({ studentId }: GoalInsightsPanelProps) {
 
     return recommendations;
   };
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        {[1, 2, 3].map(i => (
-          <Card key={i}>
-            <CardContent className="p-6">
-              <div className="animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
 
   const insights = getInsights();
   const recommendations = getRecommendations();

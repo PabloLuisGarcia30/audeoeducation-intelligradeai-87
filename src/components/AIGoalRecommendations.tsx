@@ -17,58 +17,13 @@ import { SmartGoalService, type AIGoalRecommendation, type StudentGoal } from "@
 import { toast } from "sonner";
 
 interface AIGoalRecommendationsProps {
-  studentId: string;
-  onGoalCreated: (newGoal: StudentGoal) => void;
+  recommendations: AIGoalRecommendation[];
+  onAcceptGoal: (recommendation: AIGoalRecommendation) => Promise<void>;
+  onRefresh: () => Promise<void>;
+  loading: boolean;
 }
 
-export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecommendationsProps) {
-  const [recommendations, setRecommendations] = useState<AIGoalRecommendation[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    loadRecommendations();
-  }, [studentId]);
-
-  const loadRecommendations = async () => {
-    try {
-      setLoading(true);
-      const data = await SmartGoalService.generateGoalRecommendations(studentId);
-      setRecommendations(data);
-    } catch (error) {
-      console.error('Failed to load AI recommendations:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAcceptGoal = async (recommendation: AIGoalRecommendation) => {
-    try {
-      const newGoal = await SmartGoalService.createGoal(studentId, {
-        goal_title: recommendation.goal_title,
-        goal_description: recommendation.goal_description,
-        goal_type: recommendation.goal_type,
-        target_value: recommendation.target_value,
-        target_skill_name: recommendation.target_skill_name,
-        target_misconception_id: recommendation.target_misconception_id,
-        difficulty_level: recommendation.difficulty_level,
-        target_date: recommendation.target_date,
-        is_ai_suggested: true,
-        ai_confidence_score: recommendation.ai_confidence_score,
-        milestones: recommendation.milestones,
-        context_data: recommendation.context_data
-      });
-
-      if (newGoal) {
-        onGoalCreated(newGoal);
-        toast.success('AI-suggested goal created! 🎯');
-        // Remove the accepted recommendation
-        setRecommendations(prev => prev.filter(r => r.goal_title !== recommendation.goal_title));
-      }
-    } catch (error) {
-      toast.error('Failed to create goal');
-    }
-  };
-
+export function AIGoalRecommendations({ recommendations, onAcceptGoal, onRefresh, loading }: AIGoalRecommendationsProps) {
   const getGoalTypeIcon = (type: string) => {
     switch (type) {
       case 'skill_mastery': return Target;
@@ -109,7 +64,7 @@ export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecomm
             <Brain className="h-5 w-5 text-purple-500" />
             AI Goal Recommendations
           </CardTitle>
-          <Button variant="outline" onClick={loadRecommendations} disabled={loading}>
+          <Button variant="outline" onClick={onRefresh} disabled={loading}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -160,7 +115,7 @@ export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecomm
                   
                   <div className="flex justify-end">
                     <Button 
-                      onClick={() => handleAcceptGoal(recommendation)}
+                      onClick={() => onAcceptGoal(recommendation)}
                       className="bg-purple-600 hover:bg-purple-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -178,7 +133,7 @@ export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecomm
             <p className="text-gray-600 mb-4">
               Complete some practice exercises to help our AI generate personalized goal recommendations for you!
             </p>
-            <Button onClick={loadRecommendations}>
+            <Button onClick={onRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Check for Recommendations
             </Button>
