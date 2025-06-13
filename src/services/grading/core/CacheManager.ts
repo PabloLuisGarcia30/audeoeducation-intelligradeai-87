@@ -148,7 +148,7 @@ export class CacheManager {
           gradingMethod: cached.gradingMethod as any,
           reasoning: cached.reasoning,
           processingTimeMs: 0,
-          skillMappings: cached.skillMappings || [],
+          skillMappings: this.convertLegacySkillMappings(cached.skillMappings || []),
           qualityFlags: {
             cacheHit: true
           }
@@ -186,13 +186,33 @@ export class CacheManager {
           confidence: result.confidence,
           gradingMethod: result.gradingMethod,
           reasoning: result.reasoning,
-          skillMappings: result.skillMappings
+          skillMappings: this.convertToLegacySkillMappings(result.skillMappings)
         } as any
       );
 
     } catch (error) {
       console.warn('Persistent cache storage error:', error);
     }
+  }
+
+  private convertLegacySkillMappings(legacyMappings: any[]): any[] {
+    return legacyMappings.map(mapping => ({
+      skillId: mapping.skill_id || mapping.skillId,
+      skillName: mapping.skill_name || mapping.skillName,
+      skillType: mapping.skill_type || mapping.skillType,
+      confidence: mapping.confidence || 0.5,
+      weight: mapping.skill_weight || mapping.weight || 1.0
+    }));
+  }
+
+  private convertToLegacySkillMappings(unifiedMappings: any[]): any[] {
+    return unifiedMappings.map(mapping => ({
+      skill_id: mapping.skillId,
+      skill_name: mapping.skillName,
+      skill_type: mapping.skillType,
+      confidence: mapping.confidence,
+      skill_weight: mapping.weight
+    }));
   }
 
   private cleanupMemoryCache(): void {

@@ -1,4 +1,3 @@
-
 import type { UnifiedQuestionContext, GradingContext, UnifiedGradingResult, GradingMethod } from '../types/UnifiedGradingTypes';
 
 export class LocalGradingProcessor {
@@ -57,10 +56,19 @@ export class LocalGradingProcessor {
         points: question.pointsPossible
       };
 
+      // Convert unified skill mappings to the format expected by the existing service
+      const legacySkillMappings = (question.skillContext || []).map(skill => ({
+        skill_id: skill.skillId,
+        skill_name: skill.skillName,
+        skill_type: skill.skillType,
+        skill_weight: skill.weight,
+        confidence: skill.confidence
+      }));
+
       const distilbertResult = await EnhancedLocalGradingService.gradeQuestionWithDistilBert(
         mockQuestion,
         mockAnswerKey,
-        question.skillContext || []
+        legacySkillMappings
       );
 
       const processingTime = Date.now() - startTime;

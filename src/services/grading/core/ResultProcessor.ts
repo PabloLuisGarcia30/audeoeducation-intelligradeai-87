@@ -122,20 +122,15 @@ export class ResultProcessor {
       // Import the existing misconception logging service
       const { MisconceptionLoggingService } = await import('../../misconceptionLoggingService');
 
-      await MisconceptionLoggingService.logMisconception({
+      await MisconceptionLoggingService.logMCQMisconception({
         studentId: context.studentId,
         questionId: question.questionId,
-        misconceptionCategory: result.misconceptionAnalysis.categoryName || 'Unknown',
-        misconceptionSubtype: result.misconceptionAnalysis.subtypeName || 'General',
-        confidence: result.misconceptionAnalysis.confidence || 0.5,
-        context: {
-          examId: context.examId,
-          exerciseId: context.exerciseId,
-          sessionId: context.sessionId,
-          questionType: question.questionType,
-          studentAnswer: question.studentAnswer,
-          correctAnswer: question.correctAnswer
-        }
+        selectedOption: question.studentAnswer,
+        misconceptionCategory: result.misconceptionAnalysis.categoryName,
+        misconceptionSubtype: result.misconceptionAnalysis.subtypeName,
+        confidence: result.misconceptionAnalysis.confidence,
+        exerciseId: context.exerciseId,
+        practiceSessionId: context.sessionId
       });
 
       console.log(`📝 Misconception recorded for Q${question.questionNumber}: ${result.misconceptionAnalysis.categoryName}`);

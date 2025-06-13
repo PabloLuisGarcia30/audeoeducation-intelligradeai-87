@@ -1,14 +1,17 @@
 
-import type { UnifiedQuestionContext, GradingContext, UnifiedGradingResult } from '../types/UnifiedGradingTypes';
-import { supabase } from '@/integrations/supabase/client';
+import type { 
+  UnifiedQuestionContext, 
+  GradingContext, 
+  UnifiedGradingResult 
+} from '../types/UnifiedGradingTypes';
 
 export class OpenAIGradingProcessor {
   private processingStats = {
     totalProcessed: 0,
-    totalBatches: 0,
-    totalCost: 0,
+    singleRequests: 0,
+    batchRequests: 0,
     avgProcessingTime: 0,
-    avgConfidence: 0
+    totalCost: 0
   };
 
   async processSingle(
@@ -18,50 +21,55 @@ export class OpenAIGradingProcessor {
     const startTime = Date.now();
 
     try {
-      const { data, error } = await supabase.functions.invoke('grade-complex-question', {
-        body: {
-          questionText: question.questionText,
-          studentAnswer: question.studentAnswer,
-          correctAnswer: question.correctAnswer,
-          pointsPossible: question.pointsPossible,
-          questionNumber: question.questionNumber,
-          studentName: context.studentName,
-          skillContext: question.skillContext?.map(s => s.skillName).join(', '),
-          subject: context.subject,
-          questionType: question.questionType
-        }
-      });
+      // Import the existing OpenAI service
+      const { OpenAIComplexGradingService } = await import('../../openAIComplexGradingService');
+      
+      const mockQuestion = {
+        questionNumber: question.questionNumber,
+        detectedAnswer: { selectedOption: question.studentAnswer },
+        questionText: question.questionText,
+        options: question.options
+      };
 
-      if (error) {
-        throw new Error(`OpenAI API error: ${error.message}`);
-      }
+      const mockAnswerKey = {
+        question_number: question.questionNumber,
+        correct_answer: question.correctAnswer,
+        points: question.pointsPossible,
+        acceptable_answers: question.acceptableAnswers
+      };
+
+      const openaiResult = await OpenAIComplexGradingService.gradeComplexQuestion(
+        mockQuestion,
+        mockAnswerKey,
+        question.skillContext || []
+      );
 
       const processingTime = Date.now() - startTime;
-      this.updateSingleStats(processingTime, data.confidence || 0.8, data.usage);
+      this.updateStats('single', processingTime, openaiResult.estimatedCost || 0);
 
       return {
         questionId: question.questionId,
         questionNumber: question.questionNumber,
-        isCorrect: data.isCorrect,
-        pointsEarned: data.pointsEarned || 0,
+        isCorrect: openaiResult.isCorrect,
+        pointsEarned: openaiResult.pointsEarned,
         pointsPossible: question.pointsPossible,
-        confidence: data.confidence || 0.8,
+        confidence: openaiResult.confidence,
         gradingMethod: 'openai_single',
-        reasoning: data.reasoning || 'OpenAI single question processing',
+        reasoning: openaiResult.reasoning,
+        feedback: openaiResult.feedback,
         processingTimeMs: processingTime,
         skillMappings: question.skillContext || [],
-        complexityScore: data.complexityScore || 0.7,
-        misconceptionAnalysis: data.misconceptionCategory ? {
-          categoryName: data.misconceptionCategory,
-          subtypeName: data.misconceptionSubtype,
-          confidence: data.misconceptionConfidence,
-          reasoning: data.misconceptionReasoning
+        misconceptionAnalysis: openaiResult.misconceptionAnalysis ? {
+          categoryName: openaiResult.misconceptionAnalysis.categoryName,
+          subtypeName: openaiResult.misconceptionAnalysis.subtypeName,
+          confidence: openaiResult.misconceptionAnalysis.confidence,
+          reasoning: openaiResult.misconceptionAnalysis.reasoning
         } : undefined,
         openAIUsage: {
-          promptTokens: data.usage?.promptTokens || 0,
-          completionTokens: data.usage?.completionTokens || 0,
-          totalTokens: data.usage?.totalTokens || 0,
-          estimatedCost: ((data.usage?.totalTokens || 0) * 0.002) / 1000
+          promptTokens: openaiResult.promptTokens || 0,
+          completionTokens: openaiResult.completionTokens || 0,
+          totalTokens: (openaiResult.promptTokens || 0) + (openaiResult.completionTokens || 0),
+          estimatedCost: openaiResult.estimatedCost || 0
         }
       };
 
@@ -78,90 +86,76 @@ export class OpenAIGradingProcessor {
     const startTime = Date.now();
 
     try {
-      const { data, error } = await supabase.functions.invoke('grade-complex-question', {
-        body: {
-          batchMode: true,
-          questions: questions.map(q => ({
-            questionNumber: q.questionNumber,
-            questionText: q.questionText,
-            studentAnswer: q.studentAnswer,
-            correctAnswer: q.correctAnswer,
-            pointsPossible: q.pointsPossible,
-            skillContext: q.skillContext?.map(s => s.skillName).join(', ')
-          })),
-          studentName: context.studentName,
-          enhancedBatchPrompt: this.createBatchPrompt(questions, context)
-        }
-      });
+      // Import the existing batch service
+      const { EnhancedBatchGradingService } = await import('../../enhancedBatchGradingService');
+      
+      const mockQuestions = questions.map(q => ({
+        questionNumber: q.questionNumber,
+        detectedAnswer: { selectedOption: q.studentAnswer },
+        questionText: q.questionText,
+        options: q.options
+      }));
 
-      if (error) {
-        throw new Error(`OpenAI batch API error: ${error.message}`);
-      }
+      const mockAnswerKeys = questions.map(q => ({
+        question_number: q.questionNumber,
+        correct_answer: q.correctAnswer,
+        points: q.pointsPossible,
+        acceptable_answers: q.acceptableAnswers
+      }));
+
+      const batchResults = await EnhancedBatchGradingService.gradeComplexQuestions(
+        mockQuestions,
+        mockAnswerKeys,
+        context.examId || 'unified',
+        context.studentId || 'student'
+      );
 
       const processingTime = Date.now() - startTime;
-      const batchResults = data.results || [];
+      const totalCost = batchResults.reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
+      this.updateStats('batch', processingTime, totalCost);
 
-      // Convert batch results to unified format
-      const results: UnifiedGradingResult[] = questions.map((question, index) => {
+      return questions.map((question, index) => {
         const result = batchResults[index];
-        
         if (!result) {
-          return this.createErrorResult(question, new Error('Missing batch result'), processingTime);
+          return this.createErrorResult(question, new Error('No result from batch'), processingTime);
         }
 
         return {
           questionId: question.questionId,
           questionNumber: question.questionNumber,
           isCorrect: result.isCorrect,
-          pointsEarned: result.pointsEarned || 0,
+          pointsEarned: result.pointsEarned,
           pointsPossible: question.pointsPossible,
-          confidence: result.confidence || 0.8,
+          confidence: result.confidence,
           gradingMethod: 'openai_batch',
-          reasoning: result.reasoning || 'OpenAI batch processing',
-          processingTimeMs: processingTime / questions.length,
+          reasoning: result.reasoning,
+          feedback: result.feedback,
+          processingTimeMs: processingTime / questions.length, // Distribute batch time
           skillMappings: question.skillContext || [],
-          complexityScore: result.complexityScore || 0.7,
+          misconceptionAnalysis: result.misconceptionAnalysis ? {
+            categoryName: result.misconceptionAnalysis.categoryName,
+            subtypeName: result.misconceptionAnalysis.subtypeName,
+            confidence: result.misconceptionAnalysis.confidence,
+            reasoning: result.misconceptionAnalysis.reasoning
+          } : undefined,
           openAIUsage: {
-            promptTokens: Math.floor((data.usage?.promptTokens || 0) / questions.length),
-            completionTokens: Math.floor((data.usage?.completionTokens || 0) / questions.length),
-            totalTokens: Math.floor((data.usage?.totalTokens || 0) / questions.length),
-            estimatedCost: ((data.usage?.totalTokens || 0) * 0.002) / 1000 / questions.length
+            promptTokens: result.promptTokens || 0,
+            completionTokens: result.completionTokens || 0,
+            totalTokens: (result.promptTokens || 0) + (result.completionTokens || 0),
+            estimatedCost: result.estimatedCost || 0
           }
         };
       });
 
-      this.updateBatchStats(questions.length, processingTime, data.usage);
-
-      return results;
-
     } catch (error) {
       console.error('OpenAI batch processing error:', error);
-      
-      // Return error results for all questions
-      return questions.map(question => 
-        this.createErrorResult(question, error, Date.now() - startTime)
-      );
+      return questions.map(q => this.createErrorResult(q, error, Date.now() - startTime));
     }
   }
 
-  private createBatchPrompt(questions: UnifiedQuestionContext[], context: GradingContext): string {
-    return `Grade ${questions.length} questions for ${context.studentName || 'student'} in ${context.subject || 'unknown subject'}.
-
-QUESTIONS:
-${questions.map((q, index) => `
-Q${q.questionNumber}: ${q.questionText}
-Student Answer: "${q.studentAnswer}"
-Correct Answer: "${q.correctAnswer}"
-Points: ${q.pointsPossible}
-Skills: ${q.skillContext?.map(s => s.skillName).join(', ') || 'General'}
-`).join('\n---\n')}
-
-Return JSON array with results for each question including isCorrect, pointsEarned, confidence, reasoning, and complexityScore.`;
-  }
-
   private createErrorResult(
-    question: UnifiedQuestionContext, 
-    error: any, 
+    question: UnifiedQuestionContext,
+    error: any,
     processingTime: number
   ): UnifiedGradingResult {
     return {
@@ -182,26 +176,16 @@ Return JSON array with results for each question including isCorrect, pointsEarn
     };
   }
 
-  private updateSingleStats(processingTime: number, confidence: number, usage: any): void {
+  private updateStats(type: 'single' | 'batch', processingTime: number, cost: number): void {
     this.processingStats.totalProcessed++;
     this.processingStats.avgProcessingTime = 
       (this.processingStats.avgProcessingTime + processingTime) / 2;
-    this.processingStats.avgConfidence = 
-      (this.processingStats.avgConfidence + confidence) / 2;
-    
-    if (usage?.totalTokens) {
-      this.processingStats.totalCost += (usage.totalTokens * 0.002) / 1000;
-    }
-  }
+    this.processingStats.totalCost += cost;
 
-  private updateBatchStats(batchSize: number, processingTime: number, usage: any): void {
-    this.processingStats.totalBatches++;
-    this.processingStats.totalProcessed += batchSize;
-    this.processingStats.avgProcessingTime = 
-      (this.processingStats.avgProcessingTime + processingTime) / 2;
-    
-    if (usage?.totalTokens) {
-      this.processingStats.totalCost += (usage.totalTokens * 0.002) / 1000;
+    if (type === 'single') {
+      this.processingStats.singleRequests++;
+    } else {
+      this.processingStats.batchRequests++;
     }
   }
 

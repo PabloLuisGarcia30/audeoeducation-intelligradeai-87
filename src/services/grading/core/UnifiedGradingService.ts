@@ -1,4 +1,3 @@
-
 import type { 
   UnifiedQuestionContext, 
   GradingContext, 
@@ -78,7 +77,7 @@ export class UnifiedGradingService {
       }
 
       // Process and enhance result
-      const finalResult = this.resultProcessor.processResult(result, question, context);
+      const finalResult = await this.resultProcessor.processResult(result, question, context);
 
       // Cache result if enabled
       if (context.configuration.caching?.enabled) {
