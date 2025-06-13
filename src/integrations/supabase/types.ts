@@ -1297,6 +1297,110 @@ export type Database = {
         }
         Relationships: []
       }
+      mini_lesson_requests: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          mini_lesson_id: string | null
+          misconception_subtype_id: string
+          request_context: Json | null
+          status: string | null
+          student_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          mini_lesson_id?: string | null
+          misconception_subtype_id: string
+          request_context?: Json | null
+          status?: string | null
+          student_id: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          mini_lesson_id?: string | null
+          misconception_subtype_id?: string
+          request_context?: Json | null
+          status?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mini_lesson_requests_mini_lesson_id_fkey"
+            columns: ["mini_lesson_id"]
+            isOneToOne: false
+            referencedRelation: "mini_lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mini_lesson_requests_misconception_subtype_id_fkey"
+            columns: ["misconception_subtype_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_subtypes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mini_lessons: {
+        Row: {
+          created_at: string
+          difficulty_level: string | null
+          effectiveness_score: number | null
+          generated_at: string
+          generation_context: Json | null
+          id: string
+          last_viewed_at: string | null
+          lesson_content: string
+          misconception_subtype_id: string
+          student_id: string | null
+          triggered_by: string | null
+          updated_at: string
+          viewed_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          difficulty_level?: string | null
+          effectiveness_score?: number | null
+          generated_at?: string
+          generation_context?: Json | null
+          id?: string
+          last_viewed_at?: string | null
+          lesson_content: string
+          misconception_subtype_id: string
+          student_id?: string | null
+          triggered_by?: string | null
+          updated_at?: string
+          viewed_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          difficulty_level?: string | null
+          effectiveness_score?: number | null
+          generated_at?: string
+          generation_context?: Json | null
+          id?: string
+          last_viewed_at?: string | null
+          lesson_content?: string
+          misconception_subtype_id?: string
+          student_id?: string | null
+          triggered_by?: string | null
+          updated_at?: string
+          viewed_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mini_lessons_misconception_subtype_id_fkey"
+            columns: ["misconception_subtype_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_subtypes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       misconception_categories: {
         Row: {
           category_name: string
@@ -1772,6 +1876,62 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      predictive_misconception_alerts: {
+        Row: {
+          behavioral_signals: Json | null
+          confidence_score: number
+          created_at: string
+          exam_id: string | null
+          exercise_id: string | null
+          id: string
+          predicted_misconception_subtype_id: string | null
+          question_id: string
+          resolution_type: string | null
+          resolved: boolean | null
+          resolved_at: string | null
+          risk_level: string | null
+          student_id: string
+        }
+        Insert: {
+          behavioral_signals?: Json | null
+          confidence_score?: number
+          created_at?: string
+          exam_id?: string | null
+          exercise_id?: string | null
+          id?: string
+          predicted_misconception_subtype_id?: string | null
+          question_id: string
+          resolution_type?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          risk_level?: string | null
+          student_id: string
+        }
+        Update: {
+          behavioral_signals?: Json | null
+          confidence_score?: number
+          created_at?: string
+          exam_id?: string | null
+          exercise_id?: string | null
+          id?: string
+          predicted_misconception_subtype_id?: string | null
+          question_id?: string
+          resolution_type?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          risk_level?: string | null
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictive_misconception_aler_predicted_misconception_subt_fkey"
+            columns: ["predicted_misconception_subtype_id"]
+            isOneToOne: false
+            referencedRelation: "misconception_subtypes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
