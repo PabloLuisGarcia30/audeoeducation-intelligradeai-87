@@ -80,7 +80,7 @@ export class SmartAnswerGradingService {
   }
 
   /**
-   * Add misconception analysis to grading result for incorrect answers
+   * Add misconception analysis to grading result for incorrect answers - ENHANCED with auto-creation
    */
   private static async addMisconceptionAnalysis(
     gradingResult: GradingResult,
@@ -93,6 +93,7 @@ export class SmartAnswerGradingService {
     try {
       const correctText = typeof correctAnswer === 'string' ? correctAnswer : correctAnswer.text;
       
+      // Use enhanced misconception analysis with auto-creation capability
       const misconceptionAnalysis = await EnhancedMisconceptionIntegrationService.analyzeMisconceptionWithTaxonomy(
         subject,
         questionType,
@@ -109,12 +110,19 @@ export class SmartAnswerGradingService {
           reasoning: misconceptionAnalysis.reasoning
         };
 
-        // Enhance feedback with misconception insights
+        // Enhanced feedback with auto-creation context
         if (gradingResult.feedback) {
-          gradingResult.feedback += ` This appears to be a ${misconceptionAnalysis.categoryName.toLowerCase()} issue, specifically ${misconceptionAnalysis.subtypeName.toLowerCase()}.`;
+          let feedbackAddition = ` This appears to be a ${misconceptionAnalysis.categoryName.toLowerCase()} issue, specifically ${misconceptionAnalysis.subtypeName.toLowerCase()}.`;
+          
+          // Add context if this was a newly discovered misconception
+          if (misconceptionAnalysis.isNewSubtype) {
+            feedbackAddition += ` This type of error pattern was newly identified and added to our learning system.`;
+          }
+          
+          gradingResult.feedback += feedbackAddition;
         }
 
-        console.log(`🧠 Added misconception analysis: ${misconceptionAnalysis.categoryName} -> ${misconceptionAnalysis.subtypeName}`);
+        console.log(`🧠 Added misconception analysis: ${misconceptionAnalysis.categoryName} -> ${misconceptionAnalysis.subtypeName}${misconceptionAnalysis.isNewSubtype ? ' (NEW)' : ''}`);
       }
     } catch (error) {
       console.error('❌ Failed to add misconception analysis:', error);

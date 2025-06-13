@@ -1,9 +1,8 @@
-
 import { SubjectSpecificMisconceptionService } from './subjectSpecificMisconceptionService';
 import { MisconceptionTaxonomyService, MisconceptionAnalysisResult } from './misconceptionTaxonomyService';
 
 export class EnhancedMisconceptionIntegrationService {
-  // Integrate legacy misconception detection with new taxonomy
+  // Integrate legacy misconception detection with new taxonomy - ENHANCED with auto-creation
   static async analyzeMisconceptionWithTaxonomy(
     subject: string,
     questionType: string,
@@ -13,7 +12,21 @@ export class EnhancedMisconceptionIntegrationService {
     options?: string[]
   ): Promise<MisconceptionAnalysisResult | null> {
     try {
-      // First, use the existing subject-specific analysis
+      // First, use the enhanced taxonomy analysis with auto-creation
+      const taxonomyAnalysis = await MisconceptionTaxonomyService.analyzeMisconception(
+        studentAnswer,
+        correctAnswer,
+        questionContext || '',
+        subject,
+        questionType
+      );
+
+      if (taxonomyAnalysis) {
+        console.log(`🧠 Taxonomy analysis successful: ${taxonomyAnalysis.subtypeName}${taxonomyAnalysis.isNewSubtype ? ' (AUTO-CREATED)' : ''}`);
+        return taxonomyAnalysis;
+      }
+
+      // Fallback to legacy analysis if new taxonomy doesn't find anything
       const legacyCategory = SubjectSpecificMisconceptionService.analyzeMisconceptionBySubject(
         subject,
         questionType,
@@ -23,21 +36,7 @@ export class EnhancedMisconceptionIntegrationService {
         options
       );
 
-      // Then, use the new taxonomy analysis
-      const taxonomyAnalysis = await MisconceptionTaxonomyService.analyzeMisconception(
-        studentAnswer,
-        correctAnswer,
-        questionContext || '',
-        subject,
-        questionType
-      );
-
-      // Combine the results, prioritizing the new taxonomy but using legacy as fallback
-      if (taxonomyAnalysis) {
-        return taxonomyAnalysis;
-      }
-
-      // If new taxonomy didn't find anything, try to map legacy category to new taxonomy
+      // If legacy analysis found something, try to map it to taxonomy
       if (legacyCategory && legacyCategory !== 'unclassified') {
         const mappedAnalysis = await this.mapLegacyCategoryToTaxonomy(
           legacyCategory,
@@ -48,6 +47,7 @@ export class EnhancedMisconceptionIntegrationService {
         );
         
         if (mappedAnalysis) {
+          console.log(`🔄 Mapped legacy category to taxonomy: ${legacyCategory} -> ${mappedAnalysis.subtypeName}`);
           return mappedAnalysis;
         }
       }
@@ -131,7 +131,7 @@ export class EnhancedMisconceptionIntegrationService {
     };
   }
 
-  // Enhanced misconception recording that uses both systems
+  // Enhanced misconception recording that uses both systems with auto-creation support
   static async recordEnhancedMisconception(
     studentId: string,
     questionId: string,
@@ -143,9 +143,9 @@ export class EnhancedMisconceptionIntegrationService {
     correctAnswer: string,
     questionContext?: string,
     options?: string[]
-  ): Promise<{ success: boolean; misconceptionId?: string; analysis?: MisconceptionAnalysisResult }> {
+  ): Promise<{ success: boolean; misconceptionId?: string; analysis?: MisconceptionAnalysisResult; isNewSubtype?: boolean }> {
     try {
-      // Perform enhanced analysis
+      // Perform enhanced analysis with auto-creation
       const analysis = await this.analyzeMisconceptionWithTaxonomy(
         subject,
         questionType,
@@ -170,7 +170,8 @@ export class EnhancedMisconceptionIntegrationService {
           correct_answer: correctAnswer,
           subject: subject,
           question_type: questionType,
-          analysis_reasoning: analysis.reasoning
+          analysis_reasoning: analysis.reasoning,
+          auto_created: analysis.isNewSubtype || false
         },
         questionId,
         skillId,
@@ -184,7 +185,8 @@ export class EnhancedMisconceptionIntegrationService {
       return {
         success: true,
         misconceptionId: misconceptionRecord.id,
-        analysis
+        analysis,
+        isNewSubtype: analysis.isNewSubtype
       };
     } catch (error) {
       console.error('Error recording enhanced misconception:', error);

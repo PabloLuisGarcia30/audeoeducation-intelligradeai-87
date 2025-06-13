@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface MisconceptionCategory {
@@ -77,22 +76,306 @@ export interface MisconceptionAnalysisResult {
   confidence: number;
   reasoning: string;
   remediationSuggestions: string[];
+  isNewSubtype?: boolean; // NEW: Flag for auto-created subtypes
+}
+
+export interface NewMisconceptionCandidate {
+  subtypeName: string;
+  categoryName: string;
+  description: string;
+  confidence: number;
+  reasoning: string;
+  contextEvidence: string;
+  needsReview: boolean;
 }
 
 export class MisconceptionTaxonomyService {
-  // Get all misconception categories
-  static async getCategories(): Promise<MisconceptionCategory[]> {
-    const { data, error } = await supabase
-      .from('misconception_categories')
-      .select('*')
-      .order('category_name');
+  private static readonly AUTO_CREATE_CONFIDENCE_THRESHOLD = 0.75;
+  private static readonly REVIEW_QUEUE_THRESHOLD = 0.65;
 
-    if (error) {
-      console.error('Error fetching misconception categories:', error);
-      throw error;
+  /**
+   * Enhanced misconception analysis with auto-creation capability
+   */
+  static async analyzeMisconception(
+    studentAnswer: string,
+    correctAnswer: string,
+    questionContext: string,
+    subject: string = 'General',
+    questionType: string = 'short-answer'
+  ): Promise<MisconceptionAnalysisResult | null> {
+    try {
+      console.log('🧠 Analyzing misconception with auto-creation capability');
+
+      const { data, error } = await supabase.functions.invoke('detect-misconception-with-taxonomy', {
+        body: {
+          studentAnswer,
+          correctAnswer,
+          questionContext,
+          subject,
+          questionType,
+          autoCreateEnabled: true, // NEW: Enable auto-creation
+          confidenceThreshold: this.AUTO_CREATE_CONFIDENCE_THRESHOLD
+        }
+      });
+
+      if (error) {
+        console.error('❌ Error in misconception analysis:', error);
+        return null;
+      }
+
+      // Handle auto-created misconceptions
+      if (data.isNewSubtype) {
+        console.log(`🆕 Auto-created new misconception subtype: ${data.subtypeName} in category: ${data.categoryName}`);
+        
+        // Log the auto-creation for monitoring
+        await this.logAutoCreation(data);
+      }
+
+      return {
+        subtypeId: data.subtypeId,
+        subtypeName: data.subtypeName,
+        categoryName: data.categoryName,
+        confidence: data.confidence,
+        reasoning: data.reasoning,
+        remediationSuggestions: data.remediationSuggestions || [],
+        isNewSubtype: data.isNewSubtype
+      };
+    } catch (error) {
+      console.error('❌ Exception in analyzeMisconception:', error);
+      return null;
     }
+  }
 
-    return data || [];
+  /**
+   * Auto-create a new misconception subtype if it meets criteria
+   */
+  static async autoCreateMisconceptionSubtype(
+    candidate: NewMisconceptionCandidate
+  ): Promise<{ success: boolean; subtypeId?: string; needsReview?: boolean }> {
+    try {
+      // Check if confidence meets auto-creation threshold
+      if (candidate.confidence < this.AUTO_CREATE_CONFIDENCE_THRESHOLD) {
+        if (candidate.confidence >= this.REVIEW_QUEUE_THRESHOLD) {
+          // Add to review queue instead
+          await this.addToReviewQueue(candidate);
+          return { success: false, needsReview: true };
+        }
+        return { success: false };
+      }
+
+      // Find or create the category
+      const categoryId = await this.findOrCreateCategory(candidate.categoryName);
+      if (!categoryId) {
+        console.error('❌ Failed to find or create category:', candidate.categoryName);
+        return { success: false };
+      }
+
+      // Check if subtype already exists
+      const existingSubtype = await this.findSimilarSubtype(candidate.subtypeName, categoryId);
+      if (existingSubtype) {
+        console.log(`✅ Using existing similar subtype: ${existingSubtype.subtype_name}`);
+        return { success: true, subtypeId: existingSubtype.id };
+      }
+
+      // Create new subtype
+      const { data: newSubtype, error } = await supabase
+        .from('misconception_subtypes')
+        .insert({
+          subtype_name: candidate.subtypeName,
+          description: candidate.description,
+          category_id: categoryId
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating new misconception subtype:', error);
+        return { success: false };
+      }
+
+      console.log(`🆕 Successfully auto-created misconception subtype: ${candidate.subtypeName}`);
+      return { success: true, subtypeId: newSubtype.id };
+    } catch (error) {
+      console.error('❌ Exception in autoCreateMisconceptionSubtype:', error);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Find or create a misconception category
+   */
+  private static async findOrCreateCategory(categoryName: string): Promise<string | null> {
+    try {
+      // Try to find existing category
+      const { data: existingCategory } = await supabase
+        .from('misconception_categories')
+        .select('id')
+        .ilike('category_name', categoryName)
+        .single();
+
+      if (existingCategory) {
+        return existingCategory.id;
+      }
+
+      // Create new category
+      const { data: newCategory, error } = await supabase
+        .from('misconception_categories')
+        .insert({
+          category_name: categoryName,
+          description: `Auto-created category for ${categoryName} misconceptions`
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating category:', error);
+        return null;
+      }
+
+      console.log(`🆕 Auto-created category: ${categoryName}`);
+      return newCategory.id;
+    } catch (error) {
+      console.error('❌ Exception in findOrCreateCategory:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Find similar existing subtype to avoid duplicates
+   */
+  private static async findSimilarSubtype(subtypeName: string, categoryId: string): Promise<MisconceptionSubtype | null> {
+    try {
+      const { data } = await supabase
+        .from('misconception_subtypes')
+        .select(`
+          id,
+          subtype_name,
+          description,
+          category_id,
+          misconception_categories!inner(
+            id,
+            category_name,
+            description
+          )
+        `)
+        .eq('category_id', categoryId);
+
+      if (!data) return null;
+
+      // Simple similarity check - could be enhanced with more sophisticated matching
+      const normalizedInput = subtypeName.toLowerCase().trim();
+      for (const subtype of data) {
+        const normalizedExisting = subtype.subtype_name.toLowerCase().trim();
+        
+        // Check for exact match or high similarity
+        if (normalizedExisting === normalizedInput || 
+            this.calculateSimilarity(normalizedInput, normalizedExisting) > 0.8) {
+          return {
+            id: subtype.id,
+            subtype_name: subtype.subtype_name,
+            description: subtype.description,
+            category_id: subtype.category_id,
+            category: {
+              id: subtype.misconception_categories.id,
+              category_name: subtype.misconception_categories.category_name,
+              description: subtype.misconception_categories.description
+            }
+          };
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Exception in findSimilarSubtype:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Calculate string similarity (simple implementation)
+   */
+  private static calculateSimilarity(str1: string, str2: string): number {
+    const words1 = str1.split(' ').filter(w => w.length > 2);
+    const words2 = str2.split(' ').filter(w => w.length > 2);
+    
+    if (words1.length === 0 || words2.length === 0) return 0;
+    
+    const commonWords = words1.filter(word => words2.includes(word)).length;
+    const totalUniqueWords = new Set([...words1, ...words2]).size;
+    
+    return commonWords / totalUniqueWords;
+  }
+
+  /**
+   * Add candidate to review queue for manual approval
+   */
+  private static async addToReviewQueue(candidate: NewMisconceptionCandidate): Promise<void> {
+    try {
+      await supabase
+        .from('misconception_review_queue')
+        .insert({
+          subtype_name: candidate.subtypeName,
+          category_name: candidate.categoryName,
+          description: candidate.description,
+          confidence: candidate.confidence,
+          reasoning: candidate.reasoning,
+          context_evidence: candidate.contextEvidence,
+          status: 'pending_review'
+        });
+
+      console.log(`📋 Added misconception to review queue: ${candidate.subtypeName}`);
+    } catch (error) {
+      console.error('❌ Error adding to review queue:', error);
+    }
+  }
+
+  /**
+   * Log auto-creation event for monitoring
+   */
+  private static async logAutoCreation(data: any): Promise<void> {
+    try {
+      await supabase
+        .from('misconception_auto_creation_log')
+        .insert({
+          subtype_id: data.subtypeId,
+          subtype_name: data.subtypeName,
+          category_name: data.categoryName,
+          confidence: data.confidence,
+          reasoning: data.reasoning,
+          auto_created_at: new Date().toISOString()
+        });
+    } catch (error) {
+      console.error('❌ Error logging auto-creation:', error);
+    }
+  }
+
+  // Get all misconception categories
+  static async getCategories(): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('misconception_categories')
+        .select(`
+          id,
+          category_name,
+          description,
+          misconception_subtypes(
+            id,
+            subtype_name,
+            description
+          )
+        `)
+        .order('category_name');
+
+      if (error) {
+        console.error('Error fetching categories:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Exception in getCategories:', error);
+      return [];
+    }
   }
 
   // Get subtypes for a specific category
@@ -112,434 +395,190 @@ export class MisconceptionTaxonomyService {
   }
 
   // Get all subtypes with category information
-  static async getAllSubtypesWithCategories(): Promise<(MisconceptionSubtype & { category: MisconceptionCategory })[]> {
-    const { data, error } = await supabase
-      .from('misconception_subtypes')
-      .select(`
-        *,
-        category:misconception_categories(*)
-      `)
-      .order('subtype_name');
-
-    if (error) {
-      console.error('Error fetching subtypes with categories:', error);
-      throw error;
-    }
-
-    return data || [];
-  }
-
-  // Analyze student answer for misconceptions
-  static async analyzeMisconception(
-    studentAnswer: string,
-    correctAnswer: string,
-    questionContext: string,
-    subject: string,
-    questionType: string = 'open-ended'
-  ): Promise<MisconceptionAnalysisResult | null> {
+  static async getAllSubtypesWithCategories(): Promise<MisconceptionSubtype[]> {
     try {
-      // Get all subtypes for analysis
-      const subtypes = await this.getAllSubtypesWithCategories();
-      
-      // Analyze based on different error patterns
-      const analysis = this.detectMisconceptionPattern(
-        studentAnswer,
-        correctAnswer,
-        questionContext,
-        subject,
-        questionType,
-        subtypes
-      );
+      const { data, error } = await supabase
+        .from('misconception_subtypes')
+        .select(`
+          id,
+          subtype_name,
+          description,
+          category_id,
+          misconception_categories!inner(
+            id,
+            category_name,
+            description
+          )
+        `)
+        .order('subtype_name');
 
-      return analysis;
+      if (error) {
+        console.error('Error fetching subtypes:', error);
+        return [];
+      }
+
+      return (data || []).map(item => ({
+        id: item.id,
+        subtype_name: item.subtype_name,
+        description: item.description,
+        category_id: item.category_id,
+        category: {
+          id: item.misconception_categories.id,
+          category_name: item.misconception_categories.category_name,
+          description: item.misconception_categories.description
+        }
+      }));
     } catch (error) {
-      console.error('Error analyzing misconception:', error);
-      return null;
+      console.error('Exception in getAllSubtypesWithCategories:', error);
+      return [];
     }
-  }
-
-  // Core detection logic for different misconception types
-  private static detectMisconceptionPattern(
-    studentAnswer: string,
-    correctAnswer: string,
-    questionContext: string,
-    subject: string,
-    questionType: string,
-    subtypes: (MisconceptionSubtype & { category: MisconceptionCategory })[]
-  ): MisconceptionAnalysisResult | null {
-    const studentLower = studentAnswer.toLowerCase().trim();
-    const correctLower = correctAnswer.toLowerCase().trim();
-    const contextLower = questionContext.toLowerCase();
-
-    // Procedural Error Detection
-    const proceduralAnalysis = this.analyzeProceduralErrors(studentLower, correctLower, contextLower, subtypes);
-    if (proceduralAnalysis) return proceduralAnalysis;
-
-    // Conceptual Error Detection
-    const conceptualAnalysis = this.analyzeConceptualErrors(studentLower, correctLower, contextLower, subject, subtypes);
-    if (conceptualAnalysis) return conceptualAnalysis;
-
-    // Interpretive Error Detection
-    const interpretiveAnalysis = this.analyzeInterpretiveErrors(studentLower, correctLower, contextLower, questionType, subtypes);
-    if (interpretiveAnalysis) return interpretiveAnalysis;
-
-    // Expression Error Detection
-    const expressionAnalysis = this.analyzeExpressionErrors(studentLower, correctLower, contextLower, subtypes);
-    if (expressionAnalysis) return expressionAnalysis;
-
-    // Strategic Error Detection
-    const strategicAnalysis = this.analyzeStrategicErrors(studentLower, correctLower, contextLower, subtypes);
-    if (strategicAnalysis) return strategicAnalysis;
-
-    // Meta-Cognitive Error Detection
-    const metacognitiveAnalysis = this.analyzeMetacognitiveErrors(studentLower, correctLower, contextLower, subtypes);
-    if (metacognitiveAnalysis) return metacognitiveAnalysis;
-
-    return null;
-  }
-
-  // Procedural error analysis
-  private static analyzeProceduralErrors(
-    studentAnswer: string,
-    correctAnswer: string,
-    context: string,
-    subtypes: (MisconceptionSubtype & { category: MisconceptionCategory })[]
-  ): MisconceptionAnalysisResult | null {
-    const proceduralSubtypes = subtypes.filter(s => s.category.category_name === 'Procedural Errors');
-    
-    // Step Omission Detection
-    if (studentAnswer.length < correctAnswer.length * 0.5 && context.includes('step')) {
-      const subtype = proceduralSubtypes.find(s => s.subtype_name === 'Step Omission');
-      if (subtype) {
-        return {
-          subtypeId: subtype.id,
-          subtypeName: subtype.subtype_name,
-          categoryName: subtype.category.category_name,
-          confidence: 0.8,
-          reasoning: 'Student response is significantly shorter than expected, suggesting skipped steps',
-          remediationSuggestions: [
-            'Break down the problem into smaller steps',
-            'Provide a step-by-step checklist',
-            'Use guided practice with explicit step identification'
-          ]
-        };
-      }
-    }
-
-    // Symbol Confusion Detection
-    if (this.hasSymbolErrors(studentAnswer, correctAnswer)) {
-      const subtype = proceduralSubtypes.find(s => s.subtype_name === 'Symbol Confusion');
-      if (subtype) {
-        return {
-          subtypeId: subtype.id,
-          subtypeName: subtype.subtype_name,
-          categoryName: subtype.category.category_name,
-          confidence: 0.9,
-          reasoning: 'Student appears to have confused mathematical symbols or operations',
-          remediationSuggestions: [
-            'Review symbol meanings with visual aids',
-            'Practice symbol identification exercises',
-            'Use color-coding for different operations'
-          ]
-        };
-      }
-    }
-
-    return null;
-  }
-
-  // Conceptual error analysis
-  private static analyzeConceptualErrors(
-    studentAnswer: string,
-    correctAnswer: string,
-    context: string,
-    subject: string,
-    subtypes: (MisconceptionSubtype & { category: MisconceptionCategory })[]
-  ): MisconceptionAnalysisResult | null {
-    const conceptualSubtypes = subtypes.filter(s => s.category.category_name === 'Conceptual Errors');
-    
-    // Overgeneralization Detection
-    if (this.isOvergeneralization(studentAnswer, correctAnswer, context)) {
-      const subtype = conceptualSubtypes.find(s => s.subtype_name === 'Overgeneralization');
-      if (subtype) {
-        return {
-          subtypeId: subtype.id,
-          subtypeName: subtype.subtype_name,
-          categoryName: subtype.category.category_name,
-          confidence: 0.7,
-          reasoning: 'Student appears to be applying a rule or concept too broadly',
-          remediationSuggestions: [
-            'Provide counterexamples to show rule boundaries',
-            'Practice with edge cases',
-            'Explicitly discuss when rules apply and when they don\'t'
-          ]
-        };
-      }
-    }
-
-    return null;
-  }
-
-  // Interpretive error analysis
-  private static analyzeInterpretiveErrors(
-    studentAnswer: string,
-    correctAnswer: string,
-    context: string,
-    questionType: string,
-    subtypes: (MisconceptionSubtype & { category: MisconceptionCategory })[]
-  ): MisconceptionAnalysisResult | null {
-    const interpretiveSubtypes = subtypes.filter(s => s.category.category_name === 'Interpretive Errors');
-    
-    // Task Misread Detection
-    if (this.isTaskMisread(studentAnswer, correctAnswer, context)) {
-      const subtype = interpretiveSubtypes.find(s => s.subtype_name === 'Task Misread');
-      if (subtype) {
-        return {
-          subtypeId: subtype.id,
-          subtypeName: subtype.subtype_name,
-          categoryName: subtype.category.category_name,
-          confidence: 0.8,
-          reasoning: 'Student appears to have answered a different question than what was asked',
-          remediationSuggestions: [
-            'Highlight key instruction words',
-            'Practice reading comprehension with similar questions',
-            'Encourage restating the question in their own words'
-          ]
-        };
-      }
-    }
-
-    return null;
-  }
-
-  // Expression error analysis
-  private static analyzeExpressionErrors(
-    studentAnswer: string,
-    correctAnswer: string,
-    context: string,
-    subtypes: (MisconceptionSubtype & { category: MisconceptionCategory })[]
-  ): MisconceptionAnalysisResult | null {
-    const expressionSubtypes = subtypes.filter(s => s.category.category_name === 'Expression Errors');
-    
-    // Communication Breakdown Detection
-    if (this.isCommunicationBreakdown(studentAnswer)) {
-      const subtype = expressionSubtypes.find(s => s.subtype_name === 'Communication Breakdown');
-      if (subtype) {
-        return {
-          subtypeId: subtype.id,
-          subtypeName: subtype.subtype_name,
-          categoryName: subtype.category.category_name,
-          confidence: 0.7,
-          reasoning: 'Student response is unclear or incoherent',
-          remediationSuggestions: [
-            'Provide sentence starters for explanations',
-            'Practice organizing thoughts before writing',
-            'Use graphic organizers for response structure'
-          ]
-        };
-      }
-    }
-
-    return null;
-  }
-
-  // Strategic error analysis
-  private static analyzeStrategicErrors(
-    studentAnswer: string,
-    correctAnswer: string,
-    context: string,
-    subtypes: (MisconceptionSubtype & { category: MisconceptionCategory })[]
-  ): MisconceptionAnalysisResult | null {
-    const strategicSubtypes = subtypes.filter(s => s.category.category_name === 'Strategic Errors');
-    
-    // Guess-and-Check Default Detection
-    if (this.isGuessAndCheck(studentAnswer, context)) {
-      const subtype = strategicSubtypes.find(s => s.subtype_name === 'Guess-and-Check Default');
-      if (subtype) {
-        return {
-          subtypeId: subtype.id,
-          subtypeName: subtype.subtype_name,
-          categoryName: subtype.category.category_name,
-          confidence: 0.6,
-          reasoning: 'Student appears to be using trial and error instead of systematic approach',
-          remediationSuggestions: [
-            'Teach systematic problem-solving strategies',
-            'Provide decision trees for approach selection',
-            'Practice identifying problem types'
-          ]
-        };
-      }
-    }
-
-    return null;
-  }
-
-  // Meta-cognitive error analysis
-  private static analyzeMetacognitiveErrors(
-    studentAnswer: string,
-    correctAnswer: string,
-    context: string,
-    subtypes: (MisconceptionSubtype & { category: MisconceptionCategory })[]
-  ): MisconceptionAnalysisResult | null {
-    const metacognitiveSubtypes = subtypes.filter(s => s.category.category_name === 'Meta-Cognitive Errors');
-    
-    // This would typically require additional behavioral data
-    // For now, we'll use basic heuristics
-    
-    return null;
-  }
-
-  // Helper methods for pattern detection
-  private static hasSymbolErrors(studentAnswer: string, correctAnswer: string): boolean {
-    const symbolPairs = [
-      ['+', '-'], ['*', '/'], ['<', '>'], ['=', '≠']
-    ];
-    
-    for (const [sym1, sym2] of symbolPairs) {
-      if (correctAnswer.includes(sym1) && studentAnswer.includes(sym2)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private static isOvergeneralization(studentAnswer: string, correctAnswer: string, context: string): boolean {
-    // Check if student applied a general rule to a specific case where it doesn't apply
-    const generalRuleKeywords = ['always', 'all', 'every', 'never', 'none'];
-    return generalRuleKeywords.some(keyword => studentAnswer.includes(keyword)) &&
-           !correctAnswer.includes('all') && !correctAnswer.includes('every');
-  }
-
-  private static isTaskMisread(studentAnswer: string, correctAnswer: string, context: string): boolean {
-    // Simple heuristic: completely different response types
-    const hasNumbers = /\d/.test(studentAnswer);
-    const correctHasNumbers = /\d/.test(correctAnswer);
-    const hasWords = /[a-zA-Z]{3,}/.test(studentAnswer.replace(/\d/g, ''));
-    const correctHasWords = /[a-zA-Z]{3,}/.test(correctAnswer.replace(/\d/g, ''));
-    
-    return (hasNumbers !== correctHasNumbers) || (hasWords !== correctHasWords);
-  }
-
-  private static isCommunicationBreakdown(studentAnswer: string): boolean {
-    // Check for very short, unclear, or repetitive responses
-    return studentAnswer.length < 10 || 
-           studentAnswer.split(' ').length < 3 ||
-           /(.{2,})\1{2,}/.test(studentAnswer); // Repetitive patterns
-  }
-
-  private static isGuessAndCheck(studentAnswer: string, context: string): boolean {
-    const guessKeywords = ['try', 'guess', 'maybe', 'probably', 'think'];
-    return guessKeywords.some(keyword => studentAnswer.includes(keyword));
   }
 
   // Record a misconception
   static async recordMisconception(
     studentId: string,
-    misconceptionSubtypeId: string,
-    confidenceScore: number,
-    contextData: any = {},
+    subtypeId: string,
+    confidence: number,
+    contextData: any,
     questionId?: string,
     skillId?: string,
     examId?: string
-  ): Promise<StudentMisconception | null> {
-    const { data, error } = await supabase
-      .from('student_misconceptions')
-      .insert({
-        student_id: studentId,
-        misconception_subtype_id: misconceptionSubtypeId,
-        confidence_score: confidenceScore,
-        context_data: contextData,
-        question_id: questionId,
-        skill_id: skillId,
-        exam_id: examId
-      })
-      .select()
-      .single();
+  ): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('student_misconceptions')
+        .insert({
+          student_id: studentId,
+          misconception_subtype_id: subtypeId,
+          confidence_score: confidence,
+          context_data: contextData,
+          question_id: questionId,
+          skill_id: skillId,
+          exam_id: examId,
+          detected_at: new Date().toISOString()
+        })
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error recording misconception:', error);
+      if (error) {
+        console.error('Error recording misconception:', error);
+        return null;
+      }
+
+      // Update persistence tracking
+      await supabase.rpc('update_misconception_persistence', {
+        p_student_id: studentId,
+        p_subtype_id: subtypeId
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Exception in recordMisconception:', error);
       return null;
     }
-
-    // Update persistence log
-    await supabase.rpc('update_misconception_persistence', {
-      p_student_id: studentId,
-      p_subtype_id: misconceptionSubtypeId
-    });
-
-    return data;
   }
 
   // Record feedback session
   static async recordFeedbackSession(
-    studentMisconceptionId: string,
+    misconceptionId: string,
     feedbackType: string,
     success: boolean,
     notes?: string,
-    interventionData: any = {}
-  ): Promise<MisconceptionFeedbackSession | null> {
-    const { data, error } = await supabase
-      .from('misconception_feedback_sessions')
-      .insert({
-        student_misconception_id: studentMisconceptionId,
-        feedback_type: feedbackType,
-        success: success,
-        notes: notes,
-        intervention_data: interventionData
-      })
-      .select()
-      .single();
+    interventionData?: any
+  ): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('misconception_feedback_sessions')
+        .insert({
+          student_misconception_id: misconceptionId,
+          feedback_type: feedbackType,
+          success,
+          notes,
+          intervention_data: interventionData
+        })
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error recording feedback session:', error);
+      if (error) {
+        console.error('Error recording feedback session:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Exception in recordFeedbackSession:', error);
       return null;
     }
-
-    return data;
   }
 
   // Get student's misconception history
-  static async getStudentMisconceptions(studentId: string): Promise<(StudentMisconception & { subtype: MisconceptionSubtype & { category: MisconceptionCategory } })[]> {
-    const { data, error } = await supabase
-      .from('student_misconceptions')
-      .select(`
-        *,
-        subtype:misconception_subtypes(
-          *,
-          category:misconception_categories(*)
-        )
-      `)
-      .eq('student_id', studentId)
-      .order('detected_at', { ascending: false });
+  static async getStudentMisconceptions(studentId: string, limit: number = 20): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('student_misconceptions')
+        .select(`
+          id,
+          confidence_score,
+          context_data,
+          detected_at,
+          corrected,
+          misconception_subtypes!inner(
+            id,
+            subtype_name,
+            description,
+            misconception_categories!inner(
+              category_name
+            )
+          )
+        `)
+        .eq('student_id', studentId)
+        .order('detected_at', { ascending: false })
+        .limit(limit);
 
-    if (error) {
-      console.error('Error fetching student misconceptions:', error);
-      throw error;
+      if (error) {
+        console.error('Error fetching student misconceptions:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Exception in getStudentMisconceptions:', error);
+      return [];
     }
-
-    return data || [];
   }
 
-  // Get persistence logs for a student
-  static async getStudentPersistenceLogs(studentId: string): Promise<(MisconceptionPersistenceLog & { subtype: MisconceptionSubtype & { category: MisconceptionCategory } })[]> {
-    const { data, error } = await supabase
-      .from('misconception_persistence_logs')
-      .select(`
-        *,
-        subtype:misconception_subtypes(
-          *,
-          category:misconception_categories(*)
-        )
-      `)
-      .eq('student_id', studentId)
-      .order('total_occurrences', { ascending: false });
+  // Get student's persistence logs
+  static async getStudentPersistenceLogs(studentId: string): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('misconception_persistence_logs')
+        .select(`
+          id,
+          first_detected_at,
+          last_detected_at,
+          total_occurrences,
+          resolved,
+          resolution_date,
+          misconception_subtypes!inner(
+            subtype_name,
+            misconception_categories!inner(
+              category_name
+            )
+          )
+        `)
+        .eq('student_id', studentId)
+        .order('last_detected_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching persistence logs:', error);
-      throw error;
+      if (error) {
+        console.error('Error fetching persistence logs:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Exception in getStudentPersistenceLogs:', error);
+      return [];
     }
-
-    return data || [];
   }
 
   // Record affective response flag
@@ -572,5 +611,71 @@ export class MisconceptionTaxonomyService {
     }
 
     return data;
+  }
+
+  /**
+   * NEW: Get auto-creation statistics for dashboard
+   */
+  static async getAutoCreationStats(days: number = 30): Promise<{
+    total_auto_created: number;
+    pending_review: number;
+    auto_creation_rate: number;
+    confidence_distribution: Record<string, number>;
+  }> {
+    try {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      // Get auto-creation logs
+      const { data: autoCreated } = await supabase
+        .from('misconception_auto_creation_log')
+        .select('confidence')
+        .gte('auto_created_at', startDate.toISOString());
+
+      // Get pending review items
+      const { data: pendingReview } = await supabase
+        .from('misconception_review_queue')
+        .select('id')
+        .eq('status', 'pending_review');
+
+      // Get total misconception detections for rate calculation
+      const { data: totalDetections } = await supabase
+        .from('student_misconceptions')
+        .select('id')
+        .gte('detected_at', startDate.toISOString());
+
+      const totalAutoCreated = autoCreated?.length || 0;
+      const totalPendingReview = pendingReview?.length || 0;
+      const totalDetected = totalDetections?.length || 0;
+
+      // Calculate confidence distribution
+      const confidenceDistribution: Record<string, number> = {
+        'High (0.8-1.0)': 0,
+        'Medium (0.6-0.8)': 0,
+        'Low (0.0-0.6)': 0
+      };
+
+      autoCreated?.forEach(record => {
+        const confidence = record.confidence || 0;
+        if (confidence >= 0.8) confidenceDistribution['High (0.8-1.0)']++;
+        else if (confidence >= 0.6) confidenceDistribution['Medium (0.6-0.8)']++;
+        else confidenceDistribution['Low (0.0-0.6)']++;
+      });
+
+      return {
+        total_auto_created: totalAutoCreated,
+        pending_review: totalPendingReview,
+        auto_creation_rate: totalDetected > 0 ? (totalAutoCreated / totalDetected) * 100 : 0,
+        confidence_distribution: confidenceDistribution
+      };
+    } catch (error) {
+      console.error('❌ Exception in getAutoCreationStats:', error);
+      return {
+        total_auto_created: 0,
+        pending_review: 0,
+        auto_creation_rate: 0,
+        confidence_distribution: {}
+      };
+    }
   }
 }
