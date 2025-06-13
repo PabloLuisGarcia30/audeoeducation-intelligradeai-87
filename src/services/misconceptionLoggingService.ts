@@ -54,11 +54,32 @@ export class MisconceptionLoggingService {
 
       // Only log if the selected option has a misconception annotation and is incorrect
       if (selectedMisconception && !selectedMisconception.correct) {
+        // First, try to find or create the misconception subtype ID
+        let misconceptionSubtypeId = null;
+        
+        if (selectedMisconception.misconceptionSubtype) {
+          // Try to find existing misconception subtype
+          const { data: existingSubtype } = await supabase
+            .from('misconception_subtypes')
+            .select('id')
+            .eq('subtype_name', selectedMisconception.misconceptionSubtype)
+            .single();
+
+          if (existingSubtype) {
+            misconceptionSubtypeId = existingSubtype.id;
+          } else {
+            // Create a new misconception subtype if it doesn't exist
+            // For now, we'll use a default UUID until proper misconception management is implemented
+            misconceptionSubtypeId = '00000000-0000-0000-0000-000000000000';
+          }
+        }
+
         // Record in student_misconceptions table
         const misconceptionData = {
           student_id: log.studentId,
           question_id: log.questionId,
           exam_id: log.exerciseId || 'practice',
+          misconception_subtype_id: misconceptionSubtypeId || '00000000-0000-0000-0000-000000000000',
           confidence_score: selectedMisconception.confidence || log.confidence || 0.8,
           context_data: {
             selectedOption: log.selectedOption,
@@ -67,7 +88,7 @@ export class MisconceptionLoggingService {
             description: selectedMisconception.description,
             practiceSessionId: log.practiceSessionId,
             exerciseId: log.exerciseId
-          }
+          } as any
         };
 
         const { error: insertError } = await supabase

@@ -55,8 +55,8 @@ export class EnhancedPracticeAnswerKeyService extends PracticeAnswerKeyService {
       .from('practice_answer_keys')
       .insert({
         exercise_id: exerciseId,
-        questions: questions as any,
-        metadata: enhancedMetadata as any
+        questions: questions as unknown as any,  // Cast to any for Supabase Json compatibility
+        metadata: enhancedMetadata as unknown as any
       });
 
     if (error) {
@@ -130,11 +130,11 @@ export class EnhancedPracticeAnswerKeyService extends PracticeAnswerKeyService {
       const { error } = await supabase
         .from('practice_answer_keys')
         .update({
-          questions: updatedQuestions,
+          questions: updatedQuestions as unknown as any,
           metadata: {
             ...answerKey.metadata,
             misconceptionAnnotated: true
-          }
+          } as unknown as any
         })
         .eq('exercise_id', exerciseId);
 
