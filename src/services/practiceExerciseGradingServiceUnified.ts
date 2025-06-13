@@ -72,11 +72,22 @@ export class PracticeExerciseGradingServiceUnified {
     console.log(`✅ Unified grading complete: ${totalCorrect}/${answers.length} correct, ${percentageScore.toFixed(1)}% score, ${cacheHits} cache hits`);
 
     return {
-      totalCorrect,
+      totalScore: totalPointsEarned,
+      totalPossible: totalPointsPossible,
       percentageScore,
-      totalPointsEarned,
-      totalPointsPossible,
+      totalCorrect,
       gradingResults: gradingResult.results,
+      questionResults: gradingResult.results.map(r => ({
+        questionId: r.questionId,
+        isCorrect: r.isCorrect,
+        pointsEarned: r.pointsEarned || 0,
+        pointsPossible: r.pointsPossible || 1,
+        feedback: r.feedback || '',
+        gradingMethod: r.gradingMethod || 'unified',
+        confidence: r.confidence || 0
+      })),
+      overallFeedback: `You scored ${percentageScore.toFixed(1)}% on this exercise.`,
+      completedAt: new Date(),
       processingTime: gradingResult.metadata?.processingTime || processingTime,
       averageConfidence: gradingResult.metadata?.averageConfidence || 0,
       misconceptionsLogged,
