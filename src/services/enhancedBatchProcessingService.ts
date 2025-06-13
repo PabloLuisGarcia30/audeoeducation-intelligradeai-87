@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { GradingQueueService } from './gradingQueueService';
 
@@ -62,9 +61,9 @@ export class EnhancedBatchProcessingService {
         lastModified: file.lastModified
       }));
 
-      // Submit job to database queue with proper payload structure
+      // Submit job to database queue with batch processing payload
       const result = await GradingQueueService.submitGradingJob(
-        filesData, // Pass filesData as the questions parameter
+        [], // Empty questions array for batch processing
         {
           batchProcessing: true,
           filesData: filesData,
@@ -93,7 +92,9 @@ export class EnhancedBatchProcessingService {
       if (!job) return null;
 
       // Convert database job to EnhancedBatchJob format
-      const filesData = job.payload?.filesData || [];
+      // Check if this is a batch processing job or regular grading job
+      const isBatchJob = job.payload?.batchProcessing || job.payload?.method === 'batch_file_processing';
+      const filesData = isBatchJob ? (job.payload?.filesData || []) : [];
       
       return {
         id: job.id,
@@ -111,7 +112,7 @@ export class EnhancedBatchProcessingService {
           filesPerSecond: 0,
           averageFileSize: 0,
           totalProcessingTime: job.processing_time_ms || 0,
-          batchOptimizationUsed: true
+          batchOptimizationUsed: isBatchJob
         }
       };
     } catch (error) {
@@ -213,7 +214,9 @@ export class EnhancedBatchProcessingService {
   // Helper methods
   private static async convertDbJobToEnhanced(dbJob: any): Promise<EnhancedBatchJob | null> {
     try {
-      const filesData = dbJob.payload?.filesData || [];
+      // Check if this is a batch processing job or regular grading job
+      const isBatchJob = dbJob.payload?.batchProcessing || dbJob.payload?.method === 'batch_file_processing';
+      const filesData = isBatchJob ? (dbJob.payload?.filesData || []) : [];
       
       return {
         id: dbJob.id,
@@ -231,7 +234,7 @@ export class EnhancedBatchProcessingService {
           filesPerSecond: 0,
           averageFileSize: 0,
           totalProcessingTime: dbJob.processing_time_ms || 0,
-          batchOptimizationUsed: true
+          batchOptimizationUsed: isBatchJob
         }
       };
     } catch (error) {
