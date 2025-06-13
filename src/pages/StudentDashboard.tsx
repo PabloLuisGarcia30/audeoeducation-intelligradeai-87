@@ -34,6 +34,9 @@ import { RoleToggle } from "@/components/RoleToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDevRole } from "@/contexts/DevRoleContext";
 import { AIChatbox } from "@/components/AIChatbox";
+import { AdaptiveGoalSetting } from "@/components/AdaptiveGoalSetting";
+import { MetricsDashboard } from "@/components/MetricsDashboard";
+import { AdaptiveInsightsWidget } from "@/components/AdaptiveInsightsWidget";
 
 interface StudentProfile {
   id: string;
@@ -243,11 +246,14 @@ export default function StudentDashboard() {
 
         {/* Rest of the dashboard content */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-10">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="exercises">Practice</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
             <TabsTrigger value="goals">Goals</TabsTrigger>
+            <TabsTrigger value="smart-goals">Smart Goals</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="insights">Insights</TabsTrigger>
             <TabsTrigger value="results-history">Results History</TabsTrigger>
             <TabsTrigger value="ai-coach">
               <MessageCircle className="h-4 w-4 mr-2" />
@@ -449,6 +455,18 @@ export default function StudentDashboard() {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="smart-goals">
+            <AdaptiveGoalSetting studentId={studentProfile.id} />
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <MetricsDashboard studentId={studentProfile.id} />
+          </TabsContent>
+
+          <TabsContent value="insights">
+            <AdaptiveInsightsWidget studentId={studentProfile.id} />
           </TabsContent>
 
           <TabsContent value="results-history">
