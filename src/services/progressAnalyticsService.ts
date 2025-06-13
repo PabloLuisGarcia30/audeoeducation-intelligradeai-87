@@ -125,10 +125,18 @@ export class ProgressAnalyticsService {
         return [];
       }
 
-      // Type cast the skill_type to ensure TypeScript compatibility
+      // Type cast and handle potential null values from the database
       return (data || []).map(item => ({
         ...item,
-        skill_type: (item.skill_type as 'content' | 'subject') || 'content'
+        skill_type: (item.skill_type as 'content' | 'subject') || 'content',
+        session_type: (item.session_type as 'class_session' | 'trailblazer' | 'home_learner' | 'practice') || 'practice',
+        accuracy: item.accuracy || 0,
+        confidence_score: item.confidence_score || 0,
+        time_spent_seconds: item.time_spent_seconds || 0,
+        attempts_count: item.attempts_count || 1,
+        misconception_detected: item.misconception_detected || false,
+        created_at: item.created_at || new Date().toISOString(),
+        updated_at: item.updated_at || new Date().toISOString()
       }));
     } catch (error) {
       console.error('Failed to fetch progress metrics:', error);
