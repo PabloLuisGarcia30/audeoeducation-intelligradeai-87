@@ -1,15 +1,13 @@
+
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
-import { useUser, useSupabaseClient } from '@supabase/auth-helpers-react';
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
+import { useNavigate } from 'react-router-dom';
+import { useUser } from '@supabase/auth-helpers-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { AIChatbox } from "@/components/AIChatbox";
-import { SupercoachIntegrationWidget } from "@/components/SupercoachIntegrationWidget";
-import { useSupercoachIntegration } from "@/hooks/useSupercoachIntegration";
 import { AdaptiveLearningInsights } from "@/components/AdaptiveLearningInsights";
 import { AdaptiveGoalSetting } from "@/components/AdaptiveGoalSetting";
 import { useAdaptiveLearning } from "@/hooks/useAdaptiveLearning";
@@ -17,8 +15,7 @@ import { useAdaptiveLearning } from "@/hooks/useAdaptiveLearning";
 export default function StudentDashboard() {
   const [studentData, setStudentData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
-  const supabase = useSupabaseClient();
+  const navigate = useNavigate();
   const user = useUser();
 
   // Add adaptive learning hook
@@ -29,23 +26,15 @@ export default function StudentDashboard() {
     loading: adaptiveLoading
   } = useAdaptiveLearning(user?.id || null);
 
-  const {
-    predictiveAlerts,
-    miniLessons,
-    loading: supercoachLoading,
-    runPredictiveDetection,
-    generateAdaptiveMiniLesson
-  } = useSupercoachIntegration(user?.id);
-
   useEffect(() => {
     if (!user) {
       // If not logged in, redirect to login page
-      router.push('/login');
+      navigate('/auth');
     } else {
       // Fetch student data
       fetchStudentData();
     }
-  }, [user, router]);
+  }, [user, navigate]);
 
   const fetchStudentData = async () => {
     if (!user) return;
@@ -67,7 +56,7 @@ export default function StudentDashboard() {
       const { data: contentScores, error: contentError } = await supabase
         .from('content_skill_scores')
         .select('*')
-        .eq('student_id', user.id);
+        .eq('authenticated_student_id', user.id);
 
       if (contentError) {
         console.error('Error fetching content skill scores:', contentError);
@@ -77,7 +66,7 @@ export default function StudentDashboard() {
       const { data: subjectScores, error: subjectError } = await supabase
         .from('subject_skill_scores')
         .select('*')
-        .eq('student_id', user.id);
+        .eq('authenticated_student_id', user.id);
 
       if (subjectError) {
         console.error('Error fetching subject skill scores:', subjectError);
@@ -87,7 +76,7 @@ export default function StudentDashboard() {
       const { data: testResults, error: testError } = await supabase
         .from('test_results')
         .select('*')
-        .eq('student_id', user.id);
+        .eq('authenticated_student_id', user.id);
 
       if (testError) {
         console.error('Error fetching test results:', testError);
@@ -95,9 +84,9 @@ export default function StudentDashboard() {
 
       // Group skills by category
       const groupedSkills = {
-        math: contentScores?.filter(skill => skill.category === 'math') || [],
-        science: contentScores?.filter(skill => skill.category === 'science') || [],
-        english: contentScores?.filter(skill => skill.category === 'english') || []
+        math: contentScores?.filter(skill => skill.skill_name?.toLowerCase().includes('math')) || [],
+        science: contentScores?.filter(skill => skill.skill_name?.toLowerCase().includes('science')) || [],
+        english: contentScores?.filter(skill => skill.skill_name?.toLowerCase().includes('english')) || []
       };
 
       setStudentData({
@@ -124,12 +113,11 @@ export default function StudentDashboard() {
             <div className="py-8 text-base leading-normal text-gray-500 text-center">
               Please sign in to access your dashboard.
             </div>
-            <Auth
-              supabaseClient={supabase}
-              appearance={{ theme: ThemeSupa }}
-              session={null}
-              providers={['google', 'github']}
-            />
+            <div className="text-center">
+              <Button onClick={() => navigate('/auth')}>
+                Go to Login
+              </Button>
+            </div>
           </div>
         </div>
       </div>

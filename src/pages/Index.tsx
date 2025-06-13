@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { StudentDashboard } from "@/components/StudentDashboard";
+import { TeacherDashboardView } from "@/components/TeacherDashboardView";
 import { StudentSearch } from "@/components/StudentSearch";
 import { LearnerProfileDisplay } from "@/components/LearnerProfileDisplay";
 import { ClassView } from "@/components/ClassView";
@@ -122,7 +122,7 @@ const Index = () => {
       default:
         return (
           <div className="p-6">
-            <StudentDashboard onSelectStudent={handleSelectStudent} />
+            <TeacherDashboardView onSelectStudent={handleSelectStudent} />
           </div>
         );
     }
