@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { skillClassificationService } from './skillClassification/SkillClassificationService';
 
@@ -10,6 +9,8 @@ export interface PracticeExerciseSkillUpdate {
   exerciseScore: number;
   exerciseData: any;
   classId?: string; // Add class context
+  sessionType?: 'practice_exercise' | 'trailblazer' | 'class_session'; // Add session type
+  sessionId?: string; // Add session ID
 }
 
 export interface SkillScoreCalculation {
