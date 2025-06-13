@@ -317,16 +317,28 @@ export class SupercoachService {
    */
   static async markMiniLessonViewed(miniLessonId: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('mini_lessons')
-        .update({
-          viewed_count: supabase.sql`viewed_count + 1`,
-          last_viewed_at: new Date().toISOString()
-        })
-        .eq('id', miniLessonId);
+      // Fix: Use standard SQL instead of supabase.sql
+      const { error } = await supabase.rpc('increment_mini_lesson_views', {
+        lesson_id: miniLessonId
+      });
 
       if (error) {
-        console.error('❌ Error marking mini-lesson as viewed:', error);
+        // Fallback to manual update if RPC doesn't exist
+        const { data: currentLesson } = await supabase
+          .from('mini_lessons')
+          .select('viewed_count')
+          .eq('id', miniLessonId)
+          .single();
+
+        const newCount = (currentLesson?.viewed_count || 0) + 1;
+        
+        await supabase
+          .from('mini_lessons')
+          .update({
+            viewed_count: newCount,
+            last_viewed_at: new Date().toISOString()
+          })
+          .eq('id', miniLessonId);
       }
     } catch (error) {
       console.error('❌ Exception marking mini-lesson as viewed:', error);
