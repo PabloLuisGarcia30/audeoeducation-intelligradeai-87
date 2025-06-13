@@ -62,12 +62,13 @@ export class EnhancedBatchProcessingService {
         lastModified: file.lastModified
       }));
 
-      // Submit job to database queue
+      // Submit job to database queue with proper payload structure
       const result = await GradingQueueService.submitGradingJob(
-        filesData,
+        filesData, // Pass filesData as the questions parameter
         {
           batchProcessing: true,
-          filesData: filesData
+          filesData: filesData,
+          method: 'batch_file_processing'
         },
         {
           priority: priority
@@ -92,11 +93,13 @@ export class EnhancedBatchProcessingService {
       if (!job) return null;
 
       // Convert database job to EnhancedBatchJob format
+      const filesData = job.payload?.filesData || [];
+      
       return {
         id: job.id,
-        files: job.payload?.filesData || [],
-        status: job.status,
-        priority: job.priority,
+        files: filesData,
+        status: job.status as any,
+        priority: job.priority as any,
         createdAt: new Date(job.created_at).getTime(),
         startedAt: job.started_at ? new Date(job.started_at).getTime() : undefined,
         completedAt: job.completed_at ? new Date(job.completed_at).getTime() : undefined,
@@ -163,7 +166,7 @@ export class EnhancedBatchProcessingService {
           queueDepth: stats.pending_jobs,
           totalJobsProcessed: stats.completed_jobs_today + stats.failed_jobs_today,
           currentThroughput: stats.completed_jobs_today,
-          successRate: stats.completed_jobs_today / Math.max(1, stats.completed_jobs_today + stats.failed_jobs_today) * 100,
+          successRate: stats.completed_jobs_today / Math.max(1, stats.completed_jobs_today + stats.failed_jobs_today),
           averageProcessingTime: stats.avg_processing_time_ms || 0
         },
         autoScaling: {
@@ -210,11 +213,13 @@ export class EnhancedBatchProcessingService {
   // Helper methods
   private static async convertDbJobToEnhanced(dbJob: any): Promise<EnhancedBatchJob | null> {
     try {
+      const filesData = dbJob.payload?.filesData || [];
+      
       return {
         id: dbJob.id,
-        files: dbJob.payload?.filesData || [],
-        status: dbJob.status,
-        priority: dbJob.priority,
+        files: filesData,
+        status: dbJob.status as any,
+        priority: dbJob.priority as any,
         createdAt: new Date(dbJob.created_at).getTime(),
         startedAt: dbJob.started_at ? new Date(dbJob.started_at).getTime() : undefined,
         completedAt: dbJob.completed_at ? new Date(dbJob.completed_at).getTime() : undefined,
@@ -238,7 +243,13 @@ export class EnhancedBatchProcessingService {
   private static calculateProgress(dbJob: any): number {
     if (dbJob.status === 'completed') return 100;
     if (dbJob.status === 'failed') return 0;
-    if (dbJob.status === 'processing') return 50; // Estimate
+    if (dbJob.status === 'processing') {
+      // Check if we have progress data in result_payload
+      if (dbJob.result_payload?.progress) {
+        return dbJob.result_payload.progress;
+      }
+      return 50; // Default estimate
+    }
     return 0;
   }
 

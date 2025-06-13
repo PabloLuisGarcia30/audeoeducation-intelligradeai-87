@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { enhancedBatchService, EnhancedBatchJob } from '@/services/enhancedBatchProcessingService';
+import { enhancedBatchService, EnhancedBatchJob, EnhancedProcessingQueue } from '@/services/enhancedBatchProcessingService';
 import { SystemDashboard } from './SystemDashboard';
 
 interface EnhancedBatchProcessingManagerProps {
@@ -17,15 +17,29 @@ interface EnhancedBatchProcessingManagerProps {
 export const EnhancedBatchProcessingManager: React.FC<EnhancedBatchProcessingManagerProps> = ({
   onJobComplete
 }) => {
-  const [queueStatus, setQueueStatus] = useState(enhancedBatchService.getQueueStatus());
+  const [queueStatus, setQueueStatus] = useState<EnhancedProcessingQueue | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [autoScalingEnabled, setAutoScalingEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setQueueStatus(enhancedBatchService.getQueueStatus());
-    }, 2000); // Update every 2 seconds for more responsive UI
+    const loadQueueStatus = async () => {
+      try {
+        const status = await enhancedBatchService.getQueueStatus();
+        setQueueStatus(status);
+      } catch (error) {
+        console.error('Error loading queue status:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Load initial status
+    loadQueueStatus();
+
+    // Update every 2 seconds for more responsive UI
+    const interval = setInterval(loadQueueStatus, 2000);
 
     return () => clearInterval(interval);
   }, []);
@@ -75,16 +89,18 @@ export const EnhancedBatchProcessingManager: React.FC<EnhancedBatchProcessingMan
     }
   };
 
-  const handlePauseJob = (jobId: string) => {
-    if (enhancedBatchService.pauseJob(jobId)) {
+  const handlePauseJob = async (jobId: string) => {
+    const success = await enhancedBatchService.pauseJob(jobId);
+    if (success) {
       toast.info('Job paused');
     } else {
       toast.error('Failed to pause job');
     }
   };
 
-  const handleResumeJob = (jobId: string) => {
-    if (enhancedBatchService.resumeJob(jobId)) {
+  const handleResumeJob = async (jobId: string) => {
+    const success = await enhancedBatchService.resumeJob(jobId);
+    if (success) {
       toast.info('Job resumed');
     } else {
       toast.error('Failed to resume job');
@@ -134,6 +150,24 @@ export const EnhancedBatchProcessingManager: React.FC<EnhancedBatchProcessingMan
       default: return 'default';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Clock className="h-6 w-6 animate-spin mr-2" />
+        <span>Loading queue status...</span>
+      </div>
+    );
+  }
+
+  if (!queueStatus) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <AlertCircle className="h-6 w-6 text-red-500 mr-2" />
+        <span>Failed to load queue status</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -247,7 +281,7 @@ export const EnhancedBatchProcessingManager: React.FC<EnhancedBatchProcessingMan
                   className="h-2" 
                 />
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>Success Rate: {Math.round(queueStatus.stats.successRate * 100)}%</span>
+                  <span>Success Rate: {Math.round(queueStatus.stats.successRate)}%</span>
                   <span>Avg Time: {Math.round(queueStatus.stats.averageProcessingTime / 1000)}s</span>
                 </div>
               </div>
