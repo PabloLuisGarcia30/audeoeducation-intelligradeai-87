@@ -1,342 +1,294 @@
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { 
+  Brain, 
   TrendingUp, 
   Target, 
   Calendar,
-  Award,
-  BarChart3,
+  Trophy,
+  AlertCircle,
+  CheckCircle2,
   Clock,
-  Brain,
-  CheckCircle2
+  BarChart3
 } from "lucide-react";
-import { StudentGoal, GoalAchievement, GoalAnalytics } from "@/services/smartGoalService";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { SmartGoalService, type GoalAnalytics, type StudentGoal } from "@/services/smartGoalService";
 
 interface GoalInsightsPanelProps {
-  analytics: GoalAnalytics | null;
-  goals: StudentGoal[];
-  achievements: GoalAchievement[];
+  studentId: string;
 }
 
-export function GoalInsightsPanel({ analytics, goals, achievements }: GoalInsightsPanelProps) {
-  // Calculate insights
-  const totalGoals = goals.length;
-  const activeGoals = goals.filter(g => g.status === 'active').length;
-  const completedGoals = goals.filter(g => g.status === 'completed').length;
-  const pausedGoals = goals.filter(g => g.status === 'paused').length;
+export function GoalInsightsPanel({ studentId }: GoalInsightsPanelProps) {
+  const [analytics, setAnalytics] = useState<GoalAnalytics | null>(null);
+  const [goals, setGoals] = useState<StudentGoal[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Goal completion rate over time
-  const completionTimeline = achievements
-    .filter(a => a.achievement_type === 'goal_completion')
-    .reduce((acc, achievement) => {
-      const date = achievement.achieved_at.split('T')[0];
-      acc[date] = (acc[date] || 0) + 1;
+  useEffect(() => {
+    loadInsights();
+  }, [studentId]);
+
+  const loadInsights = async () => {
+    try {
+      setLoading(true);
+      const [analyticsData, goalsData] = await Promise.all([
+        SmartGoalService.getGoalAnalytics(studentId),
+        SmartGoalService.getStudentGoals(studentId)
+      ]);
+      
+      setAnalytics(analyticsData);
+      setGoals(goalsData);
+    } catch (error) {
+      console.error('Failed to load goal insights:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getInsights = () => {
+    if (!analytics || goals.length === 0) return [];
+
+    const insights = [];
+    const activeGoals = goals.filter(g => g.status === 'active');
+    const completedGoals = goals.filter(g => g.status === 'completed');
+
+    // Completion rate insight
+    if (goals.length > 0) {
+      const completionRate = (completedGoals.length / goals.length) * 100;
+      insights.push({
+        type: completionRate >= 70 ? 'success' : completionRate >= 40 ? 'warning' : 'info',
+        icon: completionRate >= 70 ? CheckCircle2 : completionRate >= 40 ? Clock : AlertCircle,
+        title: 'Goal Completion Rate',
+        description: `You've completed ${Math.round(completionRate)}% of your goals`,
+        value: `${completedGoals.length}/${goals.length}`,
+        progress: completionRate
+      });
+    }
+
+    // Progress momentum insight
+    if (activeGoals.length > 0) {
+      const avgProgress = activeGoals.reduce((sum, goal) => sum + goal.progress_percentage, 0) / activeGoals.length;
+      insights.push({
+        type: avgProgress >= 70 ? 'success' : avgProgress >= 40 ? 'warning' : 'info',
+        icon: TrendingUp,
+        title: 'Current Momentum',
+        description: `Average progress across active goals`,
+        value: `${Math.round(avgProgress)}%`,
+        progress: avgProgress
+      });
+    }
+
+    // Goal type performance
+    const goalTypePerformance = goals.reduce((acc, goal) => {
+      if (!acc[goal.goal_type]) {
+        acc[goal.goal_type] = { total: 0, completed: 0 };
+      }
+      acc[goal.goal_type].total++;
+      if (goal.status === 'completed') {
+        acc[goal.goal_type].completed++;
+      }
       return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, { total: number; completed: number }>);
 
-  const timelineData = Object.entries(completionTimeline)
-    .map(([date, count]) => ({ date, completions: count }))
-    .slice(-7); // Last 7 days
+    const bestPerformingType = Object.entries(goalTypePerformance)
+      .map(([type, data]) => ({
+        type,
+        rate: data.total > 0 ? (data.completed / data.total) * 100 : 0
+      }))
+      .sort((a, b) => b.rate - a.rate)[0];
 
-  // Goal type distribution
-  const goalTypeData = goals.reduce((acc, goal) => {
-    const type = goal.goal_type.replace('_', ' ');
-    acc[type] = (acc[type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const pieChartData = Object.entries(goalTypeData).map(([type, count]) => ({
-    name: type,
-    value: count,
-    percentage: Math.round((count / totalGoals) * 100)
-  }));
-
-  // Success metrics by difficulty
-  const difficultyStats = goals.reduce((acc, goal) => {
-    const level = goal.difficulty_level;
-    if (!acc[level]) {
-      acc[level] = { total: 0, completed: 0, avgProgress: 0 };
+    if (bestPerformingType && bestPerformingType.rate > 0) {
+      insights.push({
+        type: 'success',
+        icon: Trophy,
+        title: 'Strongest Goal Type',
+        description: `You excel at ${bestPerformingType.type.replace('_', ' ')} goals`,
+        value: `${Math.round(bestPerformingType.rate)}% success`,
+        progress: bestPerformingType.rate
+      });
     }
-    acc[level].total++;
-    if (goal.status === 'completed') acc[level].completed++;
-    acc[level].avgProgress += goal.progress_percentage;
-    return acc;
-  }, {} as Record<string, { total: number; completed: number; avgProgress: number }>);
 
-  Object.keys(difficultyStats).forEach(level => {
-    difficultyStats[level].avgProgress = 
-      Math.round(difficultyStats[level].avgProgress / difficultyStats[level].total);
-  });
+    return insights;
+  };
 
-  const difficultyChartData = Object.entries(difficultyStats).map(([level, stats]) => ({
-    difficulty: level,
-    successRate: Math.round((stats.completed / stats.total) * 100),
-    avgProgress: stats.avgProgress,
-    total: stats.total
-  }));
+  const getRecommendations = () => {
+    if (!analytics || goals.length === 0) return [];
 
-  // Current streak calculation
-  const sortedCompletions = achievements
-    .filter(a => a.achievement_type === 'goal_completion')
-    .sort((a, b) => new Date(b.achieved_at).getTime() - new Date(a.achieved_at).getTime());
+    const recommendations = [];
+    const activeGoals = goals.filter(g => g.status === 'active');
 
-  let currentStreak = 0;
-  let lastDate = new Date();
-  
-  for (const completion of sortedCompletions) {
-    const completionDate = new Date(completion.achieved_at);
-    const daysDiff = Math.floor((lastDate.getTime() - completionDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff <= 7) { // Within a week
-      currentStreak++;
-      lastDate = completionDate;
-    } else {
-      break;
+    // Too many active goals
+    if (activeGoals.length > 5) {
+      recommendations.push({
+        type: 'warning',
+        title: 'Focus Your Energy',
+        description: 'Consider focusing on fewer goals for better success rates',
+        action: 'Pause some goals to concentrate on your priorities'
+      });
     }
+
+    // No recent activity
+    const recentGoals = goals.filter(g => {
+      const createdDate = new Date(g.created_at);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return createdDate > weekAgo;
+    });
+
+    if (recentGoals.length === 0 && goals.length > 0) {
+      recommendations.push({
+        type: 'info',
+        title: 'Time for New Challenges',
+        description: 'You haven\'t set any new goals recently',
+        action: 'Consider setting a new goal to maintain momentum'
+      });
+    }
+
+    // Stalled goals
+    const stalledGoals = activeGoals.filter(g => g.progress_percentage < 20);
+    if (stalledGoals.length > 0) {
+      recommendations.push({
+        type: 'warning',
+        title: 'Goals Need Attention',
+        description: `${stalledGoals.length} goals have low progress`,
+        action: 'Review and adjust these goals or break them into smaller steps'
+      });
+    }
+
+    return recommendations;
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        {[1, 2, 3].map(i => (
+          <Card key={i}>
+            <CardContent className="p-6">
+              <div className="animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
   }
 
-  const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+  const insights = getInsights();
+  const recommendations = getRecommendations();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold mb-2">Goal Insights & Analytics</h2>
-        <p className="text-gray-600">Understand your goal-setting patterns and success metrics</p>
-      </div>
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-blue-500" />
-              <div>
-                <p className="text-sm text-gray-600">Success Rate</p>
-                <p className="text-2xl font-bold">
-                  {totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0}%
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-500" />
-              <div>
-                <p className="text-sm text-gray-600">Current Streak</p>
-                <p className="text-2xl font-bold">{currentStreak}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-purple-500" />
-              <div>
-                <p className="text-sm text-gray-600">Avg. Completion</p>
-                <p className="text-2xl font-bold">
-                  {analytics?.avg_completion_time_days ? `${Math.round(analytics.avg_completion_time_days)}d` : '-'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-yellow-500" />
-              <div>
-                <p className="text-sm text-gray-600">Achievements</p>
-                <p className="text-2xl font-bold">{achievements.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Goal Distribution */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Goal Distribution by Type</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pieChartData.length > 0 ? (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percentage }) => `${name}: ${percentage}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {pieChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                <div className="text-center">
-                  <BarChart3 className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                  <p>No goals to analyze yet</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Success Rate by Difficulty</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {difficultyChartData.length > 0 ? (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={difficultyChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="difficulty" />
-                    <YAxis domain={[0, 100]} />
-                    <Tooltip formatter={(value, name) => [`${value}%`, 'Success Rate']} />
-                    <Bar dataKey="successRate" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                <div className="text-center">
-                  <Target className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                  <p>No difficulty data available</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Performance Insights */}
       <Card>
         <CardHeader>
-          <CardTitle>Performance Insights</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-blue-500" />
+            Goal Performance Insights
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-2 gap-6">
+          {insights.length > 0 ? (
             <div className="space-y-4">
-              <h4 className="font-medium flex items-center gap-2">
-                <Brain className="h-4 w-4 text-blue-500" />
-                Learning Patterns
-              </h4>
-              
-              <div className="space-y-3 text-sm">
-                {analytics?.most_successful_goal_type && analytics.most_successful_goal_type !== 'none' && (
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded">
-                    <span>Most successful goal type:</span>
-                    <Badge className="bg-green-100 text-green-800 capitalize">
-                      {analytics.most_successful_goal_type.replace('_', ' ')}
-                    </Badge>
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded">
-                  <span>Goal completion rate:</span>
-                  <span className="font-medium">
-                    {totalGoals > 0 ? Math.round((completedGoals / totalGoals) * 100) : 0}%
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-purple-50 rounded">
-                  <span>Active goal focus:</span>
-                  <span className="font-medium">
-                    {activeGoals > 0 ? `${activeGoals} active goals` : 'No active goals'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="font-medium flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                Recent Progress
-              </h4>
-              
-              <div className="space-y-3">
-                {goals.filter(g => g.status === 'active').slice(0, 3).map(goal => (
-                  <div key={goal.id} className="p-3 bg-gray-50 rounded">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">{goal.goal_title}</span>
-                      <span className="text-sm text-gray-600">
-                        {Math.round(goal.progress_percentage)}%
-                      </span>
+              {insights.map((insight, index) => {
+                const Icon = insight.icon;
+                return (
+                  <div key={index} className="flex items-start gap-3 p-4 border rounded-lg">
+                    <div className={`p-2 rounded-lg ${
+                      insight.type === 'success' ? 'bg-green-100' :
+                      insight.type === 'warning' ? 'bg-yellow-100' :
+                      'bg-blue-100'
+                    }`}>
+                      <Icon className={`h-5 w-5 ${
+                        insight.type === 'success' ? 'text-green-600' :
+                        insight.type === 'warning' ? 'text-yellow-600' :
+                        'text-blue-600'
+                      }`} />
                     </div>
-                    <Progress value={goal.progress_percentage} className="h-2" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800">{insight.title}</h4>
+                      <p className="text-sm text-gray-600 mb-2">{insight.description}</p>
+                      <div className="flex items-center gap-3">
+                        <Progress value={insight.progress} className="flex-1 h-2" />
+                        <span className="text-sm font-medium">{insight.value}</span>
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-8">
+              <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">Set some goals to see performance insights!</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Recommendations */}
-      {totalGoals > 0 && (
+      {/* AI Recommendations */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-purple-500" />
+            Smart Recommendations
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {recommendations.length > 0 ? (
+            <div className="space-y-3">
+              {recommendations.map((rec, index) => (
+                <div key={index} className={`p-4 rounded-lg border-l-4 ${
+                  rec.type === 'warning' ? 'border-yellow-400 bg-yellow-50' :
+                  'border-blue-400 bg-blue-50'
+                }`}>
+                  <h4 className="font-semibold text-gray-800">{rec.title}</h4>
+                  <p className="text-sm text-gray-600 mb-2">{rec.description}</p>
+                  <p className="text-sm font-medium text-gray-700">{rec.action}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">You're doing great!</h3>
+              <p className="text-gray-600">No recommendations at the moment. Keep up the excellent work!</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Goal Analytics Summary */}
+      {analytics && (
         <Card>
           <CardHeader>
-            <CardTitle>Recommendations</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-green-500" />
+              Goal Statistics
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {completedGoals === 0 && activeGoals > 0 && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-sm text-blue-800">
-                    <strong>Focus on completion:</strong> You have {activeGoals} active goals. 
-                    Consider focusing on completing one before starting new ones.
-                  </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <div className="text-2xl font-bold text-blue-700">{analytics.total_goals}</div>
+                <div className="text-sm text-blue-600">Total Goals</div>
+              </div>
+              <div className="text-center p-3 bg-green-50 rounded-lg">
+                <div className="text-2xl font-bold text-green-700">{analytics.completed_goals}</div>
+                <div className="text-sm text-green-600">Completed</div>
+              </div>
+              <div className="text-center p-3 bg-purple-50 rounded-lg">
+                <div className="text-2xl font-bold text-purple-700">{analytics.active_goals}</div>
+                <div className="text-sm text-purple-600">Active</div>
+              </div>
+              <div className="text-center p-3 bg-orange-50 rounded-lg">
+                <div className="text-2xl font-bold text-orange-700">
+                  {analytics.avg_completion_time_days ? Math.round(analytics.avg_completion_time_days) : 0}
                 </div>
-              )}
-
-              {pausedGoals > 0 && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm text-yellow-800">
-                    <strong>Revisit paused goals:</strong> You have {pausedGoals} paused goals. 
-                    Consider reviewing them and either resuming or archiving them.
-                  </p>
-                </div>
-              )}
-
-              {completedGoals > 0 && completedGoals / totalGoals > 0.7 && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded">
-                  <p className="text-sm text-green-800">
-                    <strong>Great success rate!</strong> You're completing {Math.round((completedGoals / totalGoals) * 100)}% 
-                    of your goals. Consider setting more ambitious targets.
-                  </p>
-                </div>
-              )}
-
-              {analytics?.avg_completion_time_days && analytics.avg_completion_time_days < 7 && (
-                <div className="p-3 bg-purple-50 border border-purple-200 rounded">
-                  <p className="text-sm text-purple-800">
-                    <strong>Quick achiever:</strong> You complete goals quickly! 
-                    Consider setting longer-term or more challenging objectives.
-                  </p>
-                </div>
-              )}
+                <div className="text-sm text-orange-600">Avg Days</div>
+              </div>
             </div>
           </CardContent>
         </Card>

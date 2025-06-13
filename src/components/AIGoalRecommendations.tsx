@@ -1,4 +1,5 @@
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,62 +13,80 @@ import {
   RefreshCw,
   Plus
 } from "lucide-react";
-import { AIGoalRecommendation } from "@/services/smartGoalService";
+import { SmartGoalService, type AIGoalRecommendation, type StudentGoal } from "@/services/smartGoalService";
+import { toast } from "sonner";
 
 interface AIGoalRecommendationsProps {
-  recommendations: AIGoalRecommendation[];
-  onAcceptGoal: (recommendation: AIGoalRecommendation) => void;
-  onRefresh: () => void;
-  loading: boolean;
+  studentId: string;
+  onGoalCreated: (newGoal: StudentGoal) => void;
 }
 
-export function AIGoalRecommendations({ 
-  recommendations, 
-  onAcceptGoal, 
-  onRefresh, 
-  loading 
-}: AIGoalRecommendationsProps) {
-  const getGoalTypeIcon = (type: AIGoalRecommendation['goal_type']) => {
+export function AIGoalRecommendations({ studentId, onGoalCreated }: AIGoalRecommendationsProps) {
+  const [recommendations, setRecommendations] = useState<AIGoalRecommendation[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadRecommendations();
+  }, [studentId]);
+
+  const loadRecommendations = async () => {
+    try {
+      setLoading(true);
+      const data = await SmartGoalService.generateGoalRecommendations(studentId);
+      setRecommendations(data);
+    } catch (error) {
+      console.error('Failed to load AI recommendations:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptGoal = async (recommendation: AIGoalRecommendation) => {
+    try {
+      const newGoal = await SmartGoalService.createGoal(studentId, {
+        goal_title: recommendation.goal_title,
+        goal_description: recommendation.goal_description,
+        goal_type: recommendation.goal_type,
+        target_value: recommendation.target_value,
+        target_skill_name: recommendation.target_skill_name,
+        target_misconception_id: recommendation.target_misconception_id,
+        difficulty_level: recommendation.difficulty_level,
+        target_date: recommendation.target_date,
+        is_ai_suggested: true,
+        ai_confidence_score: recommendation.ai_confidence_score,
+        milestones: recommendation.milestones,
+        context_data: recommendation.context_data
+      });
+
+      if (newGoal) {
+        onGoalCreated(newGoal);
+        toast.success('AI-suggested goal created! 🎯');
+        // Remove the accepted recommendation
+        setRecommendations(prev => prev.filter(r => r.goal_title !== recommendation.goal_title));
+      }
+    } catch (error) {
+      toast.error('Failed to create goal');
+    }
+  };
+
+  const getGoalTypeIcon = (type: string) => {
     switch (type) {
-      case 'skill_mastery': return <Target className="h-4 w-4" />;
-      case 'misconception_resolution': return <Brain className="h-4 w-4" />;
-      case 'learning_velocity': return <TrendingUp className="h-4 w-4" />;
-      case 'consistency': return <Calendar className="h-4 w-4" />;
-      case 'time_based': return <Clock className="h-4 w-4" />;
-      default: return <Target className="h-4 w-4" />;
+      case 'skill_mastery': return Target;
+      case 'consistency': return Calendar;
+      case 'learning_velocity': return TrendingUp;
+      case 'misconception_resolution': return Brain;
+      default: return Target;
     }
   };
 
-  const getGoalTypeColor = (type: AIGoalRecommendation['goal_type']) => {
+  const getGoalTypeColor = (type: string) => {
     switch (type) {
-      case 'skill_mastery': return 'bg-blue-100 text-blue-800';
-      case 'misconception_resolution': return 'bg-purple-100 text-purple-800';
-      case 'learning_velocity': return 'bg-green-100 text-green-800';
-      case 'consistency': return 'bg-orange-100 text-orange-800';
-      case 'time_based': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-blue-100 text-blue-800';
+      case 'skill_mastery': return 'blue';
+      case 'consistency': return 'green';
+      case 'learning_velocity': return 'purple';
+      case 'misconception_resolution': return 'yellow';
+      default: return 'gray';
     }
-  };
-
-  const getDifficultyColor = (difficulty: AIGoalRecommendation['difficulty_level']) => {
-    switch (difficulty) {
-      case 'easy': return 'bg-green-100 text-green-800';
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'hard': return 'bg-red-100 text-red-800';
-      default: return 'bg-yellow-100 text-yellow-800';
-    }
-  };
-
-  const getConfidenceText = (score: number) => {
-    if (score >= 0.8) return 'High Confidence';
-    if (score >= 0.6) return 'Medium Confidence';
-    return 'Low Confidence';
-  };
-
-  const getConfidenceColor = (score: number) => {
-    if (score >= 0.8) return 'text-green-600';
-    if (score >= 0.6) return 'text-yellow-600';
-    return 'text-red-600';
   };
 
   if (loading) {
@@ -82,131 +101,90 @@ export function AIGoalRecommendations({
     );
   }
 
-  if (recommendations.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center">
-          <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Recommendations Yet</h3>
-          <p className="text-gray-600 mb-4">
-            Click the button below to get AI-powered goal suggestions based on your learning data.
-          </p>
-          <Button onClick={onRefresh}>
-            <Brain className="h-4 w-4 mr-2" />
-            Generate Recommendations
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">AI-Powered Goal Recommendations</h2>
-          <p className="text-gray-600">Personalized goals based on your learning analytics</p>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-purple-500" />
+            AI Goal Recommendations
+          </CardTitle>
+          <Button variant="outline" onClick={loadRecommendations} disabled={loading}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </div>
-        <Button variant="outline" onClick={onRefresh} disabled={loading}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
-
-      <div className="grid gap-6">
-        {recommendations.map((recommendation, index) => (
-          <Card key={index} className="border-l-4 border-l-blue-500">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {getGoalTypeIcon(recommendation.goal_type)}
-                  <div>
-                    <CardTitle className="text-lg">{recommendation.goal_title}</CardTitle>
-                    <p className="text-sm text-gray-600">{recommendation.goal_description}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge className={getGoalTypeColor(recommendation.goal_type)}>
-                    {recommendation.goal_type.replace('_', ' ')}
-                  </Badge>
-                  <Badge className={getDifficultyColor(recommendation.difficulty_level)}>
-                    {recommendation.difficulty_level}
-                  </Badge>
-                  <Badge variant="outline">
-                    <Brain className="h-3 w-3 mr-1" />
-                    AI
-                  </Badge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Goal Details */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Target:</span>
-                    <div className="font-medium">{recommendation.target_value}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Target Date:</span>
-                    <div className="font-medium">
-                      {new Date(recommendation.target_date).toLocaleDateString()}
+      </CardHeader>
+      <CardContent>
+        {recommendations.length > 0 ? (
+          <div className="space-y-4">
+            {recommendations.map((recommendation, index) => {
+              const Icon = getGoalTypeIcon(recommendation.goal_type);
+              const color = getGoalTypeColor(recommendation.goal_type);
+              
+              return (
+                <div key={index} className="border rounded-lg p-4 bg-gradient-to-r from-purple-50 to-blue-50">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg bg-${color}-100`}>
+                        <Icon className={`h-5 w-5 text-${color}-600`} />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-800">{recommendation.goal_title}</h4>
+                        <p className="text-sm text-gray-600">{recommendation.goal_description}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">AI Confidence:</span>
-                    <div className={`font-medium ${getConfidenceColor(recommendation.ai_confidence_score)}`}>
-                      {getConfidenceText(recommendation.ai_confidence_score)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Skill Focus */}
-                {recommendation.target_skill_name && (
-                  <div>
-                    <span className="text-sm text-gray-600">Focus Skill:</span>
-                    <Badge variant="outline" className="ml-2">
-                      {recommendation.target_skill_name}
+                    <Badge className="bg-purple-100 text-purple-700">
+                      <Brain className="h-3 w-3 mr-1" />
+                      AI Suggested
                     </Badge>
                   </div>
-                )}
-
-                {/* Milestones */}
-                {recommendation.milestones.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Milestones:</p>
-                    <div className="space-y-1">
-                      {recommendation.milestones.map((milestone, mIndex) => (
-                        <div key={mIndex} className="flex items-center gap-2 text-sm text-gray-600">
-                          <CheckCircle2 className="h-4 w-4 text-gray-300" />
-                          <span>{milestone.title} ({milestone.value})</span>
-                        </div>
-                      ))}
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
+                    <div>
+                      <span className="text-gray-500">Target:</span>
+                      <span className="ml-2 font-medium">{recommendation.target_value}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Difficulty:</span>
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        {recommendation.difficulty_level}
+                      </Badge>
                     </div>
                   </div>
-                )}
-
-                {/* AI Reasoning */}
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-blue-900 mb-1">Why this goal?</p>
-                  <p className="text-sm text-blue-800">{recommendation.reasoning}</p>
+                  
+                  <div className="bg-blue-50 p-3 rounded-lg mb-3">
+                    <p className="text-sm font-medium text-blue-900 mb-1">Why this goal?</p>
+                    <p className="text-sm text-blue-800">{recommendation.reasoning}</p>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <Button 
+                      onClick={() => handleAcceptGoal(recommendation)}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Accept This Goal
+                    </Button>
+                  </div>
                 </div>
-
-                {/* Action Button */}
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={() => onAcceptGoal(recommendation)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Accept This Goal
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Recommendations Available</h3>
+            <p className="text-gray-600 mb-4">
+              Complete some practice exercises to help our AI generate personalized goal recommendations for you!
+            </p>
+            <Button onClick={loadRecommendations}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Check for Recommendations
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
