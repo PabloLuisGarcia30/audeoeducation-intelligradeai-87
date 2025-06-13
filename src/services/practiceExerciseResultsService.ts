@@ -1,5 +1,7 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { skillClassificationService } from './skillClassification/SkillClassificationService';
+import { UnifiedHomeLearnerIntegration } from './unifiedHomeLearnerIntegration';
 
 export interface PracticeExerciseResult {
   exerciseId: string;
@@ -73,7 +75,31 @@ export class PracticeExerciseResultsService {
 
       console.log(`✅ ${result.skillType} skill score saved for ${result.skillName}: ${result.score}%`);
 
-      // 3. Update practice analytics
+      // 3. Integrate with unified results system
+      try {
+        await UnifiedHomeLearnerIntegration.recordPracticeCompletion(
+          result.studentId,
+          result.exerciseId,
+          result.skillName,
+          result.skillType,
+          result.score,
+          pointsEarned,
+          pointsPossible,
+          {
+            exercise_type: 'practice',
+            class_id: result.classId,
+            total_questions: result.totalQuestions,
+            questions_answered: result.questionsAnswered,
+            grading_method: 'standard'
+          }
+        );
+        console.log('✅ Integrated with unified results system');
+      } catch (unifiedError) {
+        console.warn('⚠️ Failed to integrate with unified results system:', unifiedError);
+        // Don't fail the main operation if unified integration fails
+      }
+
+      // 4. Update practice analytics
       await this.updatePracticeAnalytics(result.studentId, result.skillName, result.score);
 
       return { success: true };

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { updateExerciseStatus } from '@/services/classSessionService';
 import { practiceExerciseSkillService, type SkillScoreCalculation } from '@/services/practiceExerciseSkillService';
+import { UnifiedHomeLearnerIntegration } from '@/services/unifiedHomeLearnerIntegration';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface UsePracticeExerciseCompletionProps {
@@ -62,15 +63,43 @@ export function usePracticeExerciseCompletion({
       console.log('🔄 Processing skill score updates...');
       
       const skillUpdateResult = await practiceExerciseSkillService.processPracticeExerciseCompletion({
-        studentId: user.id, // Use authenticated user ID directly
+        studentId: user.id,
         exerciseId,
         skillName,
         exerciseScore: score,
-        exerciseData, // Pass complete exercise data including metadata
-        classId // Pass class context for proper association
+        exerciseData,
+        classId
       });
 
       console.log('📊 Skill update result:', skillUpdateResult);
+
+      // Integrate with unified results system
+      try {
+        const skillType = exerciseData?.skillType || exerciseData?.skillMetadata?.skillType || 'content';
+        const pointsEarned = Math.round((score / 100) * 10); // Scale to 10 points max
+        const pointsPossible = 10;
+
+        await UnifiedHomeLearnerIntegration.recordPracticeCompletion(
+          user.id,
+          exerciseId,
+          skillName,
+          skillType,
+          score,
+          pointsEarned,
+          pointsPossible,
+          {
+            exercise_type: 'practice',
+            class_id: classId,
+            total_questions: exerciseData?.totalQuestions || 4,
+            grading_method: 'enhanced_ai'
+          }
+        );
+
+        console.log('✅ Integrated practice exercise with unified results system');
+      } catch (error) {
+        console.warn('⚠️ Failed to integrate with unified results system:', error);
+        // Don't fail the main operation if unified integration fails
+      }
 
       if (!skillUpdateResult.success) {
         console.warn('⚠️ Skill score update failed:', skillUpdateResult.error);

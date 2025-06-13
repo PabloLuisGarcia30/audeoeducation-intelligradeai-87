@@ -44,23 +44,28 @@ export default function StudentResultsHistory() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
-  // Pablo Luis Garcia test student ID (from StudentDashboard.tsx)
-  const studentId = user?.id || 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26';
-
   useEffect(() => {
-    loadResultsData();
-  }, [studentId]);
+    if (user?.id) {
+      loadResultsData();
+    } else {
+      setLoading(false);
+    }
+  }, [user?.id]);
 
   const loadResultsData = async (days: number = 30) => {
-    if (!studentId) return;
+    if (!user?.id) {
+      console.warn('No authenticated user found for results history');
+      setLoading(false);
+      return;
+    }
     
     try {
       setLoading(true);
       
       const [skills, misconceptions, summary] = await Promise.all([
-        StudentResultsHistoryService.getSkillProgressionData(studentId, days),
-        StudentResultsHistoryService.getMisconceptionTrends(studentId, days),
-        StudentResultsHistoryService.getImprovementSummary(studentId, days)
+        StudentResultsHistoryService.getSkillProgressionData(user.id, days),
+        StudentResultsHistoryService.getMisconceptionTrends(user.id, days),
+        StudentResultsHistoryService.getImprovementSummary(user.id, days)
       ]);
       
       setSkillData(skills);
@@ -104,6 +109,21 @@ export default function StudentResultsHistory() {
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
   };
+
+  if (!user?.id) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <Brain className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Authentication Required</h3>
+          <p className="text-gray-600 mb-4">Please log in to view your results history.</p>
+          <Button onClick={() => navigate('/auth')}>
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
