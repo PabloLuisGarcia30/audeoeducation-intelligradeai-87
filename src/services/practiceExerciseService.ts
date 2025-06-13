@@ -62,7 +62,7 @@ export class PracticeExerciseService {
         improvement: improvement
       }];
 
-      // Save new skill scores to content_skill_scores table
+      // Save new skill scores to content_skill_scores table with proper linking
       await this.saveSkillScoreUpdate(
         updatedSession.student_id,
         updatedSession.skill_name,

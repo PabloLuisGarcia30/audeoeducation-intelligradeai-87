@@ -115,6 +115,29 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
     enabled: !!classId,
   });
 
+  // Check if we have real database data for Pablo
+  const { data: pabloRealSkillScores } = useQuery({
+    queryKey: ['pabloRealContentSkills', studentProfile?.id],
+    queryFn: async () => {
+      if (!studentProfile?.id || !isPabloLuisGarcia) return [];
+      
+      const { data, error } = await supabase
+        .from('content_skill_scores')
+        .select('*')
+        .eq('student_id', studentProfile.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching Pablo real skill scores:', error);
+        return [];
+      }
+
+      console.log('📊 Pablo real skill scores from database:', data?.length || 0, 'records');
+      return data || [];
+    },
+    enabled: !!studentProfile?.id && isPabloLuisGarcia,
+  });
+
   // Helper function to check if this student/class has mock data available
   const hasMockData = () => {
     if (isPabloLuisGarcia) {
@@ -146,6 +169,39 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
     }
     
     return false;
+  };
+
+  // Helper function to merge real and mock data for Pablo
+  const mergeRealAndMockData = (mockData: any[], realData: any[]) => {
+    if (!realData || realData.length === 0) {
+      return mockData;
+    }
+
+    // Create a map of real data by skill name (use most recent score for each skill)
+    const realDataMap = new Map();
+    realData.forEach(item => {
+      const existing = realDataMap.get(item.skill_name);
+      if (!existing || new Date(item.created_at) > new Date(existing.created_at)) {
+        realDataMap.set(item.skill_name, item);
+      }
+    });
+
+    // Merge: use real data where available, mock data otherwise
+    return mockData.map(mockItem => {
+      const realItem = realDataMap.get(mockItem.skill_name);
+      if (realItem) {
+        console.log(`🔄 Using real data for ${mockItem.skill_name}: ${realItem.score}% (was mock: ${mockItem.score}%)`);
+        return {
+          ...mockItem,
+          score: realItem.score,
+          points_earned: realItem.points_earned,
+          points_possible: realItem.points_possible,
+          created_at: realItem.created_at,
+          id: realItem.id
+        };
+      }
+      return mockItem;
+    });
   };
 
   // Fetch test results with mock data support for both students
@@ -185,9 +241,9 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
     enabled: !!(studentProfile?.id || studentId),
   });
 
-  // Fetch content skill scores with enhanced mock data support for both students
+  // Fetch content skill scores with enhanced mock data support and real data merging for Pablo
   const { data: contentSkillScores = [], isLoading: contentSkillsLoading } = useQuery({
-    queryKey: ['studentContentSkills', studentProfile?.id, studentId, classId, classData?.subject, classData?.grade, isClassView, student?.name],
+    queryKey: ['studentContentSkills', studentProfile?.id, studentId, classId, classData?.subject, classData?.grade, isClassView, student?.name, pabloRealSkillScores?.length],
     queryFn: async () => {
       console.log('Fetching content skills for:', { 
         studentName: student?.name, 
@@ -199,25 +255,29 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
         classSubject: classData?.subject,
         classGrade: classData?.grade,
         studentProfileId: studentProfile?.id,
-        hasMockData: hasMockData()
+        hasMockData: hasMockData(),
+        realDataCount: pabloRealSkillScores?.length || 0
       });
       
-      // Use mock data for Pablo Luis Garcia
+      // Use enhanced data merging for Pablo Luis Garcia
       if (isPabloLuisGarcia) {
         if (classData) {
-          // Class-specific mock data for Pablo
+          // Class-specific mock data for Pablo with real data overlay
           if (classData.subject === 'Geography' && classData.grade === 'Grade 11') {
-            console.log('Using mock Geography data for Pablo Luis Garcia');
-            return Promise.resolve(mockPabloGeographyContentSkillScores);
+            console.log('Using merged real + mock Geography data for Pablo Luis Garcia');
+            const mergedData = mergeRealAndMockData(mockPabloGeographyContentSkillScores, pabloRealSkillScores || []);
+            return Promise.resolve(mergedData);
           }
           if (classData.subject === 'Math' && classData.grade === 'Grade 10') {
-            console.log('Using mock Math data for Pablo Luis Garcia');
-            return Promise.resolve(mockPabloContentSkillScores);
+            console.log('Using merged real + mock Math data for Pablo Luis Garcia');
+            const mergedData = mergeRealAndMockData(mockPabloContentSkillScores, pabloRealSkillScores || []);
+            return Promise.resolve(mergedData);
           }
         } else {
-          // General profile view - use general mock data for Pablo
-          console.log('Using general mock content skills for Pablo Luis Garcia');
-          return Promise.resolve(mockPabloContentSkillScores);
+          // General profile view - use merged data for Pablo
+          console.log('Using merged real + mock content skills for Pablo Luis Garcia');
+          const mergedData = mergeRealAndMockData(mockPabloContentSkillScores, pabloRealSkillScores || []);
+          return Promise.resolve(mergedData);
         }
       }
 
@@ -244,7 +304,7 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
       return getStudentContentSkillScores(searchId);
     },
     enabled: !!student, // Wait for student data to load first
-    staleTime: hasMockData() ? 24 * 60 * 60 * 1000 : 0, // 24 hours cache for mock data
+    staleTime: hasMockData() ? 0 : 0, // Don't cache to always get fresh real data
   });
 
   // Fetch subject skill scores with enhanced mock data support for both students
@@ -401,7 +461,8 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
     usingMockData: hasMockData(),
     isPablo: isPabloLuisGarcia,
     isBetty: isBettyJohnson,
-    correctedProfileId: getCorrectStudentProfileId(student?.name)
+    correctedProfileId: getCorrectStudentProfileId(student?.name),
+    pabloRealDataCount: pabloRealSkillScores?.length || 0
   });
 
   return {
