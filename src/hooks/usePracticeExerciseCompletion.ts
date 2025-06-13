@@ -35,20 +35,31 @@ export function usePracticeExerciseCompletion({
         throw new Error('User must be authenticated to complete practice exercises');
       }
 
-      console.log('🎯 Completing practice exercise for authenticated user:', user.id, 'classId:', classId);
+      console.log('🎯 Completing practice exercise for authenticated user:', {
+        userId: user.id,
+        exerciseId,
+        score,
+        skillName,
+        classId,
+        hasExerciseData: !!exerciseData
+      });
       
       // Log skill metadata usage
       if (exerciseData?.skillType) {
         console.log('✅ Using stored skill type from exercise:', exerciseData.skillType);
+      } else if (exerciseData?.skillMetadata?.skillType) {
+        console.log('✅ Using skill type from metadata:', exerciseData.skillMetadata.skillType);
       } else {
-        console.warn('⚠️ No skill type metadata found in exercise data');
+        console.warn('⚠️ No skill type metadata found in exercise data, will use fallback detection');
       }
       
       // First update the exercise status
+      console.log('📝 Updating exercise status to completed');
       await updateExerciseStatus(exerciseId, 'completed', score);
       
       // Then process skill score updates using authenticated user ID with class context
       setIsUpdatingSkills(true);
+      console.log('🔄 Processing skill score updates...');
       
       const skillUpdateResult = await practiceExerciseSkillService.processPracticeExerciseCompletion({
         studentId: user.id, // Use authenticated user ID directly
@@ -59,14 +70,16 @@ export function usePracticeExerciseCompletion({
         classId // Pass class context for proper association
       });
 
+      console.log('📊 Skill update result:', skillUpdateResult);
+
       if (!skillUpdateResult.success) {
         console.warn('⚠️ Skill score update failed:', skillUpdateResult.error);
         toast.error('Exercise completed but skill scores could not be updated');
       } else {
-        console.log('✅ Skill scores updated successfully for authenticated user:', skillUpdateResult.skillUpdates);
+        console.log('✅ Skill scores updated successfully:', skillUpdateResult.skillUpdates);
         
         // Enhanced success message with skill type information
-        const skillType = exerciseData?.skillType;
+        const skillType = exerciseData?.skillType || exerciseData?.skillMetadata?.skillType;
         const improvementMessages = skillUpdateResult.skillUpdates
           .filter(update => update.updatedScore > update.currentScore)
           .map(update => `${update.skillName} (${update.skillType}): ${update.currentScore}% → ${update.updatedScore}%`);
@@ -91,15 +104,17 @@ export function usePracticeExerciseCompletion({
     onSuccess: () => {
       if (!user?.id) return;
       
+      console.log('🔄 Invalidating queries to refresh skill data');
+      
       // Invalidate relevant queries to refresh skill data using authenticated user ID
       queryClient.invalidateQueries({ 
-        queryKey: ['studentContentSkills', user.id] 
+        queryKey: ['studentContentSkills'] 
       });
       queryClient.invalidateQueries({ 
-        queryKey: ['studentSubjectSkills', user.id] 
+        queryKey: ['studentSubjectSkills'] 
       });
       queryClient.invalidateQueries({ 
-        queryKey: ['studentExercises', user.id] 
+        queryKey: ['studentExercises'] 
       });
     },
     onError: (error) => {

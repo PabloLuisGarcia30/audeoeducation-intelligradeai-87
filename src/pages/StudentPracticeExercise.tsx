@@ -14,6 +14,7 @@ import { StudentPracticeService } from "@/services/studentPracticeService";
 import { PracticeExerciseGenerationService } from "@/services/practiceExerciseGenerationService";
 import { PracticeAnswerKeyService } from "@/services/practiceAnswerKeyService";
 import { toast } from "sonner";
+import { PracticeExerciseResultsService } from "@/services/practiceExerciseResultsService";
 
 const StudentPracticeExercise = () => {
   const navigate = useNavigate();
@@ -182,7 +183,41 @@ const StudentPracticeExercise = () => {
       ? results.percentageScore - currentSkillScore 
       : 0;
     
-    // Update session score first
+    // NEW: Save practice exercise results directly using the simplified service
+    if (exerciseData && authenticatedUserId && currentClass) {
+      try {
+        // Determine skill type
+        const skillType = await PracticeExerciseResultsService.determineSkillType(
+          authenticatedUserId, 
+          decodedSkillName
+        );
+
+        // Save results directly
+        const saveResult = await PracticeExerciseResultsService.savePracticeExerciseResults({
+          exerciseId: exerciseData.exerciseId,
+          studentId: authenticatedUserId,
+          skillName: decodedSkillName,
+          skillType: skillType,
+          score: results.percentageScore,
+          questionsAnswered: results.questionResults?.length || questionCount,
+          totalQuestions: exerciseData.questions?.length || questionCount,
+          classId: currentClass.id
+        });
+
+        if (saveResult.success) {
+          console.log('✅ Practice exercise results saved successfully');
+          toast.success(`Exercise completed! You scored ${Math.round(results.percentageScore)}%${improvementShown > 0 ? ` (${Math.round(improvementShown)}% improvement!)` : ''}`);
+        } else {
+          console.error('❌ Failed to save practice exercise results:', saveResult.error);
+          toast.error('Exercise completed but results could not be saved');
+        }
+      } catch (error) {
+        console.error('❌ Error saving practice exercise results:', error);
+        toast.error('Exercise completed but results could not be saved');
+      }
+    }
+
+    // Update session score (keep existing functionality)
     if (sessionId && authenticatedUserId) {
       try {
         await StudentPracticeService.updatePracticeSessionScore(
@@ -199,30 +234,6 @@ const StudentPracticeExercise = () => {
         );
       } catch (error) {
         console.error('Error updating practice session:', error);
-      }
-    }
-
-    // Process skill score updates using the completion hook with class context
-    if (exerciseData && authenticatedUserId && currentClass) {
-      try {
-        await completeExercise({
-          exerciseId: exerciseData.exerciseId,
-          score: results.percentageScore,
-          skillName: decodedSkillName,
-          exerciseData: exerciseData,
-          classId: currentClass.id // Pass class context for proper association
-        });
-        
-        // Show improvement message with skill score updates
-        const improvementMsg = improvementShown > 0 
-          ? ` (${Math.round(improvementShown)}% improvement!)` 
-          : '';
-        
-        toast.success(`Exercise completed! You scored ${Math.round(results.percentageScore)}%${improvementMsg}`);
-        
-      } catch (error) {
-        console.error('Error processing skill updates:', error);
-        toast.success(`Exercise completed! You scored ${Math.round(results.percentageScore)}%${improvementShown > 0 ? ` (${Math.round(improvementShown)}% improvement!)` : ''}`);
       }
     }
   };

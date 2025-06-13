@@ -171,11 +171,14 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
     return false;
   };
 
-  // Helper function to merge real and mock data for Pablo
+  // Enhanced helper function to merge real and mock data for Pablo
   const mergeRealAndMockData = (mockData: any[], realData: any[]) => {
     if (!realData || realData.length === 0) {
+      console.log('📊 No real data found, using mock data');
       return mockData;
     }
+
+    console.log(`📊 Merging real data (${realData.length} records) with mock data (${mockData.length} records)`);
 
     // Create a map of real data by skill name (use most recent score for each skill)
     const realDataMap = new Map();
@@ -186,8 +189,10 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
       }
     });
 
+    console.log(`📊 Real data skills found: ${Array.from(realDataMap.keys()).join(', ')}`);
+
     // Merge: use real data where available, mock data otherwise
-    return mockData.map(mockItem => {
+    const mergedData = mockData.map(mockItem => {
       const realItem = realDataMap.get(mockItem.skill_name);
       if (realItem) {
         console.log(`🔄 Using real data for ${mockItem.skill_name}: ${realItem.score}% (was mock: ${mockItem.score}%)`);
@@ -202,6 +207,9 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
       }
       return mockItem;
     });
+
+    console.log(`📊 Final merged data: ${mergedData.length} skills total`);
+    return mergedData;
   };
 
   // Fetch test results with mock data support for both students
@@ -304,7 +312,7 @@ export function useStudentProfileData({ studentId, classId, className }: UseStud
       return getStudentContentSkillScores(searchId);
     },
     enabled: !!student, // Wait for student data to load first
-    staleTime: hasMockData() ? 0 : 0, // Don't cache to always get fresh real data
+    staleTime: 0, // Always fetch fresh data to get latest real scores
   });
 
   // Fetch subject skill scores with enhanced mock data support for both students
