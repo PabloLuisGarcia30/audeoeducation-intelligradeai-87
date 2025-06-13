@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,26 +76,15 @@ export function SmartGoalsManager() {
   const handleAcceptGoal = async (recommendation: AIGoalRecommendation) => {
     if (!user?.id) return;
 
-    const goalData: Partial<StudentGoal> = {
-      goal_title: recommendation.goal_title,
-      goal_description: recommendation.goal_description,
-      goal_type: recommendation.goal_type,
-      target_value: recommendation.target_value,
-      target_skill_name: recommendation.target_skill_name,
-      target_misconception_id: recommendation.target_misconception_id,
-      is_ai_suggested: true,
-      ai_confidence_score: recommendation.ai_confidence_score,
-      difficulty_level: recommendation.difficulty_level,
-      target_date: recommendation.target_date,
-      milestones: recommendation.milestones,
-      context_data: recommendation.context_data
-    };
-
-    const newGoal = await SmartGoalService.createGoal(user.id, goalData);
+    const newGoal = await SmartGoalService.createGoalFromRecommendation(user.id, recommendation);
     if (newGoal) {
       setGoals(prev => [newGoal, ...prev]);
       setRecommendations(prev => prev.filter(r => r.goal_title !== recommendation.goal_title));
     }
+  };
+
+  const handleGoalCreated = (newGoal: StudentGoal) => {
+    setGoals(prev => [newGoal, ...prev]);
   };
 
   const handleUpdateGoalStatus = async (goalId: string, status: StudentGoal['status']) => {
@@ -348,6 +336,8 @@ export function SmartGoalsManager() {
 
         <TabsContent value="recommendations">
           <AIGoalRecommendations 
+            studentId={user?.id || ''}
+            onGoalCreated={handleGoalCreated}
             recommendations={recommendations}
             onAcceptGoal={handleAcceptGoal}
             onRefresh={loadRecommendations}
@@ -364,6 +354,7 @@ export function SmartGoalsManager() {
 
         <TabsContent value="insights">
           <GoalInsightsPanel 
+            studentId={user?.id || ''}
             analytics={analytics}
             goals={goals}
             achievements={achievements}
