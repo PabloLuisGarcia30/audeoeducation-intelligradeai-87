@@ -20,6 +20,18 @@ export interface OpenAIResponse {
 }
 
 /**
+ * Clean OpenAI response by removing markdown formatting
+ */
+function cleanOpenAIResponse(rawContent: string): string {
+  return rawContent
+    .replace(/^```json\s*/, '') // Remove opening ```json
+    .replace(/\s*```$/, '')     // Remove closing ```
+    .replace(/^```\s*/, '')     // Remove opening ``` without json
+    .replace(/\s*```$/, '')     // Remove closing ``` again (in case of nested)
+    .trim();
+}
+
+/**
  * Standardized OpenAI API interaction
  */
 export async function callOpenAI(
@@ -37,6 +49,8 @@ export async function callOpenAI(
   if (!openAIApiKey) {
     throw new Error('OpenAI API key not configured');
   }
+
+  console.log(`🤖 Calling OpenAI with model: ${model}`);
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -58,6 +72,7 @@ export async function callOpenAI(
       ],
       temperature,
       max_tokens: maxTokens,
+      response_format: { type: "json_object" } // Force JSON response format
     }),
   });
 
@@ -74,6 +89,8 @@ export async function callOpenAI(
     throw new Error('No content received from OpenAI');
   }
 
+  console.log(`✅ OpenAI response received (${content.length} chars)`);
+
   return {
     content,
     usage: data.usage
@@ -81,24 +98,44 @@ export async function callOpenAI(
 }
 
 /**
- * Parse and validate JSON response from OpenAI
+ * Parse and validate JSON response from OpenAI with enhanced error handling
  */
-export function parseAndValidateJSON<T>(content: string, validator?: (data: any) => boolean): T {
-  let parsedData: T;
+export function parseAndValidateJSON<T>(
+  content: string, 
+  validator?: (data: any) => boolean,
+  context?: string
+): T {
+  const contextInfo = context ? ` for ${context}` : '';
   
   try {
-    parsedData = JSON.parse(content);
-  } catch (parseError) {
-    console.error('❌ Failed to parse OpenAI response:', content);
-    throw new Error('Invalid JSON response from OpenAI');
-  }
+    // Clean the response first
+    const cleanedContent = cleanOpenAIResponse(content);
+    console.log(`🧹 Cleaned OpenAI response${contextInfo}`);
+    
+    let parsedData: T;
+    
+    try {
+      parsedData = JSON.parse(cleanedContent);
+      console.log(`✅ Successfully parsed JSON${contextInfo}`);
+    } catch (parseError) {
+      console.error(`❌ JSON parsing failed${contextInfo}:`, parseError);
+      console.error('Raw content preview:', content.substring(0, 200));
+      console.error('Cleaned content preview:', cleanedContent.substring(0, 200));
+      throw new Error(`Invalid JSON response from OpenAI: ${parseError.message}`);
+    }
 
-  // Apply custom validation if provided
-  if (validator && !validator(parsedData)) {
-    throw new Error('Response validation failed');
-  }
+    // Apply custom validation if provided
+    if (validator && !validator(parsedData)) {
+      console.error(`❌ Validation failed${contextInfo}:`, parsedData);
+      throw new Error(`Response validation failed${contextInfo}`);
+    }
 
-  return parsedData;
+    return parsedData;
+    
+  } catch (error) {
+    console.error(`❌ Parse and validate error${contextInfo}:`, error);
+    throw error;
+  }
 }
 
 /**
@@ -109,13 +146,13 @@ export function buildEducationalSystemPrompt(type: 'exercise' | 'test' | 'practi
   
   switch (type) {
     case 'exercise':
-      return `${basePrompt} Create engaging, interactive exercises that help students improve their skills. Always respond with valid JSON only.`;
+      return `${basePrompt} Create engaging, interactive exercises that help students improve their skills. IMPORTANT: Respond with valid JSON only, no markdown formatting or code blocks. Do not wrap your response in \`\`\`json or \`\`\`.`;
     case 'test':
-      return `${basePrompt} Generate high-quality, educational questions that help students practice specific skills. Always respond with valid JSON only.`;
+      return `${basePrompt} Generate high-quality, educational questions that help students practice specific skills. IMPORTANT: Respond with valid JSON only, no markdown formatting or code blocks. Do not wrap your response in \`\`\`json or \`\`\`.`;
     case 'practice':
-      return `${basePrompt} Create personalized practice exercises. Always respond with valid JSON only.`;
+      return `${basePrompt} Create personalized practice exercises. IMPORTANT: Respond with valid JSON only, no markdown formatting or code blocks. Do not wrap your response in \`\`\`json or \`\`\`.`;
     default:
-      return `${basePrompt} Always respond with valid JSON only.`;
+      return `${basePrompt} IMPORTANT: Respond with valid JSON only, no markdown formatting or code blocks. Do not wrap your response in \`\`\`json or \`\`\`.`;
   }
 }
 
@@ -135,6 +172,8 @@ export function handleOpenAIError(error: any): Error {
     return new Error('Request timed out. Please try again.');
   } else if (errorMessage.includes('API key')) {
     return new Error('API configuration error. Please contact support.');
+  } else if (errorMessage.includes('Invalid JSON')) {
+    return new Error('AI response formatting error. Please try again.');
   } else {
     return new Error(errorMessage);
   }

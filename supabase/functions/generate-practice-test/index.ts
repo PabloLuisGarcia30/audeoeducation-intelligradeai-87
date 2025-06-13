@@ -8,10 +8,6 @@ import {
   buildEducationalSystemPrompt,
   handleOpenAIError 
 } from "../shared/openaiClient.ts";
-import {
-  validateExerciseData,
-  createErrorResponse
-} from "../shared/exerciseHelpers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,6 +63,40 @@ interface PracticeTestData {
   };
 }
 
+function validateExerciseData(data: any): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  if (!data || typeof data !== 'object') {
+    errors.push('Response is not a valid object');
+    return { isValid: false, errors };
+  }
+  
+  if (!data.title || typeof data.title !== 'string') {
+    errors.push('Missing or invalid title');
+  }
+  
+  if (!data.questions || !Array.isArray(data.questions)) {
+    errors.push('Missing or invalid questions array');
+    return { isValid: false, errors };
+  }
+  
+  if (data.questions.length === 0) {
+    errors.push('No questions provided');
+  }
+  
+  // Validate each question structure
+  data.questions.forEach((question: any, index: number) => {
+    if (!question.id) errors.push(`Question ${index + 1}: Missing id`);
+    if (!question.question) errors.push(`Question ${index + 1}: Missing question text`);
+    if (!question.type) errors.push(`Question ${index + 1}: Missing type`);
+    if (question.points === undefined || question.points === null) {
+      errors.push(`Question ${index + 1}: Missing points`);
+    }
+  });
+  
+  return { isValid: errors.length === 0, errors };
+}
+
 function buildSingleSkillPrompt(request: PracticeTestRequest): string {
   const { studentName, skillName, className, subject, grade, difficulty = 'mixed', questionCount = 5 } = request;
   
@@ -78,17 +108,17 @@ ${request.includeExplanations ? 'Include explanations for each answer.' : ''}
 
 Generate exactly ${questionCount} questions targeting ${skillName}. Mix question types but focus on the specific skill.
 
-Format as JSON:
+Return a JSON object with this exact structure:
 {
   "title": "${skillName} Practice Test",
   "description": "Practice test for ${skillName} skill",
   "questions": [
     {
       "id": "q1",
-      "type": "multiple-choice" | "short-answer" | "essay",
+      "type": "multiple-choice",
       "question": "Question text",
-      "options": ["A", "B", "C", "D"] (for multiple choice),
-      "correctAnswer": "Correct answer",
+      "options": ["A", "B", "C", "D"],
+      "correctAnswer": "A",
       "acceptableAnswers": ["Alternative answers"],
       "keywords": ["key", "words"],
       "points": 1,
@@ -120,17 +150,17 @@ ${request.includeExplanations ? 'Include explanations for each answer.' : ''}
 
 Generate exactly ${questionCount} questions distributed across the specified skills. Each question should target the specific skill mentioned.
 
-Format as JSON:
+Return a JSON object with this exact structure:
 {
   "title": "Practice Test Title",
   "description": "Brief description",
   "questions": [
     {
       "id": "q1",
-      "type": "multiple-choice" | "short-answer" | "essay",
+      "type": "multiple-choice",
       "question": "Question text",
-      "options": ["A", "B", "C", "D"] (for multiple choice),
-      "correctAnswer": "Correct answer",
+      "options": ["A", "B", "C", "D"],
+      "correctAnswer": "A",
       "acceptableAnswers": ["Alternative answers"],
       "keywords": ["key", "words"],
       "points": 1,
@@ -153,45 +183,77 @@ function buildPrompt(request: PracticeTestRequest): string {
   return buildSingleSkillPrompt(request);
 }
 
-async function generatePracticeTest(request: PracticeTestRequest): Promise<PracticeTestData> {
-  console.log('🎯 Generating practice test:', request);
+async function generatePracticeTestWithRetry(request: PracticeTestRequest, maxRetries = 2): Promise<PracticeTestData> {
+  const requestId = `${request.studentName}_${Date.now()}`;
+  console.log(`🎯 Generating practice test for ${requestId}:`, request);
   
-  const prompt = buildPrompt(request);
+  let lastError: Error | null = null;
   
-  try {
-    const openAIResponse = await callOpenAI(prompt, {
-      model: 'gpt-4o-mini',
-      systemPrompt: buildEducationalSystemPrompt('test'),
-      temperature: 0.7,
-      maxTokens: 2000
-    });
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      console.log(`📝 Attempt ${attempt}/${maxRetries + 1} for ${requestId}`);
+      
+      const prompt = buildPrompt(request);
+      
+      const openAIResponse = await callOpenAI(prompt, {
+        model: 'gpt-4o-mini',
+        systemPrompt: buildEducationalSystemPrompt('test'),
+        temperature: 0.7,
+        maxTokens: 2000
+      });
 
-    // Parse and validate the JSON response
-    const practiceTest = parseAndValidateJSON<PracticeTestData>(openAIResponse.content, (data) => {
-      const validation = validateExerciseData(data);
-      if (!validation.isValid) {
-        console.error('Practice test validation failed:', validation.errors);
-        return false;
+      // Parse and validate the JSON response with context
+      const practiceTest = parseAndValidateJSON<PracticeTestData>(
+        openAIResponse.content, 
+        (data) => {
+          const validation = validateExerciseData(data);
+          if (!validation.isValid) {
+            console.error(`❌ Practice test validation failed for ${requestId}:`, validation.errors);
+            return false;
+          }
+          return true;
+        },
+        `practice test generation for ${requestId}`
+      );
+
+      // Add metadata
+      practiceTest.metadata = {
+        skillName: request.skillName,
+        difficulty: request.difficulty || 'mixed',
+        generatedAt: new Date().toISOString(),
+        studentName: request.studentName,
+        className: request.className
+      };
+
+      console.log(`✅ Successfully generated practice test for ${requestId} with ${practiceTest.questions.length} questions`);
+      return practiceTest;
+
+    } catch (error) {
+      lastError = error as Error;
+      console.error(`❌ Attempt ${attempt} failed for ${requestId}:`, error);
+      
+      // If not the last attempt, wait before retrying
+      if (attempt <= maxRetries) {
+        const delay = 1000 * attempt; // Exponential backoff
+        console.log(`⏱️ Waiting ${delay}ms before retry for ${requestId}...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-      return true;
-    });
-
-    // Add metadata
-    practiceTest.metadata = {
-      skillName: request.skillName,
-      difficulty: request.difficulty || 'mixed',
-      generatedAt: new Date().toISOString(),
-      studentName: request.studentName,
-      className: request.className
-    };
-
-    console.log('✅ Successfully generated practice test with', practiceTest.questions.length, 'questions');
-    return practiceTest;
-
-  } catch (error) {
-    console.error('❌ Error generating practice test:', error);
-    throw handleOpenAIError(error);
+    }
   }
+
+  // All attempts failed
+  console.error(`❌ All attempts failed for ${requestId}. Final error:`, lastError);
+  throw handleOpenAIError(lastError);
+}
+
+function createErrorResponse(message: string, status = 500) {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { 
+      status, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    }
+  );
 }
 
 serve(async (req) => {
@@ -208,16 +270,10 @@ serve(async (req) => {
 
     // Validate required fields
     if (!requestData.studentName || !requestData.skillName || !requestData.className) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: studentName, skillName, className' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+      return createErrorResponse('Missing required fields: studentName, skillName, className', 400);
     }
 
-    const practiceTest = await generatePracticeTest(requestData);
+    const practiceTest = await generatePracticeTestWithRetry(requestData);
 
     return new Response(
       JSON.stringify(practiceTest),
