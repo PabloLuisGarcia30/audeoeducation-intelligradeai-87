@@ -21,7 +21,8 @@ import {
   BarChart3,
   Users,
   Award,
-  Compass
+  Compass,
+  MessageCircle
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -32,6 +33,7 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { RoleToggle } from "@/components/RoleToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDevRole } from "@/contexts/DevRoleContext";
+import { AIChatbox } from "@/components/AIChatbox";
 
 interface StudentProfile {
   id: string;
@@ -120,6 +122,41 @@ export default function StudentDashboard() {
 
   const overallGPA = mockProgressData.reduce((sum, subject) => sum + subject.progress, 0) / mockProgressData.length;
 
+  // Prepare student context for AI coach
+  const studentContext = {
+    studentName: studentProfile.name,
+    className: 'Grade 11 Advanced',
+    classSubject: 'Mathematics',
+    classGrade: 'Grade 11',
+    teacher: 'Ms. Johnson',
+    contentSkillScores: mockProgressData.map(subject => ({
+      skill_name: subject.subject,
+      score: subject.progress,
+      points_earned: Math.round(subject.progress * 0.9),
+      points_possible: 90
+    })),
+    subjectSkillScores: mockProgressData.map(subject => ({
+      skill_name: `${subject.subject} Analysis`,
+      score: subject.recentScore,
+      points_earned: Math.round(subject.recentScore * 0.8),
+      points_possible: 80
+    })),
+    testResults: mockRecentActivities.filter(activity => activity.type === 'assessment').map(test => ({
+      overall_score: test.score
+    })),
+    groupedSkills: {
+      'Core Skills': mockProgressData.map(subject => ({
+        skill_name: subject.subject,
+        score: subject.progress
+      })),
+      'Advanced Skills': mockProgressData.map(subject => ({
+        skill_name: `Advanced ${subject.subject}`,
+        score: subject.recentScore
+      }))
+    },
+    classId: 'test-class-id'
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -206,12 +243,16 @@ export default function StudentDashboard() {
 
         {/* Rest of the dashboard content */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="exercises">Practice</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
             <TabsTrigger value="goals">Goals</TabsTrigger>
             <TabsTrigger value="results-history">Results History</TabsTrigger>
+            <TabsTrigger value="ai-coach">
+              <MessageCircle className="h-4 w-4 mr-2" />
+              AI Coach
+            </TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -439,6 +480,20 @@ export default function StudentDashboard() {
                     View Detailed Results History
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="ai-coach" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5" />
+                  Your Personal AI Learning Coach
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AIChatbox studentContext={studentContext} />
               </CardContent>
             </Card>
           </TabsContent>
