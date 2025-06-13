@@ -2684,6 +2684,114 @@ export type Database = {
           },
         ]
       }
+      unified_student_misconceptions: {
+        Row: {
+          confidence_score: number | null
+          context_data: Json | null
+          correct_answer: string | null
+          created_at: string | null
+          detected_at: string | null
+          id: string
+          misconception_category: string | null
+          misconception_type: string
+          persistence_count: number | null
+          question_id: string | null
+          resolved: boolean | null
+          session_id: string | null
+          session_type: string
+          severity: string | null
+          skill_name: string
+          student_answer: string | null
+          student_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          context_data?: Json | null
+          correct_answer?: string | null
+          created_at?: string | null
+          detected_at?: string | null
+          id?: string
+          misconception_category?: string | null
+          misconception_type: string
+          persistence_count?: number | null
+          question_id?: string | null
+          resolved?: boolean | null
+          session_id?: string | null
+          session_type: string
+          severity?: string | null
+          skill_name: string
+          student_answer?: string | null
+          student_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          confidence_score?: number | null
+          context_data?: Json | null
+          correct_answer?: string | null
+          created_at?: string | null
+          detected_at?: string | null
+          id?: string
+          misconception_category?: string | null
+          misconception_type?: string
+          persistence_count?: number | null
+          question_id?: string | null
+          resolved?: boolean | null
+          session_id?: string | null
+          session_type?: string
+          severity?: string | null
+          skill_name?: string
+          student_answer?: string | null
+          student_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      unified_student_results: {
+        Row: {
+          created_at: string | null
+          exercise_data: Json | null
+          id: string
+          points_earned: number
+          points_possible: number
+          score: number
+          session_id: string | null
+          session_type: string
+          skill_name: string
+          skill_type: string
+          student_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          exercise_data?: Json | null
+          id?: string
+          points_earned?: number
+          points_possible?: number
+          score: number
+          session_id?: string | null
+          session_type: string
+          skill_name: string
+          skill_type: string
+          student_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          exercise_data?: Json | null
+          id?: string
+          points_earned?: number
+          points_possible?: number
+          score?: number
+          session_id?: string | null
+          session_type?: string
+          skill_name?: string
+          skill_type?: string
+          student_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_concept_mastery: {
         Row: {
           concept: string
@@ -3030,6 +3138,34 @@ export type Database = {
           avg_mastery_score: number
           last_session_date: string
           class_name: string
+        }[]
+      }
+      get_unified_misconception_analysis: {
+        Args: { p_student_id: string; p_days?: number }
+        Returns: {
+          skill_name: string
+          misconception_type: string
+          misconception_category: string
+          total_occurrences: number
+          avg_persistence: number
+          severity_distribution: Json
+          session_types: string[]
+          resolved_count: number
+          active_count: number
+          latest_detection: string
+        }[]
+      }
+      get_unified_student_performance: {
+        Args: { p_student_id: string; p_days?: number }
+        Returns: {
+          skill_name: string
+          skill_type: string
+          avg_score: number
+          total_attempts: number
+          best_score: number
+          latest_score: number
+          session_types: string[]
+          last_practiced_at: string
         }[]
       }
       get_user_display_teacher_id: {
