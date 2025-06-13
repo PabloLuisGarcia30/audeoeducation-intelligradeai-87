@@ -174,6 +174,7 @@ export type Database = {
       answer_keys: {
         Row: {
           acceptable_answers: Json | null
+          choice_misconceptions: Json | null
           correct_answer: string
           created_at: string
           exam_id: string
@@ -189,6 +190,7 @@ export type Database = {
         }
         Insert: {
           acceptable_answers?: Json | null
+          choice_misconceptions?: Json | null
           correct_answer: string
           created_at?: string
           exam_id: string
@@ -204,6 +206,7 @@ export type Database = {
         }
         Update: {
           acceptable_answers?: Json | null
+          choice_misconceptions?: Json | null
           correct_answer?: string
           created_at?: string
           exam_id?: string
@@ -1670,6 +1673,7 @@ export type Database = {
       }
       practice_answer_keys: {
         Row: {
+          choice_misconceptions: Json | null
           created_at: string
           exercise_id: string
           id: string
@@ -1678,6 +1682,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          choice_misconceptions?: Json | null
           created_at?: string
           exercise_id: string
           id?: string
@@ -1686,6 +1691,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          choice_misconceptions?: Json | null
           created_at?: string
           exercise_id?: string
           id?: string
@@ -2767,6 +2773,16 @@ export type Database = {
       }
     }
     Views: {
+      question_misconceptions: {
+        Row: {
+          choice_misconceptions: Json | null
+          question_number: number | null
+          question_source: string | null
+          question_text: string | null
+          source_id: string | null
+        }
+        Relationships: []
+      }
       student_data_transition: {
         Row: {
           auth_user_name: string | null
