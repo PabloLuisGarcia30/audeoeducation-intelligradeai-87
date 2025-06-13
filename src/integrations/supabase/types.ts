@@ -387,6 +387,30 @@ export type Database = {
           },
         ]
       }
+      api_rate_limits: {
+        Row: {
+          created_at: string | null
+          id: string
+          request_count: number | null
+          service_name: string
+          window_start: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          request_count?: number | null
+          service_name: string
+          window_start: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          request_count?: number | null
+          service_name?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       assignments: {
         Row: {
           assignment_type: string | null
@@ -1406,6 +1430,98 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      grading_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          job_type: string | null
+          max_retries: number | null
+          payload: Json
+          priority: string | null
+          processing_time_ms: number | null
+          result_payload: Json | null
+          retries: number | null
+          started_at: string | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string | null
+          max_retries?: number | null
+          payload: Json
+          priority?: string | null
+          processing_time_ms?: number | null
+          result_payload?: Json | null
+          retries?: number | null
+          started_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string | null
+          max_retries?: number | null
+          payload?: Json
+          priority?: string | null
+          processing_time_ms?: number | null
+          result_payload?: Json | null
+          retries?: number | null
+          started_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      job_failures: {
+        Row: {
+          context: Json | null
+          error_message: string | null
+          error_type: string
+          failed_at: string | null
+          id: string
+          job_id: string | null
+          retry_attempt: number | null
+          stack_trace: string | null
+        }
+        Insert: {
+          context?: Json | null
+          error_message?: string | null
+          error_type: string
+          failed_at?: string | null
+          id?: string
+          job_id?: string | null
+          retry_attempt?: number | null
+          stack_trace?: string | null
+        }
+        Update: {
+          context?: Json | null
+          error_message?: string | null
+          error_type?: string
+          failed_at?: string | null
+          id?: string
+          job_id?: string | null
+          retry_attempt?: number | null
+          stack_trace?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_failures_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "grading_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       job_payloads: {
         Row: {
@@ -3919,6 +4035,10 @@ export type Database = {
           status: string
         }[]
       }
+      cleanup_completed_grading_jobs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       detect_goal_achievements: {
         Args: { p_student_id: string; p_goal_id: string }
         Returns: undefined
@@ -4005,6 +4125,16 @@ export type Database = {
           common_prerequisites_gaps: string[]
           remediation_themes: string[]
           cognitive_patterns: Json
+        }[]
+      }
+      get_grading_queue_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          pending_jobs: number
+          processing_jobs: number
+          completed_jobs_today: number
+          failed_jobs_today: number
+          avg_processing_time_ms: number
         }[]
       }
       get_or_create_adaptive_profile: {

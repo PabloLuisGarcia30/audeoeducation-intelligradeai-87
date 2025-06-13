@@ -14,6 +14,7 @@ import { OpenAIGradingProcessor } from './OpenAIGradingProcessor';
 import { ResultProcessor } from './ResultProcessor';
 import { CacheManager } from './CacheManager';
 import { PersistenceManager } from './PersistenceManager';
+import { QueueGradingService } from './QueueGradingService';
 
 export class UnifiedGradingService {
   private static batchManager = new BatchManager();
@@ -24,15 +25,27 @@ export class UnifiedGradingService {
   private static persistenceManager = new PersistenceManager();
 
   /**
-   * Grade a single question through the unified pipeline
+   * Grade a single question - can use queue or direct processing
    */
   static async gradeQuestion(
     question: UnifiedQuestionContext,
-    context: GradingContext
-  ): Promise<UnifiedGradingResult> {
+    context: GradingContext,
+    useQueue: boolean = false
+  ): Promise<UnifiedGradingResult | { jobId: string; message: string }> {
     const startTime = Date.now();
-    console.log(`🎯 Unified grading: Q${question.questionNumber} for ${context.studentName || 'student'}`);
+    console.log(`🎯 Unified grading: Q${question.questionNumber} for ${context.studentName || 'student'} (queue: ${useQueue})`);
 
+    // If using queue for OpenAI processing
+    if (useQueue) {
+      const routingDecision = GradingRouter.routeQuestion(question, context);
+      
+      if (routingDecision.method.includes('openai')) {
+        console.log(`📤 Using queue for OpenAI grading: ${routingDecision.method}`);
+        return await QueueGradingService.gradeQuestionAsync(question, context);
+      }
+    }
+
+    // Direct processing (existing logic)
     try {
       // Check cache first if enabled
       if (context.configuration.caching?.enabled) {
@@ -71,7 +84,12 @@ export class UnifiedGradingService {
             context,
             priority: 'normal'
           };
-          const batchResult = await this.gradeBatch(batchRequest);
+          const batchResult = await this.gradeBatch(batchRequest, useQueue);
+          
+          if ('jobId' in batchResult) {
+            return batchResult; // Return job info if queued
+          }
+          
           result = batchResult.results[0];
           break;
 
@@ -116,17 +134,26 @@ export class UnifiedGradingService {
   }
 
   /**
-   * Grade multiple questions as a batch
+   * Grade multiple questions as a batch - can use queue or direct processing
    */
-  static async gradeBatch(request: BatchGradingRequest): Promise<BatchGradingResult> {
+  static async gradeBatch(
+    request: BatchGradingRequest,
+    useQueue: boolean = false
+  ): Promise<BatchGradingResult | { jobId: string; message: string }> {
     const startTime = Date.now();
-    console.log(`🎯 Unified batch grading: ${request.questions.length} questions`);
+    console.log(`🎯 Unified batch grading: ${request.questions.length} questions (queue: ${useQueue})`);
 
     try {
       // Get routing decision for the batch
       const routingDecision = GradingRouter.routeBatch(request.questions, request.context);
       
-      // Process through batch manager
+      // If using queue for OpenAI processing
+      if (useQueue && routingDecision.method.includes('openai')) {
+        console.log(`📤 Using queue for batch OpenAI grading: ${routingDecision.method}`);
+        return await QueueGradingService.gradeBatchAsync(request);
+      }
+
+      // Direct processing (existing logic)
       const batchResult = await this.batchManager.processBatch(
         request,
         routingDecision,
@@ -170,7 +197,31 @@ export class UnifiedGradingService {
   }
 
   /**
-   * Create default grading configuration
+   * Wait for a queued job to complete
+   */
+  static async waitForQueuedJob(
+    jobId: string,
+    timeoutMs: number = 300000
+  ): Promise<UnifiedGradingResult[]> {
+    return await QueueGradingService.waitForJobCompletion(jobId, timeoutMs);
+  }
+
+  /**
+   * Get job status
+   */
+  static async getJobStatus(jobId: string) {
+    return await QueueGradingService.getJobStatus(jobId);
+  }
+
+  /**
+   * Subscribe to job updates
+   */
+  static subscribeToJob(jobId: string, callback: (job: any) => void) {
+    return QueueGradingService.subscribeToJob(jobId, callback);
+  }
+
+  /**
+   * Create default grading configuration with queue options
    */
   static createDefaultConfiguration(): GradingConfiguration {
     return {
@@ -193,16 +244,36 @@ export class UnifiedGradingService {
       misconceptionAnalysis: {
         enabled: true,
         categories: ['procedural', 'conceptual', 'interpretive']
+      },
+      queue: {
+        enabled: true,
+        priority: 'normal',
+        useForOpenAI: true
       }
     };
   }
 
   static async getGradingStats(): Promise<any> {
+    const [regularStats, queueStats] = await Promise.all([
+      Promise.resolve({
+        cache: await this.cacheManager.getStats(),
+        batch: this.batchManager.getStats(),
+        local: this.localProcessor.getStats(),
+        openai: this.openaiProcessor.getStats()
+      }),
+      QueueGradingService.getQueueStats().catch(() => null)
+    ]);
+
     return {
-      cache: await this.cacheManager.getStats(),
-      batch: this.batchManager.getStats(),
-      local: this.localProcessor.getStats(),
-      openai: this.openaiProcessor.getStats()
+      ...regularStats,
+      queue: queueStats
     };
+  }
+
+  /**
+   * Cleanup resources
+   */
+  static cleanup(): void {
+    QueueGradingService.cleanup();
   }
 }
