@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -28,6 +27,7 @@ import StudentQuiz from "./pages/StudentQuiz";
 import ClassRunner from "./pages/ClassRunner";
 import LessonPlanner from "./pages/LessonPlanner";
 import TrailblazerSession from "./pages/TrailblazerSession";
+import GoalPlanner from "./pages/GoalPlanner";
 import { DEV_CONFIG } from "./config/devConfig";
 
 const queryClient = new QueryClient();
@@ -89,6 +89,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
             <StudentDashboard />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/goal-planner" 
+        element={
+          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+            <GoalPlanner />
           </ProtectedRoute>
         } 
       />

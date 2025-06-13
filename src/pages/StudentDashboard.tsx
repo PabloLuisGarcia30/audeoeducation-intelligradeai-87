@@ -193,6 +193,37 @@ export default function StudentDashboard() {
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
+              {/* Goal Planner Feature Card */}
+              <Card className="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-0 hover:from-blue-600 hover:to-purple-700 transition-all duration-200 cursor-pointer"
+                onClick={() => navigate('/goal-planner')}>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                      <Target className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold">Goal Planner</h3>
+                      <p className="text-blue-100 text-sm">Set & Track Your Learning Goals</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-blue-100 mb-3">
+                    Create personalized learning goals, track your progress, and celebrate achievements with our AI-powered goal setting system.
+                  </p>
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    className="bg-white/20 text-white border-0 hover:bg-white/30"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/goal-planner');
+                    }}
+                  >
+                    <Target className="h-4 w-4 mr-2" />
+                    Open Goal Planner
+                  </Button>
+                </CardContent>
+              </Card>
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Subject Progress */}
                 <Card className="lg:col-span-2">
