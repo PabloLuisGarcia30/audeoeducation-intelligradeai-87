@@ -1,5 +1,4 @@
-
-import { z } from 'zod';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 export const explainConceptSchema = z.object({
   question: z.string().min(1, 'Question is required'),
