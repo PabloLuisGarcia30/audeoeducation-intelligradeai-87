@@ -5,17 +5,17 @@ import {
   logOpenAIError, 
   logOpenAISuccess,
   generateCorrelationId 
-} from '../../../src/lib/openai/responseHandler.ts';
+} from './responseUtils.ts';
 import { 
   singleQuestionGradingResponseSchema,
   batchGradingResponseSchema,
   skillEscalationResponseSchema 
-} from '../../../src/lib/openai/schemas.ts';
+} from './schemas.ts';
 import { 
   generateSingleQuestionFallback,
   generateFallbackResults,
   generateSkillEscalationFallback 
-} from '../../../src/lib/openai/fallbacks.ts';
+} from './fallbacks.ts';
 
 export function handleSingleQuestionResponse(
   rawResponse: string,
