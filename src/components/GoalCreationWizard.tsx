@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -26,6 +25,7 @@ interface GoalCreationWizardProps {
   studentId: string;
   onGoalCreated: (goal: StudentGoal) => void;
   onCancel: () => void;
+  onError?: (error: any) => void;
 }
 
 interface GoalFormData {
@@ -74,7 +74,7 @@ const goalTemplates = [
   }
 ];
 
-export function GoalCreationWizard({ studentId, onGoalCreated, onCancel }: GoalCreationWizardProps) {
+export function GoalCreationWizard({ studentId, onGoalCreated, onCancel, onError }: GoalCreationWizardProps) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<GoalFormData>({
     goal_title: '',
@@ -162,7 +162,11 @@ export function GoalCreationWizard({ studentId, onGoalCreated, onCancel }: GoalC
       }
     } catch (error) {
       console.error('Error creating goal:', error);
-      toast.error('Failed to create goal. Please try again.');
+      if (onError) {
+        onError(error);
+      } else {
+        toast.error('Failed to create goal. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

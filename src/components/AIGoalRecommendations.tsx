@@ -19,6 +19,8 @@ interface AIGoalRecommendationsProps {
   /** ID of the learner for whom we are recommending goals */
   studentId: string;
   onGoalCreated: (newGoal: StudentGoal) => void;
+  /** Optional: Error handler */
+  onError?: (error: any) => void;
   /** Optional: Pre-loaded recommendations */
   recommendations?: AIGoalRecommendation[];
   /** Optional: Accept goal handler */
@@ -31,7 +33,8 @@ interface AIGoalRecommendationsProps {
 
 export function AIGoalRecommendations({ 
   studentId, 
-  onGoalCreated, 
+  onGoalCreated,
+  onError,
   recommendations: propRecommendations,
   onAcceptGoal: propOnAcceptGoal,
   onRefresh: propOnRefresh,
@@ -67,6 +70,9 @@ export function AIGoalRecommendations({
     } catch (error) {
       console.error('Failed to load AI recommendations:', error);
       setRecommendations([]);
+      if (onError) {
+        onError(error);
+      }
     } finally {
       setLoading(false);
     }
@@ -85,8 +91,12 @@ export function AIGoalRecommendations({
       // Remove the accepted recommendation from the list
       setRecommendations(prev => prev.filter(r => r !== recommendation));
     } catch (error) {
-      toast.error('Failed to create goal');
       console.error('Error creating goal from recommendation:', error);
+      if (onError) {
+        onError(error);
+      } else {
+        toast.error('Failed to create goal');
+      }
     }
   };
 
