@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,30 +30,40 @@ import { GoalInsightsPanel } from "@/components/GoalInsightsPanel";
 import { GoalAchievementCelebration } from "@/components/GoalAchievementCelebration";
 import { MonthlyActivityTracker } from "@/components/MonthlyActivityTracker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { DEV_CONFIG } from "@/config/devConfig";
+import { shouldUseDevAuth } from "@/config/devConfig";
 import { toast } from "sonner";
 
 export default function GoalPlanner() {
   const navigate = useNavigate();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading, isDevMode } = useAuth();
   const [goals, setGoals] = useState<StudentGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [selectedView, setSelectedView] = useState<'overview' | 'calendar' | 'achievements' | 'insights'>('overview');
   const [goalOperationLoading, setGoalOperationLoading] = useState(false);
 
-  // Debug logging for authentication state
+  // Enhanced authentication debug logging
   useEffect(() => {
+    const devAuthActive = shouldUseDevAuth();
     console.log('🔍 GoalPlanner Auth Debug:', {
-      isDevMode: DEV_CONFIG.DISABLE_AUTH_FOR_DEV,
-      defaultRole: DEV_CONFIG.DEFAULT_DEV_ROLE,
+      isDevMode,
+      devAuthActive,
       userId: user?.id,
       userEmail: user?.email,
       profileRole: profile?.role,
       profileName: profile?.full_name,
-      authLoading
+      authLoading,
+      hasUser: !!user,
+      hasProfile: !!profile
     });
-  }, [user, profile, authLoading]);
+
+    // Log authentication method being used
+    if (devAuthActive) {
+      console.log('🔧 Using development authentication bypass');
+    } else {
+      console.log('🔐 Using Supabase authentication');
+    }
+  }, [user, profile, authLoading, isDevMode]);
 
   useEffect(() => {
     if (user?.id && !authLoading) {
@@ -62,7 +73,7 @@ export default function GoalPlanner() {
 
   const loadGoals = async () => {
     if (!user?.id) {
-      console.error('No authenticated user found for loading goals');
+      console.error('❌ No authenticated user found for loading goals');
       return;
     }
 
@@ -98,16 +109,21 @@ export default function GoalPlanner() {
   const handleGoalError = (error: any) => {
     console.error('❌ Goal operation error:', error);
     
-    // Provide specific error messages based on the error type
+    // Enhanced error handling with dev mode context
     let errorMessage = 'An error occurred. Please try again.';
     
     if (error?.message?.includes('row-level security')) {
-      errorMessage = 'Authentication issue detected. In dev mode, this should not happen.';
-      console.log('🔧 Dev mode auth state:', {
-        devModeEnabled: DEV_CONFIG.DISABLE_AUTH_FOR_DEV,
-        currentUserId: user?.id,
-        expectedPabloId: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26'
-      });
+      if (isDevMode) {
+        errorMessage = 'RLS policy error detected in dev mode. This suggests the authentication bypass is not working properly.';
+        console.log('🔧 Dev mode RLS error details:', {
+          devModeActive: shouldUseDevAuth(),
+          currentUserId: user?.id,
+          expectedPabloId: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26',
+          errorDetails: error
+        });
+      } else {
+        errorMessage = 'Authentication issue detected. Please try signing out and back in.';
+      }
     } else if (error?.message?.includes('duplicate')) {
       errorMessage = 'A goal with this title already exists. Please choose a different title.';
     } else if (error?.message?.includes('network')) {
@@ -126,16 +142,16 @@ export default function GoalPlanner() {
   // Show loading if auth is still loading or we don't have user data yet
   if (authLoading || !user?.id || loading) {
     return (
-      <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+      <ProtectedRoute requiredRole={shouldUseDevAuth() ? undefined : "student"}>
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-lg text-slate-600">
               {authLoading ? 'Authenticating...' : 'Loading your goals...'}
             </p>
-            {DEV_CONFIG.DISABLE_AUTH_FOR_DEV && (
+            {isDevMode && (
               <p className="text-sm text-blue-600 mt-2">
-                Dev Mode: Using Pablo Luis Garcia (Student)
+                Dev Mode: Using Mock Authentication
               </p>
             )}
           </div>
@@ -160,7 +176,7 @@ export default function GoalPlanner() {
   const firstName = displayName.split(' ')[0];
 
   return (
-    <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+    <ProtectedRoute requiredRole={shouldUseDevAuth() ? undefined : "student"}>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="container mx-auto px-4 py-8">
           {/* Header Section */}
@@ -175,7 +191,7 @@ export default function GoalPlanner() {
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Dashboard
               </Button>
-              {DEV_CONFIG.DISABLE_AUTH_FOR_DEV && (
+              {isDevMode && (
                 <Badge variant="outline" className="bg-blue-50 text-blue-700">
                   Dev Mode: {displayName}
                 </Badge>

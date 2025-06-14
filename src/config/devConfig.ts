@@ -1,10 +1,10 @@
 
 // Development configuration
 export const DEV_CONFIG = {
-  // Set to true to bypass authentication during development
+  // Set to false in production or when testing real authentication
   DISABLE_AUTH_FOR_DEV: true,
   
-  // Default role for development mode - changed to student for Pablo's demo
+  // Default role for development mode - student for Pablo's demo
   DEFAULT_DEV_ROLE: 'student' as 'teacher' | 'student'
 };
 
@@ -43,4 +43,14 @@ export const MOCK_USER_DATA = {
       updated_at: new Date().toISOString(),
     }
   }
+};
+
+// Helper function to check if we're in a development environment
+export const isDevEnvironment = () => {
+  return process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+};
+
+// Helper function to determine if dev auth should be active
+export const shouldUseDevAuth = () => {
+  return DEV_CONFIG.DISABLE_AUTH_FOR_DEV && isDevEnvironment();
 };

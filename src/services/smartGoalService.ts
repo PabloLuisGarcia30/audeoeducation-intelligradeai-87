@@ -1,7 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ProgressAnalyticsService, StudentProgressAnalytics } from "@/services/progressAnalyticsService";
 import { UnifiedStudentResultsService, UnifiedPerformanceData, UnifiedMisconceptionAnalysis } from "@/services/unifiedStudentResultsService";
+import { shouldUseDevAuth } from "@/config/devConfig";
 
 export interface StudentGoal {
   id: string;
@@ -77,6 +77,8 @@ export class SmartGoalService {
    */
   static async generateGoalRecommendations(studentId: string): Promise<AIGoalRecommendation[]> {
     try {
+      console.log('🤖 Generating AI goal recommendations for student:', studentId);
+      
       // Get student's performance analytics
       const progressAnalytics = await ProgressAnalyticsService.getStudentProgressAnalytics(studentId, 30);
       const performanceData = await UnifiedStudentResultsService.getStudentPerformance(studentId, 30);
@@ -93,7 +95,7 @@ export class SmartGoalService {
       });
 
       if (error) {
-        console.error('Error generating goal recommendations:', error);
+        console.error('❌ Error generating goal recommendations:', error);
         return this.getFallbackRecommendations(progressAnalytics, performanceData, misconceptionData);
       }
 
@@ -104,10 +106,11 @@ export class SmartGoalService {
         misconception_data: misconceptionData
       }, data.reasoning);
 
+      console.log('✅ Generated AI recommendations:', data.recommendations.length);
       return data.recommendations;
     } catch (error) {
-      console.error('Failed to generate goal recommendations:', error);
-      throw error; // Throw the actual error instead of returning empty array
+      console.error('❌ Failed to generate goal recommendations:', error);
+      throw error;
     }
   }
 
@@ -115,6 +118,8 @@ export class SmartGoalService {
    * Create a goal from an AI recommendation
    */
   static async createGoalFromRecommendation(studentId: string, recommendation: AIGoalRecommendation): Promise<StudentGoal> {
+    console.log('🎯 Creating goal from AI recommendation:', recommendation.goal_title);
+    
     const goalData: Partial<StudentGoal> = {
       goal_title: recommendation.goal_title,
       goal_description: recommendation.goal_description,
@@ -130,66 +135,96 @@ export class SmartGoalService {
       context_data: recommendation.context_data
     };
 
-    // Let the actual error bubble up to provide specific feedback
     return await this.createGoal(studentId, goalData);
   }
 
   /**
-   * Create a new goal for a student
+   * Create a new goal for a student - Enhanced with better authentication handling
    */
   static async createGoal(studentId: string, goalData: Partial<StudentGoal>): Promise<StudentGoal> {
     console.log('🎯 Creating goal for student:', studentId);
     console.log('📝 Goal data:', goalData);
+    console.log('🔧 Dev auth active:', shouldUseDevAuth());
     
     // Ensure required fields are present
     if (!goalData.goal_title || !goalData.goal_description) {
       throw new Error('Goal title and description are required');
     }
 
-    const { data, error } = await supabase
-      .from('student_goals')
-      .insert({
-        student_id: studentId,
-        goal_title: goalData.goal_title,
-        goal_description: goalData.goal_description,
-        goal_type: goalData.goal_type || 'skill_mastery',
-        target_value: goalData.target_value || 100,
-        current_value: goalData.current_value || 0,
-        target_skill_name: goalData.target_skill_name,
-        target_misconception_id: goalData.target_misconception_id,
-        is_ai_suggested: goalData.is_ai_suggested || false,
-        ai_confidence_score: goalData.ai_confidence_score || 0,
-        difficulty_level: goalData.difficulty_level || 'medium',
-        target_date: goalData.target_date,
-        status: goalData.status || 'active',
-        progress_percentage: goalData.progress_percentage || 0,
-        milestones: JSON.stringify(goalData.milestones || []),
-        context_data: JSON.stringify(goalData.context_data || {})
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('❌ Supabase error creating goal:', error);
-      // Log detailed error information for debugging
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint
-      });
-      throw error; // Throw the actual Supabase error with all details
+    // Validate student ID format
+    if (!studentId || typeof studentId !== 'string') {
+      throw new Error('Valid student ID is required');
     }
 
-    console.log('✅ Created goal successfully:', data.goal_title);
-    return this.transformGoalData(data);
+    try {
+      const { data, error } = await supabase
+        .from('student_goals')
+        .insert({
+          student_id: studentId,
+          goal_title: goalData.goal_title,
+          goal_description: goalData.goal_description,
+          goal_type: goalData.goal_type || 'skill_mastery',
+          target_value: goalData.target_value || 100,
+          current_value: goalData.current_value || 0,
+          target_skill_name: goalData.target_skill_name,
+          target_misconception_id: goalData.target_misconception_id,
+          is_ai_suggested: goalData.is_ai_suggested || false,
+          ai_confidence_score: goalData.ai_confidence_score || 0,
+          difficulty_level: goalData.difficulty_level || 'medium',
+          target_date: goalData.target_date,
+          status: goalData.status || 'active',
+          progress_percentage: goalData.progress_percentage || 0,
+          milestones: JSON.stringify(goalData.milestones || []),
+          context_data: JSON.stringify(goalData.context_data || {})
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Supabase error creating goal:', error);
+        
+        // Enhanced error logging for debugging
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          studentId,
+          devAuthActive: shouldUseDevAuth(),
+          goalTitle: goalData.goal_title
+        });
+
+        // Provide more specific error context
+        if (error.code === '42501' || error.message?.includes('row-level security')) {
+          const enhancedError = new Error(
+            `Row-level security policy violation. Student ID: ${studentId}. ` +
+            `This may indicate an authentication issue${shouldUseDevAuth() ? ' in dev mode' : ''}.`
+          );
+          enhancedError.name = 'RLSPolicyError';
+          throw enhancedError;
+        }
+
+        // Re-throw with enhanced context
+        const enhancedError = new Error(`Database error: ${error.message}`);
+        enhancedError.name = 'DatabaseError';
+        throw enhancedError;
+      }
+
+      console.log('✅ Created goal successfully:', data.goal_title);
+      return this.transformGoalData(data);
+    } catch (error) {
+      console.error('❌ Failed to create goal:', error);
+      throw error;
+    }
   }
 
   /**
-   * Get all goals for a student
+   * Get all goals for a student - Enhanced with better error handling
    */
   static async getStudentGoals(studentId: string): Promise<StudentGoal[]> {
     try {
+      console.log('📊 Fetching goals for student:', studentId);
+      
       const { data, error } = await supabase
         .from('student_goals')
         .select('*')
@@ -197,14 +232,37 @@ export class SmartGoalService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching student goals:', error);
-        return [];
+        console.error('❌ Error fetching student goals:', error);
+        
+        // Enhanced error logging
+        console.error('Fetch error details:', {
+          code: error.code,
+          message: error.message,
+          studentId,
+          devAuthActive: shouldUseDevAuth()
+        });
+
+        // In dev mode, return empty array for RLS errors
+        if (shouldUseDevAuth() && error.code === '42501') {
+          console.log('🔧 Dev mode: RLS error detected, returning empty goals array');
+          return [];
+        }
+
+        throw error;
       }
 
+      console.log('✅ Fetched goals successfully:', data?.length || 0);
       return (data || []).map(goal => this.transformGoalData(goal));
     } catch (error) {
-      console.error('Failed to fetch student goals:', error);
-      return [];
+      console.error('❌ Failed to fetch student goals:', error);
+      
+      // In dev mode, gracefully handle errors
+      if (shouldUseDevAuth()) {
+        console.log('🔧 Dev mode: Returning empty goals array due to error');
+        return [];
+      }
+      
+      throw error;
     }
   }
 

@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { DEV_CONFIG, MOCK_USER_DATA } from '@/config/devConfig';
+import { DEV_CONFIG, MOCK_USER_DATA, shouldUseDevAuth } from '@/config/devConfig';
 import { useDevRole } from '@/contexts/DevRoleContext';
 
 export type UserRole = 'teacher' | 'student';
@@ -23,6 +23,7 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
+  isDevMode: boolean; // Add dev mode indicator
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -44,9 +45,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDevMode, setIsDevMode] = useState(false);
 
   // Get dev role context if available
-  let devRole: 'teacher' | 'student' = 'teacher';
+  let devRole: 'teacher' | 'student' = DEV_CONFIG.DEFAULT_DEV_ROLE;
   try {
     const devRoleContext = useDevRole();
     devRole = devRoleContext.currentRole;
@@ -55,8 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    // Check if we're in dev mode
-    if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+    const useDevAuth = shouldUseDevAuth();
+    setIsDevMode(useDevAuth);
+
+    if (useDevAuth) {
+      console.log('🔧 Dev mode active: Bypassing Supabase authentication');
       // Use mock data based on current dev role with display_teacher_id for teacher
       const mockData = MOCK_USER_DATA[devRole];
       const enhancedProfile = devRole === 'teacher' 
@@ -70,9 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Set up auth state listener
+    console.log('🔐 Production mode: Using Supabase authentication');
+
+    // Set up auth state listener for real authentication
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔐 Auth state changed:', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -80,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Fetch user profile after authentication
           setTimeout(async () => {
             try {
+              console.log('👤 Fetching profile for user:', session.user.id);
               const { data: profileData, error } = await supabase
                 .from('profiles')
                 .select('*')
@@ -87,12 +96,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .single();
 
               if (error) {
-                console.error('Error fetching profile:', error);
+                console.error('❌ Error fetching profile:', error);
+                // For real users, we might want to create a profile if it doesn't exist
+                if (error.code === 'PGRST116') {
+                  console.log('📝 Profile not found, this might be a new user');
+                }
               } else {
+                console.log('✅ Profile loaded:', profileData);
                 setProfile(profileData);
               }
             } catch (error) {
-              console.error('Error in profile fetch:', error);
+              console.error('❌ Error in profile fetch:', error);
             }
           }, 0);
         } else {
@@ -105,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔍 Checking existing session:', session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       if (!session) {
@@ -116,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [devRole]);
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {
-    if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+    if (shouldUseDevAuth()) {
       toast.success('Auth disabled in dev mode');
       return { error: null };
     }
@@ -154,7 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+    if (shouldUseDevAuth()) {
       toast.success('Auth disabled in dev mode');
       return { error: null };
     }
@@ -178,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+    if (shouldUseDevAuth()) {
       toast.success('Auth disabled in dev mode');
       return;
     }
@@ -199,7 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+    if (shouldUseDevAuth()) {
       setProfile(prev => prev ? { ...prev, ...updates } : null);
       toast.success('Profile updated (dev mode)');
       return { error: null };
@@ -234,6 +249,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     loading,
+    isDevMode,
     signUp,
     signIn,
     signOut,
