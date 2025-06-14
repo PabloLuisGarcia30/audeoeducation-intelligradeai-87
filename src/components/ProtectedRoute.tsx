@@ -17,6 +17,16 @@ export function ProtectedRoute({
   const { user, profile, loading, isDevMode } = useAuth();
   const location = useLocation();
 
+  console.log('🔒 ProtectedRoute check:', {
+    path: location.pathname,
+    shouldUseDevAuth: shouldUseDevAuth(),
+    isDevMode,
+    user: user?.id,
+    profile: profile?.role,
+    requiredRole,
+    loading
+  });
+
   // Bypass authentication in dev mode
   if (shouldUseDevAuth()) {
     console.log('🔧 ProtectedRoute: Dev mode active, allowing access');
@@ -24,6 +34,7 @@ export function ProtectedRoute({
   }
 
   if (loading) {
+    console.log('🔄 ProtectedRoute: Loading auth state');
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex items-center justify-center">
         <div className="text-center">
@@ -52,5 +63,4 @@ export function ProtectedRoute({
   return <>{children}</>;
 }
 
-// Add default export
 export default ProtectedRoute;

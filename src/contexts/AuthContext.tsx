@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,7 +12,7 @@ export interface UserProfile {
   email: string;
   full_name: string;
   role: UserRole;
-  display_teacher_id?: string; // Renamed from teacher_id
+  display_teacher_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -23,7 +22,7 @@ interface AuthContextType {
   session: Session | null;
   profile: UserProfile | null;
   loading: boolean;
-  isDevMode: boolean; // Add dev mode indicator
+  isDevMode: boolean;
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -47,25 +46,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isDevMode, setIsDevMode] = useState(false);
 
-  // Get dev role context if available
-  let devRole: 'teacher' | 'student' = DEV_CONFIG.DEFAULT_DEV_ROLE;
-  try {
-    const devRoleContext = useDevRole();
-    devRole = devRoleContext.currentRole;
-  } catch {
-    // DevRoleContext not available, use default
-  }
+  // Get dev role context - this should work since DevRoleProvider wraps AuthProvider
+  const { currentRole: devRole } = useDevRole();
 
   useEffect(() => {
     const useDevAuth = shouldUseDevAuth();
     setIsDevMode(useDevAuth);
 
+    console.log('🔧 AuthContext: Dev auth check:', useDevAuth);
+    console.log('🔧 AuthContext: Current dev role:', devRole);
+
     if (useDevAuth) {
       console.log('🔧 Dev mode active: Bypassing Supabase authentication');
-      // Use mock data based on current dev role with display_teacher_id for teacher
+      // Use mock data based on current dev role
       const mockData = MOCK_USER_DATA[devRole];
       const enhancedProfile = devRole === 'teacher' 
-        ? { ...mockData.profile, display_teacher_id: 'TCH001' } // Use display_teacher_id
+        ? { ...mockData.profile, display_teacher_id: 'TCH001' }
         : mockData.profile;
       
       setUser(mockData.user as any);
@@ -97,7 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
               if (error) {
                 console.error('❌ Error fetching profile:', error);
-                // For real users, we might want to create a profile if it doesn't exist
                 if (error.code === 'PGRST116') {
                   console.log('📝 Profile not found, this might be a new user');
                 }
@@ -128,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [devRole]);
+  }, [devRole]); // Re-run when dev role changes
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {
     if (shouldUseDevAuth()) {

@@ -12,13 +12,13 @@ export const DEV_CONFIG = {
 export const MOCK_USER_DATA = {
   teacher: {
     user: {
-      id: '233d54d8-7c04-4fbf-889e-9500749a4269', // Using existing Mr. Cullen UUID from database
+      id: '233d54d8-7c04-4fbf-889e-9500749a4269',
       email: 'mr.cullen@school.edu',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
     profile: {
-      id: '233d54d8-7c04-4fbf-889e-9500749a4269', // Using existing Mr. Cullen UUID from database
+      id: '233d54d8-7c04-4fbf-889e-9500749a4269',
       email: 'mr.cullen@school.edu',
       full_name: 'Mr. Cullen',
       role: 'teacher' as const,
@@ -29,15 +29,15 @@ export const MOCK_USER_DATA = {
   },
   student: {
     user: {
-      id: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26', // Pablo's real ID
-      email: 'PabloLuisAlegaGarcia@gmail.com', // Pablo's real email
+      id: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26',
+      email: 'PabloLuisAlegaGarcia@gmail.com',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
     profile: {
-      id: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26', // Pablo's real ID
-      email: 'PabloLuisAlegaGarcia@gmail.com', // Pablo's real email
-      full_name: 'Pablo Luis Garcia', // Pablo's real name
+      id: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26',
+      email: 'PabloLuisAlegaGarcia@gmail.com',
+      full_name: 'Pablo Luis Garcia',
       role: 'student' as const,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -47,10 +47,17 @@ export const MOCK_USER_DATA = {
 
 // Helper function to check if we're in a development environment
 export const isDevEnvironment = () => {
-  return process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+  const isDev = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
+  console.log('🔧 Dev environment check:', isDev);
+  return isDev;
 };
 
 // Helper function to determine if dev auth should be active
 export const shouldUseDevAuth = () => {
-  return DEV_CONFIG.DISABLE_AUTH_FOR_DEV && isDevEnvironment();
+  const shouldUse = DEV_CONFIG.DISABLE_AUTH_FOR_DEV && isDevEnvironment();
+  console.log('🔧 Should use dev auth:', shouldUse, { 
+    DISABLE_AUTH_FOR_DEV: DEV_CONFIG.DISABLE_AUTH_FOR_DEV, 
+    isDevEnvironment: isDevEnvironment() 
+  });
+  return shouldUse;
 };
