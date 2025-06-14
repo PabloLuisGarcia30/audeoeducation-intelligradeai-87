@@ -40,7 +40,7 @@ import { AdaptiveInsightsWidget } from "@/components/AdaptiveInsightsWidget";
 import { EnhancedStudentProgressTab } from "@/components/EnhancedStudentProgressTab";
 import { SmartGoalsManager } from "@/components/SmartGoalsManager";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { DEV_CONFIG } from "@/config";
+import { DEV_CONFIG } from "@/config/devConfig";
 
 interface StudentProfile {
   id: string;
@@ -174,11 +174,19 @@ export default function StudentDashboard() {
     <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Student Dashboard</h1>
-            <p className="text-gray-600">
-              Welcome back! Track your progress and continue learning.
-            </p>
+          {/* Header with Role Toggle */}
+          <div className="mb-8 flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Student Dashboard</h1>
+              <p className="text-gray-600">
+                Welcome back! Track your progress and continue learning.
+              </p>
+            </div>
+            
+            {/* Role Toggle */}
+            <div className="flex-shrink-0">
+              <RoleToggle />
+            </div>
           </div>
 
           <Tabs defaultValue="overview" className="w-full">
