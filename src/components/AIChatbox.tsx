@@ -66,7 +66,22 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
     scrollToBottom();
   }, [messages]);
 
-  const parsePracticeRecommendations = (content: string) => {
+  const parsePracticeRecommendations = (apiResponse: any) => {
+    // Handle new JSON-structured responses
+    if (apiResponse.practiceRecommendations && Array.isArray(apiResponse.practiceRecommendations)) {
+      console.log('✅ Found structured practice recommendations:', apiResponse.practiceRecommendations);
+      return {
+        cleanContent: apiResponse.response || '',
+        recommendations: apiResponse.practiceRecommendations
+      };
+    }
+
+    // Fallback: Parse legacy text-based format for backwards compatibility
+    const content = apiResponse.response || apiResponse;
+    if (typeof content !== 'string') {
+      return { cleanContent: content, recommendations: [] };
+    }
+
     const practiceStart = content.indexOf('**PRACTICE_RECOMMENDATIONS**');
     const practiceEnd = content.indexOf('**END_PRACTICE_RECOMMENDATIONS**');
     
@@ -92,7 +107,6 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
       } else if (line.includes('CHALLENGE')) {
         currentCategory = 'CHALLENGE';
       } else if (line.startsWith('- ') && currentCategory) {
-        // Parse recommendation line: "- Skill Name: 65% | Difficulty: Review | Time: 15-20 min | Improvement: +15-20%"
         const parts = line.substring(2).split(' | ');
         if (parts.length >= 4) {
           const [skillPart, difficultyPart, timePart, improvementPart] = parts;
@@ -134,6 +148,8 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
     setIsLoading(true);
 
     try {
+      console.log('🤖 Sending message to AI chat:', inputValue);
+      
       // Call the AI chat edge function
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: {
@@ -149,11 +165,15 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
         throw error;
       }
 
-      const { cleanContent, recommendations } = parsePracticeRecommendations(data.response || "I'm sorry, I couldn't generate a response. Please try again.");
+      console.log('🤖 AI chat response received:', data);
+
+      const { cleanContent, recommendations } = parsePracticeRecommendations(data);
+
+      console.log('🎯 Parsed recommendations:', recommendations);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: cleanContent,
+        content: cleanContent || "I'm sorry, I couldn't generate a response. Please try again.",
         sender: 'ai',
         timestamp: new Date(),
         practiceRecommendations: recommendations.length > 0 ? recommendations : undefined
@@ -161,7 +181,7 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
 
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Error getting AI response:', error);
+      console.error('❌ Error getting AI response:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment.",
@@ -255,7 +275,7 @@ export function AIChatbox({ studentContext }: AIChatboxProps) {
               </div>
               
               {/* Practice Recommendations */}
-              {message.practiceRecommendations && (
+              {message.practiceRecommendations && message.practiceRecommendations.length > 0 && (
                 <div className="ml-10">
                   <PracticeRecommendations 
                     recommendations={message.practiceRecommendations}

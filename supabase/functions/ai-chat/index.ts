@@ -9,6 +9,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// JSON schema for AI responses with practice recommendations
+const responseSchema = {
+  type: "object",
+  properties: {
+    message: {
+      type: "string",
+      description: "The main response message to the student"
+    },
+    practiceRecommendations: {
+      type: "array",
+      description: "Practice recommendations when student asks about what to work on",
+      items: {
+        type: "object",
+        properties: {
+          skillName: { type: "string" },
+          currentScore: { type: "number", minimum: 0, maximum: 100 },
+          difficulty: { type: "string", enum: ["Review", "Standard", "Challenge"] },
+          estimatedTime: { type: "string" },
+          expectedImprovement: { type: "string" },
+          category: { type: "string", enum: ["PRIORITY", "REVIEW", "CHALLENGE"] }
+        },
+        required: ["skillName", "currentScore", "difficulty", "estimatedTime", "expectedImprovement", "category"]
+      }
+    }
+  },
+  required: ["message"]
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -79,7 +107,7 @@ serve(async (req) => {
       }))
     }));
 
-    // Create the improved system prompt
+    // Create the enhanced system prompt for JSON mode
     const systemPrompt = `You are an AI learning assistant helping ${studentContext.studentName} in ${studentContext.classSubject} (${studentContext.classGrade}).
 
 📘 STUDENT CONTEXT
@@ -113,47 +141,41 @@ ${studentContext.testResults.length ?
 - Average Score: ${Math.round(studentContext.testResults.reduce((sum, t) => sum + t.overall_score, 0) / studentContext.testResults.length)}%
 - Latest Test: ${Math.round(studentContext.testResults[0]?.overall_score || 0)}%` : "- No test data yet"}
 
-📌 PRACTICE RECOMMENDATIONS
-Always respond to practice-related questions with this structure:
-
-**PRACTICE_RECOMMENDATIONS**
-${prioritySkills.length ? `PRIORITY (Immediate focus):
-${prioritySkills.map(s => `- ${s.name}: ${s.score}% | Time: 15–20 min | Boost: +3–8%`).join('\n')}` : ''}
-${reviewSkills.length ? `REVIEW (Reinforce understanding):
-${reviewSkills.map(s => `- ${s.name}: ${s.score}% | Time: 10–15 min | Boost: +2–5%`).join('\n')}` : ''}
-${challengeSkills.length ? `CHALLENGE (Stretch goal):
-${challengeSkills.map(s => `- ${s.name}: ${s.score}% | Time: 20–25 min | Boost: +1–3%`).join('\n')}` : ''}
-**END_PRACTICE_RECOMMENDATIONS**
-
-🧠 EXPLAIN LIKE I'M 12 (When asked "what is..." or "explain...")
-
-- Use simple words and relatable examples (like games, food, or sports)
-- Explain technical terms if used
-- Use emojis to keep it friendly 😊
-- Break it down step-by-step in small chunks
-- Start with: "Great question! Let me explain it simply..."
-- End with encouragement: "You've got this!" or "Want to dive deeper?"
-
 🎯 YOUR ROLE
 
-- Be supportive, fun, and educational
-- Always include PRACTICE_RECOMMENDATIONS when asked about what to study
-- Use 12-YEAR-OLD FRIENDLY tone for explanations
-- Refer to LOW-SCORING AREAS when asked about weak points
-- Give specific advice using skill names + scores
-- Suggest learning strategies for ${studentContext.classGrade} ${studentContext.classSubject}
-- Focus on <80% skills in all improvement advice
-- Keep replies short (2–3 sentences), unless a detailed explanation is requested
-- Always tie feedback to real performance data
+You MUST respond in JSON format with this structure:
+{
+  "message": "Your main response text",
+  "practiceRecommendations": [array of practice recommendations - ONLY include if student asks practice questions]
+}
+
+📌 PRACTICE RECOMMENDATIONS RULES
+- Include practiceRecommendations array ONLY when student asks practice-related questions
+- For each skill recommendation, include:
+  - skillName: exact skill name from the data
+  - currentScore: the actual score number
+  - difficulty: "Review", "Standard", or "Challenge" 
+  - estimatedTime: like "15-20 min"
+  - expectedImprovement: like "+3-8%"
+  - category: "PRIORITY" (score < 70), "REVIEW" (70-84%), or "CHALLENGE" (85%+)
+
+Priority order: ${prioritySkills.length ? prioritySkills.map(s => `${s.name} (${s.score}%)`).join(', ') : 'None'}
+Review order: ${reviewSkills.length ? reviewSkills.map(s => `${s.name} (${s.score}%)`).join(', ') : 'None'}
+Challenge order: ${challengeSkills.length ? challengeSkills.map(s => `${s.name} (${s.score}%)`).join(', ') : 'None'}
+
+🧠 EXPLAIN LIKE I'M 12 (When asked "what is..." or "explain...")
+- Use simple words and relatable examples
+- Use emojis to keep it friendly 😊
+- Break it down step-by-step
+- Start with: "Great question! Let me explain it simply..."
+- End with encouragement
 
 📈 ANALYSIS GUIDELINES
-
 - <60% = urgent
-- 60–79% = developing
+- 60–79% = developing  
 - 80%+ = proficient
 - Use actual scores and skill names when giving recommendations
-
-Keep it concise, warm, and focused on student progress.`;
+- Keep replies warm and focused on student progress`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -168,7 +190,10 @@ Keep it concise, warm, and focused on student progress.`;
           { role: 'user', content: message }
         ],
         temperature: 0.7,
-        max_tokens: 600,
+        max_tokens: 800,
+        response_format: { 
+          type: "json_object"
+        }
       }),
     });
 
@@ -177,15 +202,40 @@ Keep it concise, warm, and focused on student progress.`;
     }
 
     const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
+    const aiResponseText = data.choices[0].message.content;
+    
+    // Parse the JSON response
+    let aiResponse;
+    try {
+      aiResponse = JSON.parse(aiResponseText);
+    } catch (parseError) {
+      console.error('Failed to parse AI JSON response:', parseError);
+      // Fallback for non-JSON responses
+      aiResponse = {
+        message: aiResponseText || "I'm sorry, I couldn't generate a proper response. Please try again.",
+        practiceRecommendations: []
+      };
+    }
 
-    return new Response(JSON.stringify({ response: aiResponse }), {
+    // Ensure the response has the expected structure
+    if (!aiResponse.message) {
+      aiResponse.message = "I'm sorry, I couldn't generate a proper response. Please try again.";
+    }
+    if (!Array.isArray(aiResponse.practiceRecommendations)) {
+      aiResponse.practiceRecommendations = [];
+    }
+
+    return new Response(JSON.stringify({ 
+      response: aiResponse.message,
+      practiceRecommendations: aiResponse.practiceRecommendations 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error in ai-chat function:', error);
     return new Response(JSON.stringify({ 
-      error: 'Failed to get AI response. Please try again.' 
+      error: 'Failed to get AI response. Please try again.',
+      practiceRecommendations: []
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
