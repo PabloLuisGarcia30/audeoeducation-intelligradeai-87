@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +27,7 @@ import { AchievementCenter } from "@/components/AchievementCenter";
 import { AIGoalRecommendations } from "@/components/AIGoalRecommendations";
 import { GoalInsightsPanel } from "@/components/GoalInsightsPanel";
 import { GoalAchievementCelebration } from "@/components/GoalAchievementCelebration";
+import { MonthlyActivityTracker } from "@/components/MonthlyActivityTracker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DEV_CONFIG } from "@/config";
 
@@ -272,6 +272,9 @@ export default function GoalPlanner() {
                 studentId={studentProfile.id} 
                 onGoalCreated={handleGoalCreated}
               />
+
+              {/* Monthly Activity Tracker */}
+              <MonthlyActivityTracker />
             </div>
           )}
 
