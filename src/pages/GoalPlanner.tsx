@@ -83,18 +83,26 @@ export default function GoalPlanner() {
   };
 
   const handleGoalError = (error: any) => {
-    console.error('Goal creation error:', error);
+    console.error('Goal operation error:', error);
     
     // Provide specific error messages based on the error type
+    let errorMessage = 'An error occurred. Please try again.';
+    
     if (error?.message?.includes('row-level security')) {
-      toast.error('Authentication issue. Please try signing out and back in.');
+      errorMessage = 'Authentication issue. Please try signing out and back in.';
+    } else if (error?.message?.includes('duplicate')) {
+      errorMessage = 'A goal with this title already exists. Please choose a different title.';
     } else if (error?.message?.includes('network')) {
-      toast.error('Connection issue. Please check your internet and try again.');
+      errorMessage = 'Connection issue. Please check your internet and try again.';
     } else if (error?.message?.includes('permission')) {
-      toast.error('Permission denied. Please contact support if this continues.');
-    } else {
-      toast.error('Failed to create goal. Please try again or contact support.');
+      errorMessage = 'Permission denied. Please contact support if this continues.';
+    } else if (error?.code === 'PGRST116') {
+      errorMessage = 'Database connection issue. Please try again in a moment.';
+    } else if (error?.message) {
+      errorMessage = `Error: ${error.message}`;
     }
+    
+    toast.error(errorMessage);
   };
 
   // Show loading if auth is still loading or we don't have user data yet

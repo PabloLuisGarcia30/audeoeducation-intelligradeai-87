@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -154,18 +155,30 @@ export function GoalCreationWizard({ studentId, onGoalCreated, onCancel, onError
 
       const newGoal = await SmartGoalService.createGoal(studentId, goalData);
       
-      if (newGoal) {
-        toast.success('Goal created successfully! 🎯');
-        onGoalCreated(newGoal);
-      } else {
-        toast.error('Failed to create goal. Please try again.');
-      }
-    } catch (error) {
+      toast.success('Goal created successfully! 🎯');
+      onGoalCreated(newGoal);
+    } catch (error: any) {
       console.error('Error creating goal:', error);
+      
+      // Parse the error to provide specific user feedback
+      let errorMessage = 'Failed to create goal. Please try again.';
+      
+      if (error?.message?.includes('row-level security')) {
+        errorMessage = 'Authentication issue. Please try signing out and back in.';
+      } else if (error?.message?.includes('duplicate')) {
+        errorMessage = 'A goal with this title already exists. Please choose a different title.';
+      } else if (error?.message?.includes('network')) {
+        errorMessage = 'Connection issue. Please check your internet and try again.';
+      } else if (error?.message?.includes('permission')) {
+        errorMessage = 'Permission denied. Please contact support if this continues.';
+      } else if (error?.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
       if (onError) {
         onError(error);
       } else {
-        toast.error('Failed to create goal. Please try again.');
+        toast.error(errorMessage);
       }
     } finally {
       setIsSubmitting(false);

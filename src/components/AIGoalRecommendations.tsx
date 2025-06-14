@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,11 +68,25 @@ export function AIGoalRecommendations({
       setLoading(true);
       const recs = await SmartGoalService.generateGoalRecommendations(studentId);
       setRecommendations(recs);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load AI recommendations:', error);
       setRecommendations([]);
+      
+      // Parse the error to provide specific user feedback
+      let errorMessage = 'Failed to load recommendations. Please try again.';
+      
+      if (error?.message?.includes('network')) {
+        errorMessage = 'Connection issue. Please check your internet and try again.';
+      } else if (error?.message?.includes('permission')) {
+        errorMessage = 'Permission denied. Please contact support if this continues.';
+      } else if (error?.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
       if (onError) {
         onError(error);
+      } else {
+        toast.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -90,12 +105,28 @@ export function AIGoalRecommendations({
       onGoalCreated(newGoal);
       // Remove the accepted recommendation from the list
       setRecommendations(prev => prev.filter(r => r !== recommendation));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating goal from recommendation:', error);
+      
+      // Parse the error to provide specific user feedback
+      let errorMessage = 'Failed to create goal. Please try again.';
+      
+      if (error?.message?.includes('row-level security')) {
+        errorMessage = 'Authentication issue. Please try signing out and back in.';
+      } else if (error?.message?.includes('duplicate')) {
+        errorMessage = 'A goal with this title already exists. Please choose a different title.';
+      } else if (error?.message?.includes('network')) {
+        errorMessage = 'Connection issue. Please check your internet and try again.';
+      } else if (error?.message?.includes('permission')) {
+        errorMessage = 'Permission denied. Please contact support if this continues.';
+      } else if (error?.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
       if (onError) {
         onError(error);
       } else {
-        toast.error('Failed to create goal');
+        toast.error(errorMessage);
       }
     }
   };

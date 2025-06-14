@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { ProgressAnalyticsService, StudentProgressAnalytics } from "@/services/progressAnalyticsService";
 import { UnifiedStudentResultsService, UnifiedPerformanceData, UnifiedMisconceptionAnalysis } from "@/services/unifiedStudentResultsService";
@@ -107,7 +106,7 @@ export class SmartGoalService {
       return data.recommendations;
     } catch (error) {
       console.error('Failed to generate goal recommendations:', error);
-      return [];
+      throw error; // Throw the actual error instead of returning empty array
     }
   }
 
@@ -130,24 +129,23 @@ export class SmartGoalService {
       context_data: recommendation.context_data
     };
 
-    const newGoal = await this.createGoal(studentId, goalData);
-    if (!newGoal) {
-      throw new Error('Failed to create goal from recommendation');
-    }
-    return newGoal;
+    // Don't catch and re-throw with generic message - let the actual error bubble up
+    return await this.createGoal(studentId, goalData);
   }
 
   /**
    * Create a new goal for a student
    */
-  static async createGoal(studentId: string, goalData: Partial<StudentGoal>): Promise<StudentGoal | null> {
-    try {
-      // Ensure required fields are present
-      if (!goalData.goal_title || !goalData.goal_description) {
-        console.error('Goal title and description are required');
-        return null;
-      }
+  static async createGoal(studentId: string, goalData: Partial<StudentGoal>): Promise<StudentGoal> {
+    console.log('🎯 Creating goal for student:', studentId);
+    console.log('📝 Goal data:', goalData);
+    
+    // Ensure required fields are present
+    if (!goalData.goal_title || !goalData.goal_description) {
+      throw new Error('Goal title and description are required');
+    }
 
+    try {
       const { data, error } = await supabase
         .from('student_goals')
         .insert({
@@ -172,15 +170,15 @@ export class SmartGoalService {
         .single();
 
       if (error) {
-        console.error('Error creating goal:', error);
-        return null;
+        console.error('❌ Supabase error creating goal:', error);
+        throw error; // Throw the actual Supabase error
       }
 
-      console.log(`✅ Created goal: ${data.goal_title}`);
+      console.log('✅ Created goal successfully:', data.goal_title);
       return this.transformGoalData(data);
     } catch (error) {
-      console.error('Failed to create goal:', error);
-      return null;
+      console.error('💥 Failed to create goal:', error);
+      throw error; // Don't mask the error - let it bubble up
     }
   }
 
