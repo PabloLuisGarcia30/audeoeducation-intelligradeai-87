@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { ProgressAnalyticsService, StudentProgressAnalytics } from "@/services/progressAnalyticsService";
 import { UnifiedStudentResultsService, UnifiedPerformanceData, UnifiedMisconceptionAnalysis } from "@/services/unifiedStudentResultsService";
@@ -129,7 +130,7 @@ export class SmartGoalService {
       context_data: recommendation.context_data
     };
 
-    // Don't catch and re-throw with generic message - let the actual error bubble up
+    // Let the actual error bubble up to provide specific feedback
     return await this.createGoal(studentId, goalData);
   }
 
@@ -145,41 +146,43 @@ export class SmartGoalService {
       throw new Error('Goal title and description are required');
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('student_goals')
-        .insert({
-          student_id: studentId,
-          goal_title: goalData.goal_title,
-          goal_description: goalData.goal_description,
-          goal_type: goalData.goal_type || 'skill_mastery',
-          target_value: goalData.target_value || 100,
-          current_value: goalData.current_value || 0,
-          target_skill_name: goalData.target_skill_name,
-          target_misconception_id: goalData.target_misconception_id,
-          is_ai_suggested: goalData.is_ai_suggested || false,
-          ai_confidence_score: goalData.ai_confidence_score || 0,
-          difficulty_level: goalData.difficulty_level || 'medium',
-          target_date: goalData.target_date,
-          status: goalData.status || 'active',
-          progress_percentage: goalData.progress_percentage || 0,
-          milestones: JSON.stringify(goalData.milestones || []),
-          context_data: JSON.stringify(goalData.context_data || {})
-        })
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('student_goals')
+      .insert({
+        student_id: studentId,
+        goal_title: goalData.goal_title,
+        goal_description: goalData.goal_description,
+        goal_type: goalData.goal_type || 'skill_mastery',
+        target_value: goalData.target_value || 100,
+        current_value: goalData.current_value || 0,
+        target_skill_name: goalData.target_skill_name,
+        target_misconception_id: goalData.target_misconception_id,
+        is_ai_suggested: goalData.is_ai_suggested || false,
+        ai_confidence_score: goalData.ai_confidence_score || 0,
+        difficulty_level: goalData.difficulty_level || 'medium',
+        target_date: goalData.target_date,
+        status: goalData.status || 'active',
+        progress_percentage: goalData.progress_percentage || 0,
+        milestones: JSON.stringify(goalData.milestones || []),
+        context_data: JSON.stringify(goalData.context_data || {})
+      })
+      .select()
+      .single();
 
-      if (error) {
-        console.error('❌ Supabase error creating goal:', error);
-        throw error; // Throw the actual Supabase error
-      }
-
-      console.log('✅ Created goal successfully:', data.goal_title);
-      return this.transformGoalData(data);
-    } catch (error) {
-      console.error('💥 Failed to create goal:', error);
-      throw error; // Don't mask the error - let it bubble up
+    if (error) {
+      console.error('❌ Supabase error creating goal:', error);
+      // Log detailed error information for debugging
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      throw error; // Throw the actual Supabase error with all details
     }
+
+    console.log('✅ Created goal successfully:', data.goal_title);
+    return this.transformGoalData(data);
   }
 
   /**

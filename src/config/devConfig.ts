@@ -4,8 +4,8 @@ export const DEV_CONFIG = {
   // Set to true to bypass authentication during development
   DISABLE_AUTH_FOR_DEV: true,
   
-  // Default role for development mode
-  DEFAULT_DEV_ROLE: 'teacher' as 'teacher' | 'student'
+  // Default role for development mode - changed to student for Pablo's demo
+  DEFAULT_DEV_ROLE: 'student' as 'teacher' | 'student'
 };
 
 // Mock user data for development - using Pablo Luis Garcia's real data for student mode

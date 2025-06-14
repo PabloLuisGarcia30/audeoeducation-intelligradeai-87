@@ -29,7 +29,7 @@ import { GoalInsightsPanel } from "@/components/GoalInsightsPanel";
 import { GoalAchievementCelebration } from "@/components/GoalAchievementCelebration";
 import { MonthlyActivityTracker } from "@/components/MonthlyActivityTracker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { DEV_CONFIG } from "@/config";
+import { DEV_CONFIG } from "@/config/devConfig";
 import { toast } from "sonner";
 
 export default function GoalPlanner() {
@@ -40,6 +40,19 @@ export default function GoalPlanner() {
   const [showWizard, setShowWizard] = useState(false);
   const [selectedView, setSelectedView] = useState<'overview' | 'calendar' | 'achievements' | 'insights'>('overview');
   const [goalOperationLoading, setGoalOperationLoading] = useState(false);
+
+  // Debug logging for authentication state
+  useEffect(() => {
+    console.log('🔍 GoalPlanner Auth Debug:', {
+      isDevMode: DEV_CONFIG.DISABLE_AUTH_FOR_DEV,
+      defaultRole: DEV_CONFIG.DEFAULT_DEV_ROLE,
+      userId: user?.id,
+      userEmail: user?.email,
+      profileRole: profile?.role,
+      profileName: profile?.full_name,
+      authLoading
+    });
+  }, [user, profile, authLoading]);
 
   useEffect(() => {
     if (user?.id && !authLoading) {
@@ -55,12 +68,12 @@ export default function GoalPlanner() {
 
     try {
       setLoading(true);
-      console.log('Loading goals for user:', user.id);
+      console.log('🎯 Loading goals for user:', user.id);
       const studentGoals = await SmartGoalService.getStudentGoals(user.id);
-      console.log('Successfully loaded goals:', studentGoals.length);
+      console.log('✅ Successfully loaded goals:', studentGoals.length);
       setGoals(studentGoals);
     } catch (error) {
-      console.error('Failed to load goals:', error);
+      console.error('❌ Failed to load goals:', error);
       toast.error('Failed to load your goals. Please try refreshing the page.');
     } finally {
       setLoading(false);
@@ -70,12 +83,12 @@ export default function GoalPlanner() {
   const handleGoalCreated = async (newGoal: StudentGoal) => {
     try {
       setGoalOperationLoading(true);
-      console.log('Goal created successfully:', newGoal.goal_title);
+      console.log('🎯 Goal created successfully:', newGoal.goal_title);
       setGoals(prev => [newGoal, ...prev]);
       setShowWizard(false);
       toast.success('🎯 Goal created successfully! You\'re on your way to success!');
     } catch (error) {
-      console.error('Failed to handle goal creation:', error);
+      console.error('❌ Failed to handle goal creation:', error);
       toast.error('Something went wrong while saving your goal. Please try again.');
     } finally {
       setGoalOperationLoading(false);
@@ -83,13 +96,18 @@ export default function GoalPlanner() {
   };
 
   const handleGoalError = (error: any) => {
-    console.error('Goal operation error:', error);
+    console.error('❌ Goal operation error:', error);
     
     // Provide specific error messages based on the error type
     let errorMessage = 'An error occurred. Please try again.';
     
     if (error?.message?.includes('row-level security')) {
-      errorMessage = 'Authentication issue. Please try signing out and back in.';
+      errorMessage = 'Authentication issue detected. In dev mode, this should not happen.';
+      console.log('🔧 Dev mode auth state:', {
+        devModeEnabled: DEV_CONFIG.DISABLE_AUTH_FOR_DEV,
+        currentUserId: user?.id,
+        expectedPabloId: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26'
+      });
     } else if (error?.message?.includes('duplicate')) {
       errorMessage = 'A goal with this title already exists. Please choose a different title.';
     } else if (error?.message?.includes('network')) {
@@ -115,6 +133,11 @@ export default function GoalPlanner() {
             <p className="text-lg text-slate-600">
               {authLoading ? 'Authenticating...' : 'Loading your goals...'}
             </p>
+            {DEV_CONFIG.DISABLE_AUTH_FOR_DEV && (
+              <p className="text-sm text-blue-600 mt-2">
+                Dev Mode: Using Pablo Luis Garcia (Student)
+              </p>
+            )}
           </div>
         </div>
       </ProtectedRoute>
@@ -152,6 +175,11 @@ export default function GoalPlanner() {
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Dashboard
               </Button>
+              {DEV_CONFIG.DISABLE_AUTH_FOR_DEV && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                  Dev Mode: {displayName}
+                </Badge>
+              )}
             </div>
             
             <div className="text-center mb-6">
