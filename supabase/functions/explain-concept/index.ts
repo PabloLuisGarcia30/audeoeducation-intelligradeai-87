@@ -33,6 +33,13 @@ interface GradeConfig {
   gradeCategory: string;
 }
 
+interface MCQDetectionResult {
+  isMCQ: boolean;
+  confidence: number;
+  detectionMethod: string;
+  patterns: string[];
+}
+
 // Grade-appropriate configuration
 function getGradeConfig(grade: string): GradeConfig {
   const gradeNumber = extractGradeNumber(grade);
@@ -96,44 +103,121 @@ function extractGradeNumber(grade: string): number {
   return 7;
 }
 
-// Simple question-type-based routing
-function routeByQuestionType(context: ExplanationContext): {
+// Enhanced MCQ detection with comprehensive pattern matching
+function detectMCQQuestion(context: ExplanationContext): MCQDetectionResult {
+  let confidence = 0;
+  let detectionMethod = '';
+  const patterns: string[] = [];
+
+  // 1. Explicit question type parameter (highest confidence)
+  if (context.questionType) {
+    const questionType = context.questionType.toLowerCase();
+    if (questionType.includes('multiple-choice') || questionType.includes('multiple_choice') || questionType === 'mcq') {
+      return {
+        isMCQ: true,
+        confidence: 100,
+        detectionMethod: 'explicit_question_type',
+        patterns: [`questionType: ${context.questionType}`]
+      };
+    }
+  }
+
+  const questionText = context.question.toLowerCase();
+  const correctAnswer = context.correctAnswer.toLowerCase().trim();
+
+  // 2. Answer format detection (high confidence)
+  const answerPatterns = [
+    /^[A-D]$/i,           // Single letter: A, B, C, D
+    /^[A-D]\)$/i,         // Letter with parenthesis: A), B), C), D)
+    /^\([A-D]\)$/i,       // Letter in parentheses: (A), (B), (C), (D)
+    /^[A-D]\.$/i,         // Letter with period: A., B., C., D.
+    /^[1-4]$/,            // Numbers: 1, 2, 3, 4
+    /^[1-4]\)$/,          // Numbers with parenthesis: 1), 2), 3), 4)
+    /^\([1-4]\)$/,        // Numbers in parentheses: (1), (2), (3), (4)
+  ];
+
+  for (const pattern of answerPatterns) {
+    if (pattern.test(correctAnswer)) {
+      confidence = Math.max(confidence, 90);
+      detectionMethod = 'answer_format';
+      patterns.push(`Answer format: ${correctAnswer}`);
+      break;
+    }
+  }
+
+  // 3. Question text pattern detection (medium confidence)
+  const questionPatterns = [
+    { regex: /\ba\)|b\)|c\)|d\)/i, name: 'letter_options_with_paren', confidence: 85 },
+    { regex: /\b\(?a\)|\(?b\)|\(?c\)|\(?d\)/i, name: 'letter_options_various', confidence: 80 },
+    { regex: /\b1\)|2\)|3\)|4\)/i, name: 'numbered_options', confidence: 80 },
+    { regex: /which of the following/i, name: 'which_following', confidence: 85 },
+    { regex: /select the (best|correct|most appropriate)/i, name: 'select_directive', confidence: 80 },
+    { regex: /choose the (best|correct|most appropriate)/i, name: 'choose_directive', confidence: 80 },
+    { regex: /the (best|correct|most appropriate) answer is/i, name: 'answer_directive', confidence: 75 },
+    { regex: /all of the above|none of the above/i, name: 'inclusive_options', confidence: 70 },
+    { regex: /mark the letter|circle the letter|select the letter/i, name: 'letter_instruction', confidence: 85 }
+  ];
+
+  for (const pattern of questionPatterns) {
+    if (pattern.regex.test(questionText)) {
+      confidence = Math.max(confidence, pattern.confidence);
+      if (!detectionMethod) detectionMethod = 'question_text_patterns';
+      patterns.push(pattern.name);
+    }
+  }
+
+  // 4. Combined heuristics (lower confidence boost)
+  if (questionText.includes('option') && (questionText.includes('correct') || questionText.includes('best'))) {
+    confidence = Math.max(confidence, 65);
+    if (!detectionMethod) detectionMethod = 'combined_heuristics';
+    patterns.push('option_and_correctness_keywords');
+  }
+
+  // Determine if it's an MCQ based on confidence threshold
+  const isMCQ = confidence >= 65; // Lowered threshold for better detection
+
+  return {
+    isMCQ,
+    confidence,
+    detectionMethod: detectionMethod || 'no_detection',
+    patterns
+  };
+}
+
+// Strict routing with no fallback for MCQ questions
+function routeWithStrictMCQRule(context: ExplanationContext): {
   selectedModel: 'gpt-4o-mini' | 'gpt-4.1-2025-04-14';
   reasoning: string;
   complexityScore: number;
+  mcqDetection: MCQDetectionResult;
+  strictRuleApplied: boolean;
 } {
-  const questionText = context.question.toLowerCase();
-  const correctAnswer = context.correctAnswer.toLowerCase();
-
-  // Check for multiple choice indicators
-  const mcqIndicators = [
-    /\ba\)|b\)|c\)|d\)/i,
-    /\b\(?a\)|\(?b\)|\(?c\)|\(?d\)/i,
-    /which of the following/i,
-    /select the/i,
-    /choose the/i
-  ];
-
-  const isMCQ = mcqIndicators.some(pattern => pattern.test(questionText)) ||
-                /^[A-D]$/i.test(correctAnswer.trim()) ||
-                /^[A-D]\)/i.test(correctAnswer.trim());
-
-  // Check for true/false
-  const isTF = ['true', 'false', 't', 'f', 'yes', 'no'].includes(correctAnswer.trim().toLowerCase());
-
-  if (isMCQ) {
+  const mcqDetection = detectMCQQuestion(context);
+  
+  // STRICT RULE: If detected as MCQ, ALWAYS use gpt-4o-mini
+  if (mcqDetection.isMCQ) {
     return {
       selectedModel: 'gpt-4o-mini',
-      reasoning: 'Selected gpt-4o-mini for multiple choice question - simple explanation suitable',
-      complexityScore: 20
+      reasoning: `STRICT MCQ RULE: Detected multiple choice question (${mcqDetection.confidence}% confidence, method: ${mcqDetection.detectionMethod}). Using gpt-4o-mini with NO fallback allowed.`,
+      complexityScore: 20,
+      mcqDetection,
+      strictRuleApplied: true
     };
   }
 
+  // For non-MCQ questions, use original logic
+  const questionText = context.question.toLowerCase();
+  const correctAnswer = context.correctAnswer.toLowerCase();
+
+  // Check for true/false
+  const isTF = ['true', 'false', 't', 'f', 'yes', 'no'].includes(correctAnswer.trim());
   if (isTF) {
     return {
-      selectedModel: 'gpt-4o-mini', 
+      selectedModel: 'gpt-4o-mini',
       reasoning: 'Selected gpt-4o-mini for true/false question - simple explanation suitable',
-      complexityScore: 15
+      complexityScore: 15,
+      mcqDetection,
+      strictRuleApplied: false
     };
   }
 
@@ -141,24 +225,19 @@ function routeByQuestionType(context: ExplanationContext): {
   return {
     selectedModel: 'gpt-4.1-2025-04-14',
     reasoning: 'Selected gpt-4.1-2025-04-14 for open-ended question - detailed explanation required',
-    complexityScore: 80
+    complexityScore: 80,
+    mcqDetection,
+    strictRuleApplied: false
   };
 }
 
-function shouldFallbackToGPT4o(result: string, wasSimpleQuestion: boolean): boolean {
-  // For simple routing, minimal fallback logic
-  const wordCount = result.split(/\s+/).length;
-  
-  // Only fallback if result is extremely short (likely an error)
-  if (wordCount < 50) return true;
-  
-  // Check for error messages
-  if (result.toLowerCase().includes('error') || result.toLowerCase().includes('sorry')) return true;
-  
-  return false;
-}
-
-async function generateExplanationWithModel(model: string, context: ExplanationContext): Promise<string> {
+// MCQ-specific error handling that retries with gpt-4o-mini
+async function generateExplanationWithMCQRetry(
+  model: string, 
+  context: ExplanationContext, 
+  isMCQ: boolean,
+  attempt: number = 1
+): Promise<string> {
   const gradeConfig = getGradeConfig(context.grade);
   
   const systemPrompt = `You are a ${gradeConfig.toneDescription} teacher who loves using memorable analogies to explain concepts to ${gradeConfig.gradeCategory} students. Your specialty is making complex ideas stick in students' minds through unforgettable comparisons and engaging stories.
@@ -188,29 +267,58 @@ The basic explanation given was: "${context.explanation}"
 
 Please create a ${gradeConfig.toneDescription.toUpperCase()}, MEMORABLE explanation using creative analogies that a ${gradeConfig.gradeCategory} student will never forget! Make it engaging and use comparisons that will make this concept stick in their mind forever. CRITICAL: Keep it to exactly ${gradeConfig.wordLimit} words or less. Help them really grasp why this answer is correct through an amazing analogy or story!`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${openAIApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: gradeConfig.temperature,
-      max_tokens: Math.min(300, gradeConfig.wordLimit + 50),
-    }),
-  });
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: gradeConfig.temperature,
+        max_tokens: Math.min(300, gradeConfig.wordLimit + 50),
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const result = data.choices[0].message.content;
+    
+    // For MCQ questions, validate the response quality
+    if (isMCQ) {
+      const wordCount = result.split(/\s+/).length;
+      
+      // If response is too short and this is first attempt, retry with gpt-4o-mini
+      if (wordCount < 30 && attempt === 1) {
+        console.log(`MCQ explanation too short (${wordCount} words), retrying with gpt-4o-mini (attempt ${attempt + 1})`);
+        return await generateExplanationWithMCQRetry('gpt-4o-mini', context, isMCQ, attempt + 1);
+      }
+      
+      // If response contains error indicators and this is first attempt, retry
+      if ((result.toLowerCase().includes('error') || result.toLowerCase().includes('sorry')) && attempt === 1) {
+        console.log(`MCQ explanation contains error indicators, retrying with gpt-4o-mini (attempt ${attempt + 1})`);
+        return await generateExplanationWithMCQRetry('gpt-4o-mini', context, isMCQ, attempt + 1);
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    // For MCQ questions, always retry with gpt-4o-mini (never fallback to gpt-4.1)
+    if (isMCQ && attempt === 1) {
+      console.log(`MCQ explanation failed, retrying with gpt-4o-mini (attempt ${attempt + 1}): ${error.message}`);
+      return await generateExplanationWithMCQRetry('gpt-4o-mini', context, isMCQ, attempt + 1);
+    }
+    
+    throw error;
   }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
 }
 
 serve(async (req) => {
@@ -243,67 +351,91 @@ serve(async (req) => {
       questionType
     };
 
-    console.log(`Using grade-appropriate routing for ${context.grade} student...`);
+    console.log(`Using strict MCQ routing for ${context.grade} student...`);
     
-    // Simple question-type-based routing
-    const routingDecision = routeByQuestionType(context);
+    // Apply strict MCQ routing rule
+    const routingDecision = routeWithStrictMCQRule(context);
     const gradeConfig = getGradeConfig(context.grade);
     
     console.log(`Routing decision: ${routingDecision.selectedModel}`);
+    console.log(`MCQ Detection: ${routingDecision.mcqDetection.isMCQ ? 'YES' : 'NO'} (${routingDecision.mcqDetection.confidence}% confidence)`);
+    console.log(`Strict rule applied: ${routingDecision.strictRuleApplied}`);
     console.log(`Grade configuration: ${gradeConfig.gradeCategory} level with ${gradeConfig.wordLimit} word limit`);
     console.log(`Reasoning: ${routingDecision.reasoning}`);
 
     let detailedExplanation: string;
     let usedModel = routingDecision.selectedModel;
     let fallbackTriggered = false;
+    let retryCount = 0;
 
     try {
-      // Try with initially selected model
-      detailedExplanation = await generateExplanationWithModel(routingDecision.selectedModel, context);
+      // Use MCQ-specific retry logic that never falls back to gpt-4.1 for MCQ questions
+      detailedExplanation = await generateExplanationWithMCQRetry(
+        routingDecision.selectedModel, 
+        context, 
+        routingDecision.mcqDetection.isMCQ
+      );
       
-      // Quality check and potential fallback for gpt-4o-mini
-      if (routingDecision.selectedModel === 'gpt-4o-mini') {
-        const wasSimpleQuestion = routingDecision.complexityScore < 30;
-        if (shouldFallbackToGPT4o(detailedExplanation, wasSimpleQuestion)) {
-          console.log('Quality check failed for gpt-4o-mini, falling back to gpt-4.1-2025-04-14...');
-          detailedExplanation = await generateExplanationWithModel('gpt-4.1-2025-04-14', context);
+    } catch (error) {
+      // For MCQ questions: NEVER fallback to gpt-4.1, always stay with gpt-4o-mini
+      if (routingDecision.mcqDetection.isMCQ) {
+        console.log(`MCQ explanation failed completely, providing fallback response with gpt-4o-mini: ${error.message}`);
+        detailedExplanation = `I apologize, but I'm having trouble generating a detailed explanation right now. However, since this is a multiple choice question, here's a simple explanation: ${explanation}. The correct answer is ${correctAnswer}. Please try again in a moment for a more detailed explanation.`;
+        usedModel = 'gpt-4o-mini';
+        fallbackTriggered = false; // Not a model fallback, just error handling
+        retryCount = 2;
+      } else {
+        // For non-MCQ questions, allow fallback to gpt-4.1 if original was gpt-4o-mini
+        if (routingDecision.selectedModel === 'gpt-4o-mini') {
+          console.log('Non-MCQ gpt-4o-mini failed, falling back to gpt-4.1-2025-04-14...');
+          detailedExplanation = await generateExplanationWithMCQRetry('gpt-4.1-2025-04-14', context, false);
           usedModel = 'gpt-4.1-2025-04-14';
           fallbackTriggered = true;
+        } else {
+          throw error;
         }
-      }
-    } catch (error) {
-      // Error fallback - if gpt-4o-mini fails, try gpt-4.1-2025-04-14
-      if (routingDecision.selectedModel === 'gpt-4o-mini') {
-        console.log('gpt-4o-mini failed, falling back to gpt-4.1-2025-04-14...');
-        detailedExplanation = await generateExplanationWithModel('gpt-4.1-2025-04-14', context);
-        usedModel = 'gpt-4.1-2025-04-14';
-        fallbackTriggered = true;
-      } else {
-        throw error;
       }
     }
 
+    // Enhanced routing info with MCQ detection details
+    const routingInfo = {
+      selectedModel: usedModel,
+      originalModel: routingDecision.selectedModel,
+      fallbackTriggered,
+      complexityScore: routingDecision.complexityScore,
+      confidence: routingDecision.mcqDetection.confidence,
+      reasoning: routingDecision.reasoning,
+      mcqDetection: {
+        detected: routingDecision.mcqDetection.isMCQ,
+        confidence: routingDecision.mcqDetection.confidence,
+        method: routingDecision.mcqDetection.detectionMethod,
+        patterns: routingDecision.mcqDetection.patterns
+      },
+      strictMCQRule: {
+        applied: routingDecision.strictRuleApplied,
+        enforced: routingDecision.mcqDetection.isMCQ,
+        modelLocked: routingDecision.mcqDetection.isMCQ ? 'gpt-4o-mini' : 'none'
+      },
+      gradeConfiguration: {
+        category: gradeConfig.gradeCategory,
+        wordLimit: gradeConfig.wordLimit,
+        temperature: gradeConfig.temperature,
+        vocabularyLevel: gradeConfig.vocabularyLevel
+      },
+      retryCount
+    };
+
     // Log routing results for analytics
-    console.log(`Successfully generated explanation using ${usedModel}${fallbackTriggered ? ' (after fallback)' : ''}`);
-    console.log(`Cost factor: ${usedModel === 'gpt-4.1-2025-04-14' ? '8x' : '1x'} baseline`);
-    console.log(`Grade-appropriate settings: ${gradeConfig.gradeCategory}, ${gradeConfig.wordLimit} words, temperature ${gradeConfig.temperature}`);
+    console.log(`✅ Successfully generated explanation using ${usedModel}${fallbackTriggered ? ' (after fallback)' : ''}${retryCount > 0 ? ` (${retryCount} retries)` : ''}`);
+    if (routingDecision.mcqDetection.isMCQ) {
+      console.log(`🔒 STRICT MCQ RULE ENFORCED: Question locked to gpt-4o-mini (Detection: ${routingDecision.mcqDetection.detectionMethod}, Patterns: ${routingDecision.mcqDetection.patterns.join(', ')})`);
+    }
+    console.log(`💰 Cost factor: ${usedModel === 'gpt-4.1-2025-04-14' ? '8x' : '1x'} baseline`);
+    console.log(`📚 Grade-appropriate settings: ${gradeConfig.gradeCategory}, ${gradeConfig.wordLimit} words, temperature ${gradeConfig.temperature}`);
 
     return new Response(JSON.stringify({ 
       detailedExplanation,
-      routingInfo: {
-        selectedModel: usedModel,
-        originalModel: routingDecision.selectedModel,
-        fallbackTriggered,
-        complexityScore: routingDecision.complexityScore,
-        confidence: 95, // High confidence in question-type routing
-        reasoning: routingDecision.reasoning,
-        gradeConfiguration: {
-          category: gradeConfig.gradeCategory,
-          wordLimit: gradeConfig.wordLimit,
-          temperature: gradeConfig.temperature,
-          vocabularyLevel: gradeConfig.vocabularyLevel
-        }
-      }
+      routingInfo
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
