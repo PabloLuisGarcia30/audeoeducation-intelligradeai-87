@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,17 +49,19 @@ export default function GoalPlanner() {
 
   const loadGoals = async () => {
     if (!user?.id) {
-      console.error('No authenticated user found');
+      console.error('No authenticated user found for loading goals');
       return;
     }
 
     try {
       setLoading(true);
+      console.log('Loading goals for user:', user.id);
       const studentGoals = await SmartGoalService.getStudentGoals(user.id);
+      console.log('Successfully loaded goals:', studentGoals.length);
       setGoals(studentGoals);
     } catch (error) {
       console.error('Failed to load goals:', error);
-      toast.error('Failed to load your goals. Please try again.');
+      toast.error('Failed to load your goals. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
@@ -69,14 +70,30 @@ export default function GoalPlanner() {
   const handleGoalCreated = async (newGoal: StudentGoal) => {
     try {
       setGoalOperationLoading(true);
+      console.log('Goal created successfully:', newGoal.goal_title);
       setGoals(prev => [newGoal, ...prev]);
       setShowWizard(false);
-      toast.success('Goal created successfully!');
+      toast.success('🎯 Goal created successfully! You\'re on your way to success!');
     } catch (error) {
       console.error('Failed to handle goal creation:', error);
-      toast.error('Failed to create goal. Please try again.');
+      toast.error('Something went wrong while saving your goal. Please try again.');
     } finally {
       setGoalOperationLoading(false);
+    }
+  };
+
+  const handleGoalError = (error: any) => {
+    console.error('Goal creation error:', error);
+    
+    // Provide specific error messages based on the error type
+    if (error?.message?.includes('row-level security')) {
+      toast.error('Authentication issue. Please try signing out and back in.');
+    } else if (error?.message?.includes('network')) {
+      toast.error('Connection issue. Please check your internet and try again.');
+    } else if (error?.message?.includes('permission')) {
+      toast.error('Permission denied. Please contact support if this continues.');
+    } else {
+      toast.error('Failed to create goal. Please try again or contact support.');
     }
   };
 
@@ -293,6 +310,7 @@ export default function GoalPlanner() {
               <AIGoalRecommendations 
                 studentId={user.id} 
                 onGoalCreated={handleGoalCreated}
+                onError={handleGoalError}
               />
 
               {/* Monthly Activity Tracker */}
@@ -318,6 +336,7 @@ export default function GoalPlanner() {
               studentId={user.id}
               onGoalCreated={handleGoalCreated}
               onCancel={() => setShowWizard(false)}
+              onError={handleGoalError}
             />
           )}
         </div>
