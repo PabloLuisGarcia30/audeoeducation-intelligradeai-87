@@ -184,7 +184,7 @@ export function MonthlyActivityTracker() {
                     return (
                       <div
                         key={day + 1}
-                        className="w-6 h-6 mx-px border border-gray-200 rounded cursor-pointer hover:scale-110 transition-transform"
+                        className="w-6 h-6 mx-px border border-gray-200 rounded-full cursor-pointer hover:scale-110 transition-transform"
                         style={{ 
                           backgroundColor: getIntensityColor(cellData?.intensity || 0)
                         }}
@@ -204,7 +204,7 @@ export function MonthlyActivityTracker() {
               {[0, 1, 2, 3, 4, 5].map((intensity) => (
                 <div
                   key={intensity}
-                  className="w-4 h-4 border border-gray-200 rounded"
+                  className="w-4 h-4 border border-gray-200 rounded-full"
                   style={{ backgroundColor: getIntensityColor(intensity) }}
                 />
               ))}
