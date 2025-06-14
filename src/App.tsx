@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -34,20 +35,19 @@ const queryClient = new QueryClient();
 
 function AppRoutes() {
   const { user, profile, loading } = useAuth();
+  const { currentRole, isDevMode } = useDevRole();
   
-  // Get dev role for routing decisions
-  let currentRole: 'teacher' | 'student' = 'teacher';
-  try {
-    const { currentRole: devRole, isDevMode } = useDevRole();
-    if (isDevMode) {
-      currentRole = devRole;
-    } else if (profile?.role) {
-      currentRole = profile.role;
-    }
-  } catch {
-    // DevRoleContext not available, use profile role or default
-    currentRole = profile?.role || 'teacher';
+  console.log('🔍 AppRoutes render:', { user: user?.id, profile: profile?.role, loading, currentRole, isDevMode });
+
+  // Determine current role for routing
+  let effectiveRole: 'teacher' | 'student' = 'teacher';
+  if (isDevMode) {
+    effectiveRole = currentRole;
+  } else if (profile?.role) {
+    effectiveRole = profile.role;
   }
+
+  console.log('🎯 Effective role for routing:', effectiveRole);
 
   if (loading && !DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
     return (
@@ -70,7 +70,7 @@ function AppRoutes() {
         path="/" 
         element={
           <ProtectedRoute>
-            {currentRole === 'student' ? <Navigate to="/student-dashboard" replace /> : <Index />}
+            {effectiveRole === 'student' ? <Navigate to="/student-dashboard" replace /> : <Index />}
           </ProtectedRoute>
         } 
       />
@@ -243,6 +243,8 @@ function AppRoutes() {
 }
 
 function App() {
+  console.log('🚀 App component mounting');
+  
   return (
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
