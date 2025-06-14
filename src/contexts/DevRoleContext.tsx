@@ -22,7 +22,9 @@ export function useDevRole() {
 
 export function DevRoleProvider({ children }: { children: React.ReactNode }) {
   const [currentRole, setCurrentRole] = useState<DevRole>(DEV_CONFIG.DEFAULT_DEV_ROLE);
-  const isDevMode = DEV_CONFIG.DISABLE_AUTH_FOR_DEV;
+  const isDevMode = DEV_CONFIG.FORCE_NO_AUTH || DEV_CONFIG.DISABLE_AUTH_FOR_DEV;
+
+  console.log('🎭 DevRoleProvider initialized:', { currentRole, isDevMode });
 
   return (
     <DevRoleContext.Provider value={{ currentRole, setCurrentRole, isDevMode }}>

@@ -1,5 +1,6 @@
+
 import { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { StudentDashboard } from "@/components/StudentDashboard";
 import { StudentSearch } from "@/components/StudentSearch";
 import { LearnerProfileDisplay } from "@/components/LearnerProfileDisplay";
@@ -36,17 +37,15 @@ const Index = () => {
     currentRole = profile?.role || 'teacher';
   }
 
-  // Navigate to student dashboard when role changes to student
+  console.log('📊 Index page - Current role:', currentRole, 'Dev mode:', isDevMode);
+
+  // Only navigate to student dashboard when role changes to student AND we're not in FORCE_NO_AUTH mode
   useEffect(() => {
-    if (isDevMode && currentRole === 'student') {
+    if (!DEV_CONFIG.FORCE_NO_AUTH && isDevMode && currentRole === 'student') {
+      console.log('🔄 Navigating to student dashboard for role:', currentRole);
       navigate('/student-dashboard');
     }
   }, [currentRole, isDevMode, navigate]);
-
-  // If in student view (non-dev mode), redirect to student dashboard
-  if (!isDevMode && currentRole === 'student') {
-    return <Navigate to="/student-dashboard" replace />;
-  }
 
   const handleSelectStudent = (studentId: string, classId?: string, className?: string) => {
     setSelectedStudent(studentId);
@@ -137,11 +136,21 @@ const Index = () => {
   };
 
   return (
-    <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "teacher"}>
+    <ProtectedRoute>
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-gray-50">
           <DashboardSidebar activeView={activeView} onViewChange={setActiveView} />
           <main className="flex-1 overflow-auto">
+            {/* Role indicator when in dev mode */}
+            {DEV_CONFIG.FORCE_NO_AUTH && (
+              <div className="bg-blue-100 border-b border-blue-200 px-6 py-2">
+                <p className="text-sm text-blue-800">
+                  🔧 Dev Mode: Currently viewing as <strong>{currentRole}</strong>
+                  {currentRole === 'teacher' && ' (Mr. Cullen)'}
+                  {currentRole === 'student' && ' (Pablo Luis Garcia)'}
+                </p>
+              </div>
+            )}
             {renderContent()}
           </main>
         </div>

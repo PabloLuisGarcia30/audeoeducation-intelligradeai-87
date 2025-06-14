@@ -1,14 +1,17 @@
 
 // Development configuration
 export const DEV_CONFIG = {
-  // Set to false in production or when testing real authentication
+  // Complete authentication bypass - set to false to re-enable all auth
+  FORCE_NO_AUTH: true,
+  
+  // Legacy dev auth settings (kept for granular control when re-enabling)
   DISABLE_AUTH_FOR_DEV: true,
   
-  // Default role for development mode - student for Pablo's demo
-  DEFAULT_DEV_ROLE: 'student' as 'teacher' | 'student'
+  // Default role for development mode
+  DEFAULT_DEV_ROLE: 'teacher' as 'teacher' | 'student'
 };
 
-// Mock user data for development - using Pablo Luis Garcia's real data for student mode
+// Mock user data for development
 export const MOCK_USER_DATA = {
   teacher: {
     user: {
@@ -54,8 +57,9 @@ export const isDevEnvironment = () => {
 
 // Helper function to determine if dev auth should be active
 export const shouldUseDevAuth = () => {
-  const shouldUse = DEV_CONFIG.DISABLE_AUTH_FOR_DEV && isDevEnvironment();
+  const shouldUse = DEV_CONFIG.FORCE_NO_AUTH || (DEV_CONFIG.DISABLE_AUTH_FOR_DEV && isDevEnvironment());
   console.log('🔧 Should use dev auth:', shouldUse, { 
+    FORCE_NO_AUTH: DEV_CONFIG.FORCE_NO_AUTH,
     DISABLE_AUTH_FOR_DEV: DEV_CONFIG.DISABLE_AUTH_FOR_DEV, 
     isDevEnvironment: isDevEnvironment() 
   });

@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -39,7 +38,7 @@ function AppRoutes() {
   
   console.log('🔍 AppRoutes render:', { user: user?.id, profile: profile?.role, loading, currentRole, isDevMode });
 
-  // Determine current role for routing
+  // Determine current role for routing (but don't enforce it)
   let effectiveRole: 'teacher' | 'student' = 'teacher';
   if (isDevMode) {
     effectiveRole = currentRole;
@@ -49,7 +48,8 @@ function AppRoutes() {
 
   console.log('🎯 Effective role for routing:', effectiveRole);
 
-  if (loading && !DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+  // Skip loading check when FORCE_NO_AUTH is true
+  if (loading && !DEV_CONFIG.FORCE_NO_AUTH) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 flex items-center justify-center">
         <div className="text-center">
@@ -65,7 +65,7 @@ function AppRoutes() {
       <Route path="/auth" element={<Auth />} />
       <Route path="/quiz/:token" element={<StudentQuiz />} />
       
-      {/* Protected Routes */}
+      {/* Protected Routes - but no actual protection when FORCE_NO_AUTH is true */}
       <Route 
         path="/" 
         element={
@@ -78,7 +78,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <StudentLanding />
           </ProtectedRoute>
         } 
@@ -87,7 +87,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard/main" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <StudentDashboard />
           </ProtectedRoute>
         } 
@@ -96,7 +96,7 @@ function AppRoutes() {
       <Route 
         path="/goal-planner" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <GoalPlanner />
           </ProtectedRoute>
         } 
@@ -105,7 +105,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard/results-history" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <StudentResultsHistory />
           </ProtectedRoute>
         } 
@@ -114,7 +114,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard/trailblazer" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <StudentTrailblazer />
           </ProtectedRoute>
         } 
@@ -123,7 +123,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard/trailblazer/session/:sessionId" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <TrailblazerSession />
           </ProtectedRoute>
         } 
@@ -132,7 +132,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard/home-learner" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <HomeLearner />
           </ProtectedRoute>
         } 
@@ -141,7 +141,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard/class/:classId" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <StudentClassScores />
           </ProtectedRoute>
         } 
@@ -150,7 +150,7 @@ function AppRoutes() {
       <Route 
         path="/student-dashboard/practice/:classId/:skillName" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+          <ProtectedRoute>
             <StudentPracticeExercise />
           </ProtectedRoute>
         } 
@@ -159,7 +159,7 @@ function AppRoutes() {
       <Route 
         path="/test-creator" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "teacher"}>
+          <ProtectedRoute>
             <TestCreator />
           </ProtectedRoute>
         } 
@@ -168,7 +168,7 @@ function AppRoutes() {
       <Route 
         path="/upload-test" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "teacher"}>
+          <ProtectedRoute>
             <UploadTest />
           </ProtectedRoute>
         } 
@@ -186,7 +186,7 @@ function AppRoutes() {
       <Route 
         path="/create-quiz-link" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "teacher"}>
+          <ProtectedRoute>
             <CreateQuizLink />
           </ProtectedRoute>
         } 
@@ -213,7 +213,7 @@ function AppRoutes() {
       <Route 
         path="/class-runner" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "teacher"}>
+          <ProtectedRoute>
             <ClassRunner />
           </ProtectedRoute>
         } 
@@ -222,7 +222,7 @@ function AppRoutes() {
       <Route 
         path="/lesson-planner" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "teacher"}>
+          <ProtectedRoute>
             <LessonPlanner />
           </ProtectedRoute>
         } 
@@ -231,7 +231,7 @@ function AppRoutes() {
       <Route 
         path="/mistake-pattern-demo" 
         element={
-          <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "teacher"}>
+          <ProtectedRoute>
             <MistakePatternDemo />
           </ProtectedRoute>
         } 

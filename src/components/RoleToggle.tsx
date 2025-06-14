@@ -8,15 +8,17 @@ import { DEV_CONFIG } from "@/config/devConfig";
 export function RoleToggle() {
   const { currentRole, setCurrentRole, isDevMode } = useDevRole();
 
-  // Only show in dev mode
-  if (!isDevMode || !DEV_CONFIG.DISABLE_AUTH_FOR_DEV) {
+  // Show when FORCE_NO_AUTH is true or in dev mode
+  if (!DEV_CONFIG.FORCE_NO_AUTH && (!isDevMode || !DEV_CONFIG.DISABLE_AUTH_FOR_DEV)) {
     return null;
   }
 
   const isStudent = currentRole === 'student';
 
   const handleToggle = (checked: boolean) => {
-    setCurrentRole(checked ? 'student' : 'teacher');
+    const newRole = checked ? 'student' : 'teacher';
+    console.log('🔄 Role toggle:', { from: currentRole, to: newRole });
+    setCurrentRole(newRole);
   };
 
   return (

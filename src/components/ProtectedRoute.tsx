@@ -1,7 +1,7 @@
 
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
-import { shouldUseDevAuth } from '@/config/devConfig';
+import { shouldUseDevAuth, DEV_CONFIG } from '@/config/devConfig';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -20,6 +20,7 @@ export function ProtectedRoute({
   console.log('🔒 ProtectedRoute check:', {
     path: location.pathname,
     shouldUseDevAuth: shouldUseDevAuth(),
+    forceNoAuth: DEV_CONFIG.FORCE_NO_AUTH,
     isDevMode,
     user: user?.id,
     profile: profile?.role,
@@ -27,7 +28,13 @@ export function ProtectedRoute({
     loading
   });
 
-  // Bypass authentication in dev mode
+  // Complete authentication bypass when FORCE_NO_AUTH is true
+  if (DEV_CONFIG.FORCE_NO_AUTH) {
+    console.log('🔧 ProtectedRoute: FORCE_NO_AUTH active, allowing access');
+    return <>{children}</>;
+  }
+
+  // Legacy dev mode bypass (kept for when we re-enable auth with granular control)
   if (shouldUseDevAuth()) {
     console.log('🔧 ProtectedRoute: Dev mode active, allowing access');
     return <>{children}</>;
