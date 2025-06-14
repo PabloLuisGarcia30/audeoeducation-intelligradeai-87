@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,42 +31,70 @@ import { GoalAchievementCelebration } from "@/components/GoalAchievementCelebrat
 import { MonthlyActivityTracker } from "@/components/MonthlyActivityTracker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DEV_CONFIG } from "@/config";
+import { toast } from "sonner";
 
 export default function GoalPlanner() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const [goals, setGoals] = useState<StudentGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [selectedView, setSelectedView] = useState<'overview' | 'calendar' | 'achievements' | 'insights'>('overview');
-
-  // Pablo Luis Garcia test profile data
-  const studentProfile = {
-    id: 'f2b40ffb-6348-4fa9-ade5-105bd1eb6b26',
-    name: 'Pablo Luis Garcia',
-    email: 'PabloLuisAlegaGarcia@gmail.com'
-  };
+  const [goalOperationLoading, setGoalOperationLoading] = useState(false);
 
   useEffect(() => {
-    loadGoals();
-  }, []);
+    if (user?.id && !authLoading) {
+      loadGoals();
+    }
+  }, [user?.id, authLoading]);
 
   const loadGoals = async () => {
+    if (!user?.id) {
+      console.error('No authenticated user found');
+      return;
+    }
+
     try {
       setLoading(true);
-      const studentGoals = await SmartGoalService.getStudentGoals(studentProfile.id);
+      const studentGoals = await SmartGoalService.getStudentGoals(user.id);
       setGoals(studentGoals);
     } catch (error) {
       console.error('Failed to load goals:', error);
+      toast.error('Failed to load your goals. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoalCreated = (newGoal: StudentGoal) => {
-    setGoals(prev => [newGoal, ...prev]);
-    setShowWizard(false);
+  const handleGoalCreated = async (newGoal: StudentGoal) => {
+    try {
+      setGoalOperationLoading(true);
+      setGoals(prev => [newGoal, ...prev]);
+      setShowWizard(false);
+      toast.success('Goal created successfully!');
+    } catch (error) {
+      console.error('Failed to handle goal creation:', error);
+      toast.error('Failed to create goal. Please try again.');
+    } finally {
+      setGoalOperationLoading(false);
+    }
   };
+
+  // Show loading if auth is still loading or we don't have user data yet
+  if (authLoading || !user?.id || loading) {
+    return (
+      <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-lg text-slate-600">
+              {authLoading ? 'Authenticating...' : 'Loading your goals...'}
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   const activeGoals = goals.filter(goal => goal.status === 'active');
   const completedGoals = goals.filter(goal => goal.status === 'completed');
@@ -78,18 +107,9 @@ export default function GoalPlanner() {
     return 'Good evening';
   };
 
-  if (loading) {
-    return (
-      <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-lg text-slate-600">Loading your goals...</p>
-          </div>
-        </div>
-      </ProtectedRoute>
-    );
-  }
+  // Get the display name from profile or fallback to user email
+  const displayName = profile?.full_name || user.email || 'Student';
+  const firstName = displayName.split(' ')[0];
 
   return (
     <ProtectedRoute requiredRole={DEV_CONFIG.DISABLE_AUTH_FOR_DEV ? undefined : "student"}>
@@ -111,7 +131,7 @@ export default function GoalPlanner() {
             
             <div className="text-center mb-6">
               <h1 className="text-4xl font-bold text-slate-800 mb-2">
-                {getGreeting()}, {studentProfile.name.split(' ')[0]}! 🎯
+                {getGreeting()}, {firstName}! 🎯
               </h1>
               <p className="text-xl text-slate-600">
                 Let's make this {currentMonth} your most successful month yet!
@@ -209,10 +229,11 @@ export default function GoalPlanner() {
                   <div className="flex flex-wrap gap-3">
                     <Button 
                       onClick={() => setShowWizard(true)}
+                      disabled={goalOperationLoading}
                       className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Set New Goal
+                      {goalOperationLoading ? 'Creating...' : 'Set New Goal'}
                     </Button>
                     <Button variant="outline">
                       <Brain className="h-4 w-4 mr-2" />
@@ -258,10 +279,11 @@ export default function GoalPlanner() {
                     </p>
                     <Button 
                       onClick={() => setShowWizard(true)}
+                      disabled={goalOperationLoading}
                       className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Set Your First Goal
+                      {goalOperationLoading ? 'Creating...' : 'Set Your First Goal'}
                     </Button>
                   </CardContent>
                 </Card>
@@ -269,7 +291,7 @@ export default function GoalPlanner() {
 
               {/* AI Recommendations */}
               <AIGoalRecommendations 
-                studentId={studentProfile.id} 
+                studentId={user.id} 
                 onGoalCreated={handleGoalCreated}
               />
 
@@ -283,17 +305,17 @@ export default function GoalPlanner() {
           )}
 
           {selectedView === 'achievements' && (
-            <AchievementCenter studentId={studentProfile.id} />
+            <AchievementCenter studentId={user.id} />
           )}
 
           {selectedView === 'insights' && (
-            <GoalInsightsPanel studentId={studentProfile.id} />
+            <GoalInsightsPanel studentId={user.id} />
           )}
 
           {/* Goal Creation Wizard */}
           {showWizard && (
             <GoalCreationWizard
-              studentId={studentProfile.id}
+              studentId={user.id}
               onGoalCreated={handleGoalCreated}
               onCancel={() => setShowWizard(false)}
             />
